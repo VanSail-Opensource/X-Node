@@ -65,8 +65,11 @@ func TestTemporaryIPBlockAndLimitsSurviveRestart(t *testing.T) {
 		t.Fatal(e)
 	}
 	d := reopened.Snapshot()
-	if !d.IPBlocks["7:192.0.2.1"].Until.Equal(until) || !d.Users[0].BlockNew || d.Users[0].BurstSpeedLimitMbps != 500 {
+	if !d.IPBlocks["7:192.0.2.1"].Until.Equal(until) || d.Users[0].SpeedLimitMbps != 100 || d.Users[0].BurstSpeedLimitMbps != 500 {
 		t.Fatal("durable restrictions lost")
+	}
+	if d.Users[0].BlockNew {
+		t.Fatal("connection-derived decision restored after restart")
 	}
 	if e = reopened.BlockIP("7:192.0.2.1", protocol.IPBlock{}); e != nil {
 		t.Fatal(e)

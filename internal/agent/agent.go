@@ -47,40 +47,43 @@ type banEvent struct {
 	Until time.Time
 }
 type Agent struct {
-	Dir            string
-	Version        string
-	BootID         string
-	Store          *state.Store
-	Registry       *sessions.Registry
-	Runtime        *xray.Runtime
-	Client         *transport.Client
-	Logs           *nlog.Stream
-	Sampler        *monitor.Sampler
-	Certificates   *cert.Pool
-	Firewall       *firewall.Manager
-	Updater        *updatepkg.Manager
-	Runner         host.Runner
-	Jobs           *Jobs
-	desired        protocol.Config
-	hasDesired     bool
-	apply          chan applyJob
-	applied        chan applied
-	cancelApply    context.CancelFunc
-	applying       atomic.Bool
-	bans           chan banEvent
-	previous       state.Traffic
-	lastReport     time.Time
-	lastDDNS       map[string]time.Time
-	lastUpdate     time.Time
-	geoNext        atomic.Int64
-	notify         chan string
-	generation     uint64
-	geoMu          sync.Mutex
-	dnsMu          sync.Mutex
-	utilityCancel  context.CancelFunc
-	utilityContext context.Context
-	retryAt        time.Time
-	retryDelay     time.Duration
+	Dir                string
+	Version            string
+	BootID             string
+	Store              *state.Store
+	Registry           *sessions.Registry
+	Runtime            *xray.Runtime
+	Client             *transport.Client
+	Logs               *nlog.Stream
+	Sampler            *monitor.Sampler
+	Certificates       *cert.Pool
+	Firewall           *firewall.Manager
+	Updater            *updatepkg.Manager
+	Runner             host.Runner
+	Jobs               *Jobs
+	desired            protocol.Config
+	hasDesired         bool
+	apply              chan applyJob
+	applied            chan applied
+	cancelApply        context.CancelFunc
+	applying           atomic.Bool
+	bans               chan banEvent
+	previous           state.Traffic
+	previousAccounting map[string][2]uint64
+	lastCapture        time.Time
+	accountingRequests chan accountingRequest
+	lastReport         time.Time
+	lastDDNS           map[string]time.Time
+	lastUpdate         time.Time
+	geoNext            atomic.Int64
+	notify             chan string
+	generation         uint64
+	geoMu              sync.Mutex
+	dnsMu              sync.Mutex
+	utilityCancel      context.CancelFunc
+	utilityContext     context.Context
+	retryAt            time.Time
+	retryDelay         time.Duration
 }
 
 func New(dir, version string, client *transport.Client, logs *nlog.Stream) (*Agent, error) {
@@ -92,8 +95,13 @@ func New(dir, version string, client *transport.Client, logs *nlog.Stream) (*Age
 	registry := sessions.New()
 	a := &Agent{Dir: dir, Version: version, BootID: state.ID(), Store: store, Registry: registry, Runtime: xray.New(registry), Client: client, Logs: logs, Sampler: monitor.New(), Certificates: cert.NewPool(filepath.Join(dir, "certs")), Runner: runner, apply: make(chan applyJob, 1), applied: make(chan applied, 1), bans: make(chan banEvent, 128), previous: state.Traffic{}, lastDDNS: map[string]time.Time{}, notify: make(chan string, 1)}
 	a.Firewall = &firewall.Manager{Dir: filepath.Join(dir, "firewall"), ConfigPath: "/etc/nftables.conf", Executable: "/usr/local/bin/xnodectl", Runner: runner}
+	a.previousAccounting = map[string][2]uint64{}
+	a.accountingRequests = make(chan accountingRequest, 16)
 	a.Updater = updatepkg.New(filepath.Join(dir, "updates"), version, runner)
-	a.Jobs = NewJobs(dir, client.Send)
+	a.Jobs, e = NewJobs(dir, client.Send)
+	if e != nil {
+		return nil, e
+	}
 	a.Jobs.redact = logs.Redact
 	registry.OnBan = func(id int, until time.Time) {
 		if e := store.Ban(id, until); e != nil {
@@ -111,12 +119,12 @@ func New(dir, version string, client *transport.Client, logs *nlog.Stream) (*Age
 	}
 	client.Hello = func() protocol.Message {
 		d := store.Snapshot()
-		return protocol.New("agent.hello", "", d.Revision, map[string]any{"agent_id": d.AgentID, "boot_id": a.BootID, "version": version, "xray_version": "v26.10.10", "config_revision": d.ConfigRevision, "ready": a.Runtime.Ready(), "capabilities": Capabilities})
+		return protocol.New("agent.hello", "", d.Revision, map[string]any{"agent_id": d.AgentID, "boot_id": a.BootID, "version": version, "xray_version": "v26.10.10", "config_revision": d.ConfigRevision, "ready": a.Runtime.Ready(), "capabilities": Capabilities, "upgrade_pending": a.Updater.Pending()})
 	}
 	return a, nil
 }
 
-var Capabilities = []string{"native_xray", "multi_inbound", "tcp_udp_limits", "session_revocation", "traffic_ack", "certificates", "ddns", "smartdns", "geodata", "nftables", "port_forward", "metrics", "logs", "peer_speedtest", "torrent_ban", "signed_updates"}
+var Capabilities = []string{"native_xray", "multi_inbound", "tcp_udp_limits", "session_revocation", "traffic_ack", "certificates", "ddns", "smartdns", "geodata", "nftables", "port_forward", "metrics", "logs", "peer_speedtest", "torrent_ban", "signed_updates", "traffic_periods_v1", "measured_user_rates", "authorization_expiry", "member_outbound_guards"}
 
 func (a *Agent) Run(ctx context.Context) error {
 	d := a.Store.Snapshot()
@@ -159,6 +167,8 @@ func (a *Agent) Run(ctx context.Context) error {
 			return nil
 		case m := <-a.Client.Incoming:
 			a.handle(child, m)
+		case request := <-a.accountingRequests:
+			a.handleAccounting(request)
 		case connected := <-a.Client.Status:
 			if connected {
 				a.lastReport = time.Time{}
@@ -194,6 +204,7 @@ func (a *Agent) Run(ctx context.Context) error {
 				a.queue(child, applyJob{ID: id, Revision: d.Revision, Config: a.desired, Cached: true})
 			}
 		case <-tick.C:
+			a.Registry.ExpireUsers(time.Now())
 			if e := a.captureTraffic(); e != nil {
 				a.failStorage(e)
 			}
@@ -217,29 +228,6 @@ func (a *Agent) failStorage(err error) {
 	a.Runtime.Stop()
 	nlog.Core().Error("durable state unavailable; proxy admission stopped")
 	a.Client.Send(protocol.New("agent.error", "", 0, map[string]string{"error": "durable state unavailable"}), true)
-}
-func (a *Agent) captureTraffic() error {
-	current := a.Registry.Counters()
-	delta := state.Traffic{}
-	for id, v := range current {
-		old := a.previous[id]
-		up, down := uint64(0), uint64(0)
-		if v[0] >= old[0] {
-			up = v[0] - old[0]
-		}
-		if v[1] >= old[1] {
-			down = v[1] - old[1]
-		}
-		if up > 0 || down > 0 {
-			delta[id] = [2]uint64{up, down}
-		}
-	}
-	if e := a.Store.AddTraffic(delta); e != nil {
-		return e
-	}
-	a.previous = current
-	a.Registry.PruneCounters()
-	return nil
 }
 func (a *Agent) registerSecrets(c protocol.Config) {
 	values := []string{a.Client.Token}
@@ -518,6 +506,10 @@ func (a *Agent) handle(ctx context.Context, m protocol.Message) {
 			fail(e)
 			return
 		}
+		if a.Updater != nil && a.Updater.Pending() && managedExtensions(c) && !managedExtensions(a.desired) {
+			fail(errors.New("upgrade confirmation is required before adopting managed extensions"))
+			return
+		}
 		if e = a.Store.Authorize(c.Users, m.Revision); e != nil {
 			fail(e)
 			return
@@ -619,6 +611,8 @@ func (a *Agent) command(ctx context.Context, m protocol.Message) error {
 	}
 	return a.Jobs.Start(ctx, m.ID, request.Name, func(ctx context.Context, progress func(any)) (any, error) {
 		switch request.Name {
+		case "traffic.flush":
+			return a.flushTraffic(ctx, args)
 		case "connections.list":
 			var p struct {
 				After string `json:"after,omitempty"`

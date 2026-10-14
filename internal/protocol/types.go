@@ -76,6 +76,8 @@ type User struct {
 	SpeedLimitAfterSeconds int                        `json:"speed_limit_after_seconds,omitempty"`
 	SpeedLimitResetSeconds int                        `json:"speed_limit_reset_seconds,omitempty"`
 	BlockNew               bool                       `json:"block_new,omitempty"`
+	AccountingPeriod       string                     `json:"accounting_period,omitempty"`
+	ValidUntil             *time.Time                 `json:"valid_until,omitempty"`
 }
 
 // UserEmail binds authenticated transports to the current credential generation.
@@ -213,6 +215,7 @@ type Config struct {
 	Updates             UpdatePolicy           `json:"updates,omitempty"`
 	Telemetry           TelemetryPolicy        `json:"telemetry,omitempty"`
 	Torrent             TorrentPolicy          `json:"torrent,omitempty"`
+	MemberOutbounds     []string               `json:"member_outbounds,omitempty"`
 }
 
 func ParseConfig(b []byte) (Config, error) {
@@ -241,6 +244,9 @@ func ValidateUsers(users []User) error {
 	ids := make(map[int]bool, len(users))
 	accounts := make(map[string]bool)
 	for _, u := range users {
+		if u.AccountingPeriod != "" && !ValidName(u.AccountingPeriod) || u.ValidUntil != nil && u.ValidUntil.IsZero() {
+			return errors.New("invalid user accounting period or expiration")
+		}
 		if u.ID <= 0 || ids[u.ID] || u.ActiveIPLimit < 0 || u.ConnectionLimit < 0 || u.SpeedLimitMbps < 0 || u.SpeedLimitMbps > 1000000 || u.BurstSpeedLimitMbps < 0 || u.BurstSpeedLimitMbps > 1000000 || u.BurstSpeedLimitMbps > 0 && (u.SpeedLimitMbps == 0 || u.BurstSpeedLimitMbps < u.SpeedLimitMbps) || u.SpeedLimitAfterSeconds < 0 || u.SpeedLimitAfterSeconds > 3600 || u.SpeedLimitResetSeconds < 0 || u.SpeedLimitResetSeconds > 3600 {
 			return errors.New("invalid or duplicate user")
 		}
@@ -293,6 +299,9 @@ func ValidName(s string) bool {
 }
 
 func (c Config) Validate() error {
+	if err := ValidateMemberOutbounds(c.Xray, c.MemberOutbounds); err != nil {
+		return err
+	}
 	if err := ValidateUsers(c.Users); err != nil {
 		return err
 	}

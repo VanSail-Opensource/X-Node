@@ -60,6 +60,11 @@ xnodectl uninstall
 
 ## Master integration
 
+Go masters can use `github.com/VanSail-Opensource/X-Node/pkg/protocol` for the
+agent's exact wire contract. Accounting-aware masters negotiate period-tagged
+traffic, flush barriers, measured byte rates, cached authorization expiry and
+member proxy guards; see the protocol before adopting these optional fields.
+
 Read [the protocol](docs/protocol.md), [OpenAPI](docs/openapi.json), [AsyncAPI](docs/asyncapi.json), and [JSON schemas](docs/schemas/config.schema.json). Build the detailed searchable static reference with `python3 scripts/build_docs.py`; deploy `docs-site/dist` to Cloudflare Pages using [these settings](docs-site/README.md). The OpenAPI document describes the actual WebSocket upgrade; application operations are frames, not REST endpoints.
 
 Every envelope has `v: 1`, a `type`, an optional request `id`, and `data`. State mutations carry `revision`; incremental changes also carry `base_revision`. The server supplies `users: []` to remove every user. Omitted or null user arrays are invalid.

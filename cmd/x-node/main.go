@@ -28,7 +28,7 @@ func main() {
 	check := flag.String("check-config", "", "validate remote configuration JSON shape")
 	flag.Parse()
 	if *show {
-		_ = json.NewEncoder(os.Stdout).Encode(map[string]string{"version": version, "build_time": buildTime, "commit": commit, "xray": "v26.10.10"})
+		_ = json.NewEncoder(os.Stdout).Encode(map[string]any{"version": version, "build_time": buildTime, "commit": commit, "xray": "v26.10.10", "capabilities": agent.Capabilities})
 		return
 	}
 	if *check != "" {

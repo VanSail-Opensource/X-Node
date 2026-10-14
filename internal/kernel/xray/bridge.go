@@ -80,13 +80,13 @@ func (h *managedOutbound) Dispatch(ctx context.Context, link *transport.Link) {
 	copied.CanSpliceCopy = 3
 	copied.Conn = nil
 	child = session.ContextWithInbound(child, &copied)
-	lease, err := h.bridge.Registry.Acquire(child, id, si.User.Email, si.Tag, si.Source.Address.IP().String(), dest.NetAddr(), strings.ToLower(dest.Network.String()), int(dest.Port), func() { cancel(); reject() })
+	lease, err := h.bridge.Registry.AcquireTracked(child, id, si.User.Email, si.Tag, si.Source.Address.IP().String(), dest.NetAddr(), strings.ToLower(dest.Network.String()), int(dest.Port), func() { cancel(); reject() })
 	if err != nil {
 		cancel()
 		reject()
 		return
 	}
-	defer lease.Close()
+	defer func() { lease.Close(); lease.Finish() }()
 	child = context.WithValue(child, leaseKey{}, lease)
 	if h.Tag() == "_xnode_torrent" {
 		h.bridge.Registry.Ban(id, time.Now().Add(time.Duration(h.bridge.BanNanos.Load())))

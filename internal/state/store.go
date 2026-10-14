@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
@@ -17,22 +16,21 @@ import (
 
 const MaxStoreBytes = 64 << 20
 
-type Traffic map[int][2]uint64
-type Batch struct {
-	ID      string  `json:"id"`
-	Traffic Traffic `json:"traffic"`
-}
+type Traffic = protocol.Traffic
+type Batch = protocol.TrafficReport
 type Data struct {
-	AgentID        string                      `json:"agent_id"`
-	Revision       uint64                      `json:"revision"`
-	ConfigRevision uint64                      `json:"config_revision"`
-	Config         *protocol.Config            `json:"config,omitempty"`
-	Users          []protocol.User             `json:"users"`
-	Bans           map[int]time.Time           `json:"bans,omitempty"`
-	IPBlocks       map[string]protocol.IPBlock `json:"ip_blocks,omitempty"`
-	Sequence       uint64                      `json:"sequence"`
-	Pending        *Batch                      `json:"pending,omitempty"`
-	Accumulated    Traffic                     `json:"accumulated,omitempty"`
+	AgentID        string                            `json:"agent_id"`
+	Revision       uint64                            `json:"revision"`
+	ConfigRevision uint64                            `json:"config_revision"`
+	Config         *protocol.Config                  `json:"config,omitempty"`
+	Users          []protocol.User                   `json:"users"`
+	Bans           map[int]time.Time                 `json:"bans,omitempty"`
+	IPBlocks       map[string]protocol.IPBlock       `json:"ip_blocks,omitempty"`
+	Sequence       uint64                            `json:"sequence"`
+	Pending        *Batch                            `json:"pending,omitempty"`
+	Accumulated    Traffic                           `json:"accumulated,omitempty"`
+	Accounting     map[string]protocol.TrafficSample `json:"accounting,omitempty"`
+	Backlog        []*Batch                          `json:"backlog,omitempty"`
 }
 type Store struct {
 	mu   sync.Mutex
@@ -156,52 +154,6 @@ func (s *Store) BlockIP(key string, block protocol.IPBlock) error {
 		return nil
 	})
 }
-func (s *Store) AddTraffic(delta Traffic) error {
-	if len(delta) == 0 {
-		return nil
-	}
-	return s.change(func(d *Data) error {
-		if d.Accumulated == nil {
-			d.Accumulated = Traffic{}
-		}
-		for id, v := range delta {
-			old := d.Accumulated[id]
-			if ^uint64(0)-old[0] < v[0] || ^uint64(0)-old[1] < v[1] {
-				return errors.New("traffic counter overflow")
-			}
-			d.Accumulated[id] = [2]uint64{old[0] + v[0], old[1] + v[1]}
-		}
-		return nil
-	})
-}
-func (s *Store) Batch() (*Batch, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.data.Pending != nil {
-		return protocol.Clone(s.data.Pending), nil
-	}
-	if len(s.data.Accumulated) == 0 {
-		return nil, nil
-	}
-	next := protocol.Clone(s.data)
-	next.Sequence++
-	next.Pending = &Batch{ID: fmt.Sprintf("%s:%d", next.AgentID, next.Sequence), Traffic: next.Accumulated}
-	next.Accumulated = Traffic{}
-	if err := s.persist(next); err != nil {
-		return nil, err
-	}
-	s.data = next
-	return protocol.Clone(next.Pending), nil
-}
-func (s *Store) Ack(id string) error {
-	return s.change(func(d *Data) error {
-		if d.Pending != nil && d.Pending.ID == id {
-			d.Pending = nil
-		}
-		return nil
-	})
-}
-
 func AtomicWrite(path string, b []byte, mode os.FileMode) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
 		return err

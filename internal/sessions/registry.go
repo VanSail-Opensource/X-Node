@@ -31,6 +31,7 @@ type userState struct {
 	identities       map[string]string
 	ips              map[string]int
 	count            int
+	handlers         int
 	speed            *speedPolicy
 	upload, download atomic.Uint64
 }
@@ -49,19 +50,29 @@ type Registry struct {
 	OnReject    func(AdmissionEvent)
 	ipBlocks    map[string]protocol.IPBlock
 	reportIPs   bool
+	accounting  map[accountingKey]*accountingCounters
+	inflight    map[string]*Lease
+	rates       map[int]protocol.UserRate
+	fences      map[int]int
 }
 type Lease struct {
-	Info     Connection
-	once     sync.Once
-	registry *Registry
-	user     *userState
-	cancel   func()
+	Info       Connection
+	once       sync.Once
+	registry   *Registry
+	user       *userState
+	cancel     func()
+	accounting *accountingCounters
+	tracked    bool
+	finished   chan struct{}
+	finishOnce sync.Once
 }
 
 func New() *Registry {
 	return &Registry{prefix: state.ID(), users: map[int]*userState{}, connections: map[string]*Lease{}, bans: map[int]time.Time{}, rejects: map[string]uint64{}, epochs: map[string]string{}, ipBlocks: map[string]protocol.IPBlock{}}
 }
 func sameIdentity(a, b protocol.User) bool {
+	a.ValidUntil = nil
+	b.ValidUntil = nil
 	a.ActiveIPLimit = 0
 	a.ConnectionLimit = 0
 	a.SpeedLimitMbps = 0
@@ -161,7 +172,7 @@ func (r *Registry) PruneCounters() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	for id, u := range r.users {
-		if len(u.policy.InboundTags) == 0 && u.count == 0 {
+		if len(u.policy.InboundTags) == 0 && u.count == 0 && u.handlers == 0 {
 			delete(r.users, id)
 		}
 	}
@@ -203,7 +214,7 @@ func (r *Registry) blocked(port int, network string) bool {
 	return false
 }
 
-func (r *Registry) Acquire(ctx context.Context, id int, identity, tag, ip, destination, network string, port int, cancel func()) (*Lease, error) {
+func (r *Registry) acquire(ctx context.Context, id int, identity, tag, ip, destination, network string, port int, cancel func(), tracked bool) (*Lease, error) {
 	addr, err := netip.ParseAddr(ip)
 	if err != nil {
 		return nil, errors.New("invalid source address")
@@ -227,6 +238,10 @@ func (r *Registry) Acquire(ctx context.Context, id int, identity, tag, ip, desti
 		reason = "agent_capacity"
 	case u == nil || u.identities[tag] == "" || identity != u.identities[tag]:
 		reason = "ineligible"
+	case u.policy.ValidUntil != nil && !u.policy.ValidUntil.After(time.Now()):
+		reason = "expired"
+	case r.fences[id] > 0 || r.fences[0] > 0:
+		reason = "block_new"
 	case u.policy.BlockNew:
 		reason = "block_new"
 	case r.bans[id].After(time.Now()):
@@ -256,6 +271,7 @@ func (r *Registry) Acquire(ctx context.Context, id int, identity, tag, ip, desti
 	}
 	r.sequence++
 	l := &Lease{Info: Connection{ID: fmt.Sprintf("%s:%d", r.prefix, r.sequence), UserID: id, InboundTag: tag, SourceIP: ip, Destination: destination, DestinationPort: port, Network: network, Started: time.Now().UTC()}, registry: r, user: u, cancel: cancel}
+	r.initializeAccounting(l, tracked)
 	u.count++
 	u.ips[ip]++
 	r.connections[l.Info.ID] = l
@@ -275,13 +291,22 @@ func (l *Lease) Close() {
 		if l.cancel != nil {
 			l.cancel()
 		}
+		if !l.tracked {
+			l.Finish()
+		}
 	})
 }
 func (l *Lease) Account(upload bool, n uint64) {
 	if upload {
 		l.user.upload.Add(n)
+		if l.accounting != nil {
+			l.accounting.upload.Add(n)
+		}
 	} else {
 		l.user.download.Add(n)
+		if l.accounting != nil {
+			l.accounting.download.Add(n)
+		}
 	}
 }
 func (l *Lease) Wait(ctx context.Context, n int) error {
@@ -366,17 +391,19 @@ func (r *Registry) Counters() state.Traffic {
 }
 
 type Summary struct {
-	Connections map[int]int         `json:"connections"`
-	ActiveIPs   map[int][]string    `json:"active_ips,omitempty"`
-	Rejections  map[string]uint64   `json:"rejections"`
-	Status      map[int]LimitStatus `json:"status"`
-	Speed       map[int]SpeedStatus `json:"speed"`
+	Connections map[int]int               `json:"connections"`
+	ActiveIPs   map[int][]string          `json:"active_ips,omitempty"`
+	Rejections  map[string]uint64         `json:"rejections"`
+	Status      map[int]LimitStatus       `json:"status"`
+	Speed       map[int]SpeedStatus       `json:"speed"`
+	Rates       map[int]protocol.UserRate `json:"rates,omitempty"`
 }
 
 func (r *Registry) Summary() Summary {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	s := Summary{Connections: map[int]int{}, Rejections: protocol.Clone(r.rejects), Status: map[int]LimitStatus{}, Speed: map[int]SpeedStatus{}}
+	s.Rates = protocol.Clone(r.rates)
 	if r.reportIPs {
 		s.ActiveIPs = map[int][]string{}
 	}
@@ -393,6 +420,12 @@ func (r *Registry) Summary() Summary {
 		case len(u.policy.InboundTags) == 0:
 			status.Limited = true
 			status.Reason = "ineligible"
+		case u.policy.ValidUntil != nil && !u.policy.ValidUntil.After(time.Now()):
+			status.Limited = true
+			status.Reason = "expired"
+		case r.fences[id] > 0 || r.fences[0] > 0:
+			status.Limited = true
+			status.Reason = "block_new"
 		case u.policy.BlockNew:
 			status.Limited = true
 			status.Reason = "block_new"

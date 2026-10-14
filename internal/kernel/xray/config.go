@@ -322,9 +322,16 @@ func accountFor(proto, tag string, settings map[string]any, u protocol.User) (ma
 			account["auth"] = u.UUID
 		}
 	case "shadowsocks":
+		method, _ := settings["method"].(string)
+		ss2022 := strings.HasPrefix(method, "2022-")
+		if ss2022 {
+			if value, exists := account["method"]; exists && value != "" {
+				return nil, errors.New("SS2022 user accounts must omit the method")
+			}
+			delete(account, "method")
+		}
 		if _, ok := account["password"]; !ok {
-			method, _ := settings["method"].(string)
-			if strings.HasPrefix(method, "2022-") {
+			if ss2022 {
 				h := sha256.Sum256([]byte(u.UUID))
 				size := 32
 				if strings.Contains(method, "aes-128") {
@@ -335,7 +342,7 @@ func accountFor(proto, tag string, settings map[string]any, u protocol.User) (ma
 				account["password"] = u.UUID
 			}
 		}
-		if _, ok := account["method"]; !ok {
+		if _, ok := account["method"]; !ok && !ss2022 {
 			account["method"] = settings["method"]
 		}
 	case "socks", "mixed", "http":

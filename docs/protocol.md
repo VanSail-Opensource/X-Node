@@ -1,5 +1,42 @@
 # WebSocket protocol v1
 
+Optional capabilities `traffic_periods_v1`, `measured_user_rates`,
+`authorization_expiry`, and `member_outbound_guards` identify the accounting-aware
+agent. Masters must verify capabilities before supplying the corresponding
+optional configuration fields. Go masters can import `pkg/protocol`.
+Hello's `upgrade_pending` marks an unconfirmed binary upgrade. First adoption of
+managed extensions is rejected until cached runtime activation confirms that
+upgrade, preventing an older watchdog binary from dropping new state on rollback.
+
+Accounting-aware users carry `accounting_period` and an optional RFC3339
+`valid_until`. Expiry remains effective while disconnected. Traffic reports keep
+their legacy totals and additionally carry `samples` with user ID, accounting
+period, UTC `from`/`through`, and exact uploaded/downloaded bytes. For these users,
+bill samples rather than adding both representations. Period IDs are master-owned
+and must never be reused. Timestamp granularity is one second.
+
+`users.rates[userID]` supplies measured `upload_bytes_per_second`,
+`download_bytes_per_second`, and `sample_seconds`. These are payload byte rates;
+`users.speed` still describes decimal Mbps policy limits, not measured throughput.
+
+The `traffic.flush` command accepts optional `user_id` and `quiesce`.
+With quiescence, block new admission first; the agent closes matching sessions and
+waits for their native handlers before capture. The result contains `agent_id`,
+the sealed journal `sequence`, `through`, and `quiesced`. The master must commit
+reports through that sequence before settling or resetting the old period.
+Outstanding batches stay immutable and queued barrier batches survive restart.
+
+`member_outbounds` lists generated member proxy tags. Their endpoints must be
+literal public IPs; the master resolves/validates hostnames before compilation
+and retains TLS SNI separately. Agent checks reject private, mapped private,
+reserved, scoped, and DNS-rebinding endpoints. Member socket overrides and
+unvalidated chains are rejected. Managed SS-2022 supports AES-128/256 methods:
+server keys stay on inbound settings and native user accounts omit `method`.
+
+Session/IP scans and metrics/history reads are not written to utility history.
+Signed installs and rollbacks reject binaries whose version metadata lacks
+capabilities required by cached authorization or pending accounting journals.
+
 The agent connects to the configured WSS URL with `Authorization: Bearer <token>` and the `x-node.v1` subprotocol. Authentication, agent enrollment and authorization are the master's responsibility. The agent never places its credential in the URL.
 
 ```json

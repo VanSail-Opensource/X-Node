@@ -30,12 +30,24 @@ type Jobs struct {
 	redact  func(string) string
 }
 
-func NewJobs(dir string, send func(protocol.Message, bool) bool) *Jobs {
+func NewJobs(dir string, send func(protocol.Message, bool) bool) (*Jobs, error) {
 	j := &Jobs{path: filepath.Join(dir, "jobs.json"), running: map[string]context.CancelFunc{}, slots: make(chan struct{}, 2), send: send}
-	if b, e := os.ReadFile(j.path); e == nil && len(b) < 2<<20 {
-		_ = json.Unmarshal(b, &j.history)
+	if b, e := os.ReadFile(j.path); e == nil {
+		if len(b) >= 2<<20 || json.Unmarshal(b, &j.history) != nil {
+			return nil, errors.New("invalid persisted job history")
+		}
+		j.history = durableJobHistory(j.history)
+		cleaned, err := json.Marshal(j.history)
+		if err != nil {
+			return nil, err
+		}
+		if err = state.AtomicWrite(j.path, cleaned, 0600); err != nil {
+			return nil, err
+		}
+	} else if !os.IsNotExist(e) {
+		return nil, e
 	}
-	return j
+	return j, nil
 }
 func (j *Jobs) Start(ctx context.Context, id, command string, fn func(context.Context, func(any)) (any, error)) error {
 	if id == "" {
@@ -89,7 +101,7 @@ func (j *Jobs) Start(ctx context.Context, id, command string, fn func(context.Co
 		if len(j.history) > 128 {
 			j.history = j.history[len(j.history)-128:]
 		}
-		b, _ := json.Marshal(j.history)
+		b, _ := json.Marshal(durableJobHistory(j.history))
 		persistErr := state.AtomicWrite(j.path, b, 0600)
 		j.mu.Unlock()
 		if persistErr != nil {

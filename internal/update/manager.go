@@ -168,6 +168,11 @@ func (m *Manager) Install(ctx context.Context, id, version string, progress func
 		if json.Unmarshal(out, &info) != nil || info.Version != result.Version {
 			return result, errors.New("staged binary version differs")
 		}
+		if i == 0 {
+			if e = m.checkCapabilities(out); e != nil {
+				return result, e
+			}
+		}
 	}
 	for _, target := range targets {
 		old, e := os.ReadFile(target)
@@ -263,6 +268,17 @@ func (m *Manager) RollbackPending(ctx context.Context) error {
 	return m.rollback(ctx, &t)
 }
 func (m *Manager) rollback(ctx context.Context, t *Transaction) error {
+	if required, err := m.requiredCapabilities(); err != nil {
+		return err
+	} else if len(required) > 0 {
+		metadata, err := m.Runner.Run(ctx, t.NodePath+".old", "--version")
+		if err != nil {
+			return err
+		}
+		if err = m.checkCapabilities(metadata); err != nil {
+			return err
+		}
+	}
 	for _, target := range []string{t.NodePath, t.CLIPath} {
 		b, e := os.ReadFile(target + ".old")
 		if e != nil {

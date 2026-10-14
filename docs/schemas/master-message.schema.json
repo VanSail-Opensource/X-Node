@@ -251,6 +251,12 @@
               },
               "type": "object"
             },
+            "member_outbounds": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
             "providers": {
               "additionalProperties": {
                 "additionalProperties": false,
@@ -335,6 +341,9 @@
                   }
                 ],
                 "properties": {
+                  "accounting_period": {
+                    "type": "string"
+                  },
                   "active_ip_limit": {
                     "minimum": 0,
                     "type": "integer"
@@ -381,6 +390,10 @@
                     "type": "integer"
                   },
                   "uuid": {
+                    "type": "string"
+                  },
+                  "valid_until": {
+                    "format": "date-time",
                     "type": "string"
                   }
                 },
@@ -674,6 +687,12 @@
               },
               "type": "object"
             },
+            "member_outbounds": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
             "providers": {
               "additionalProperties": {
                 "additionalProperties": false,
@@ -758,6 +777,9 @@
                   }
                 ],
                 "properties": {
+                  "accounting_period": {
+                    "type": "string"
+                  },
                   "active_ip_limit": {
                     "minimum": 0,
                     "type": "integer"
@@ -804,6 +826,10 @@
                     "type": "integer"
                   },
                   "uuid": {
+                    "type": "string"
+                  },
+                  "valid_until": {
+                    "format": "date-time",
                     "type": "string"
                   }
                 },
@@ -861,6 +887,9 @@
               "items": {
                 "additionalProperties": false,
                 "properties": {
+                  "accounting_period": {
+                    "type": "string"
+                  },
                   "active_ip_limit": {
                     "type": "integer"
                   },
@@ -898,6 +927,10 @@
                     "type": "integer"
                   },
                   "uuid": {
+                    "type": "string"
+                  },
+                  "valid_until": {
+                    "format": "date-time",
                     "type": "string"
                   }
                 },
@@ -956,6 +989,9 @@
               "items": {
                 "additionalProperties": false,
                 "properties": {
+                  "accounting_period": {
+                    "type": "string"
+                  },
                   "active_ip_limit": {
                     "type": "integer"
                   },
@@ -993,6 +1029,10 @@
                     "type": "integer"
                   },
                   "uuid": {
+                    "type": "string"
+                  },
+                  "valid_until": {
+                    "format": "date-time",
                     "type": "string"
                   }
                 },
@@ -1156,7 +1196,8 @@
                 "runtime.reload",
                 "geodata.refresh",
                 "ddns.run",
-                "certificates.get"
+                "certificates.get",
+                "traffic.flush"
               ],
               "type": "string"
             }

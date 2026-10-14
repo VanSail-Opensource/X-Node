@@ -57,8 +57,11 @@ func main() {
 		if e != nil {
 			fail(e)
 		}
-		var v map[string]string
-		if json.Unmarshal(b, &v) != nil || v["version"] == "" {
+		var v struct {
+			Version      string   `json:"version"`
+			Capabilities []string `json:"capabilities"`
+		}
+		if json.Unmarshal(b, &v) != nil || v.Version == "" {
 			fail(fmt.Errorf("binary metadata missing"))
 		}
 	}

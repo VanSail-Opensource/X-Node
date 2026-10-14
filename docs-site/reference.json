@@ -111,14 +111,17 @@
     "blocked_ports.network": "tcp or udp; omitted applies to both.",
     "users.burst_speed_limit_mbps": "Always enforced burst ceiling in Mbps, at least the normal rate. Omission keeps the fixed normal cap.",
     "users.speed_limit_after_seconds": "Consecutive seconds above normal before applying the normal cap; default 10.",
-    "users.speed_limit_reset_seconds": "Seconds below 90% of normal before allowing bursts again; default 1."
+    "users.speed_limit_reset_seconds": "Seconds below 90% of normal before allowing bursts again; default 1.",
+    "users.accounting_period": "Master-owned accounting period ID, never reused. Requires traffic_periods_v1.",
+    "users.valid_until": "RFC3339 deadline enforced from cached state while disconnected. Requires authorization_expiry.",
+    "member_outbounds": "Generated member proxy tags whose literal public endpoints and owned dependencies are verified on the agent."
   },
   "messages": [
     {
       "name": "agent.hello",
       "direction": "Agent → master",
       "description": "Identify the durable agent and current process before synchronization.",
-      "body": "## First frame\nSent before other application frames on every new socket. The payload identifies the persisted agent, a fresh process boot ID, agent/core versions, applied revision and supported capabilities. Use durable identity for enrollment and billing; use the boot ID to recognize a new process/counter generation.\n\n## Next step\nWait for `state.request`, then send an authoritative snapshot. A hello reports current state; it does not authorize the master to skip synchronization."
+      "body": "## First frame\nSent before other application frames on every new socket. The payload identifies the persisted agent, a fresh process boot ID, agent/core versions, applied revision and supported capabilities. Use durable identity for enrollment and billing; use the boot ID to recognize a new process/counter generation.\n\n## Next step\nWait for `state.request`, then send an authoritative snapshot. A hello reports current state; it does not authorize the master to skip synchronization.\n\n## Optional master capabilities\nNegotiate traffic_periods_v1, measured_user_rates, authorization_expiry and member_outbound_guards. upgrade_pending delays first adoption until binary rollback confirmation."
     },
     {
       "name": "state.request",
@@ -262,13 +265,13 @@
       "name": "telemetry.report",
       "direction": "Agent → master",
       "description": "Report runtime state, user admission status and immutable host metrics.",
-      "body": "## Current snapshot\nThe payload includes `agent_id`, `boot_id`, `time`, `connected`, `liveness`, `ready`, `synchronized`, `config_revision`, `users`, `machine`, `certificates` and transport-drop information. Envelope `revision` tracks accepted authorization.\n\n## Users and privacy\nReplace the master's current online connection set. Missing active users mean zero sessions. `users.status[userID]` supplies `user_id`, `limited: true/false`, a reason when blocked and `scope` (`new_connection` or `new_ip`). `users.connections` contains current counts and `users.active_ips` is present only when requested. IP/destination-specific restrictions are reported for attempted admissions; they do not claim that every new user stream is blocked. Source IPs are omitted by default. `telemetry.include_active_ips: true` explicitly requests user-associated active IPs in recurring snapshots. An explicit `users.active_ips` query obtains one-time details.\n\n## Delivery\nThe default report interval is five seconds. This is a disposable snapshot and needs no acknowledgement. Durable billing uses traffic.report instead."
+      "body": "## Current snapshot\nThe payload includes `agent_id`, `boot_id`, `time`, `connected`, `liveness`, `ready`, `synchronized`, `config_revision`, `users`, `machine`, `certificates` and transport-drop information. Envelope `revision` tracks accepted authorization.\n\n## Users and privacy\nReplace the master's current online connection set. Missing active users mean zero sessions. `users.status[userID]` supplies `user_id`, `limited: true/false`, a reason when blocked and `scope` (`new_connection` or `new_ip`). `users.connections` contains current counts and `users.active_ips` is present only when requested. IP/destination-specific restrictions are reported for attempted admissions; they do not claim that every new user stream is blocked. Source IPs are omitted by default. `telemetry.include_active_ips: true` explicitly requests user-associated active IPs in recurring snapshots. An explicit `users.active_ips` query obtains one-time details.\n\n## Delivery\nThe default report interval is five seconds. This is a disposable snapshot and needs no acknowledgement. Durable billing uses traffic.report instead.\n\n## Measured speed\nusers.rates reports upload_bytes_per_second, download_bytes_per_second and sample_seconds. These measured byte rates are independent of users.speed decimal Mbps limits."
     },
     {
       "name": "traffic.report",
       "direction": "Agent → master",
       "description": "Replay-safe upload/download byte batches for durable billing.",
-      "body": "## Bill exactly once\nThe payload contains a stable `id` and `traffic`, a map of user IDs to `[upload_bytes, download_bytes]`. The journal is written before transmission. A replay after retry or restart uses the same ID.\n\nAtomically deduplicate and bill in the master, then send `traffic.ack`. Duplicate receipt should also be acknowledged, without billing again. Only the matching pending batch is retired.",
+      "body": "## Bill exactly once\nThe payload contains a stable `id` and `traffic`, a map of user IDs to `[upload_bytes, download_bytes]`. The journal is written before transmission. A replay after retry or restart uses the same ID.\n\nAtomically deduplicate and bill in the master, then send `traffic.ack`. Duplicate receipt should also be acknowledged, without billing again. Only the matching pending batch is retired.\n\n## Period accounting\nWith traffic_periods_v1, samples contain user_id, accounting_period, from/through timestamps and exact upload_bytes/download_bytes. Bill samples rather than adding legacy traffic again. Sealed batches and old accounting periods survive replay and restart.",
       "example": {
         "v": 1,
         "type": "traffic.report",
@@ -698,6 +701,29 @@
       "name": "update.rollback",
       "description": "Restore the retained prior binary without deleting durable state.",
       "body": "## Prior release\nRestores the retained previous binary when rollback is available. Reconnect and readiness confirm the restarted agent's behavior. Preserve the state directory, identity, accepted restrictions and pending traffic.\n\n## Arguments\nUse an empty object."
+    },
+    {
+      "name": "traffic.flush",
+      "description": "Seal captured traffic and obtain a durable accounting cutoff.",
+      "body": "## Accounting barrier\nThe optional user_id selects the user to quiesce; omission selects all users. Set quiesce only after new admission has been blocked. The agent waits for native handlers and their final payload bytes, then seals traffic without replacing an outstanding batch.\n\nThe result contains agent_id, sequence, through and quiesced. Commit all reports through that sequence before resetting or settling the old accounting period. A command result by itself does not prove the master has ingested the reports.",
+      "fields": [
+        [
+          "user_id",
+          "integer",
+          "Optional",
+          "Positive user ID; zero or omission selects every user."
+        ],
+        [
+          "quiesce",
+          "boolean",
+          "Optional",
+          "Close fenced sessions and wait for native completion before sealing."
+        ]
+      ],
+      "args": {
+        "user_id": 7,
+        "quiesce": true
+      }
     }
   ]
 }

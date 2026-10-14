@@ -1,3 +1,7 @@
+# X-Node v1.0.1
+
+Maintenance release with no runtime behavior changes. Refreshes signed amd64 and arm64 artifacts from the latest main commit.
+
 # X-Node v1.0.0
 
 Debian 13 redesign with one embedded Xray runtime, multiple tagged inbounds and an authenticated WebSocket control contract.

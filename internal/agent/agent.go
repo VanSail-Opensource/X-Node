@@ -28,6 +28,7 @@ import (
 	"github.com/VanSail-Opensource/X-Node/internal/state"
 	"github.com/VanSail-Opensource/X-Node/internal/transport"
 	updatepkg "github.com/VanSail-Opensource/X-Node/internal/update"
+	"github.com/VanSail-Opensource/X-Node/pkg/releases"
 )
 
 type applyJob struct {
@@ -87,6 +88,10 @@ type Agent struct {
 }
 
 func New(dir, version string, client *transport.Client, logs *nlog.Stream) (*Agent, error) {
+	metadata, err := releases.ExecutableMetadata()
+	if err != nil {
+		return nil, err
+	}
 	store, e := state.Open(dir)
 	if e != nil {
 		return nil, e
@@ -119,7 +124,7 @@ func New(dir, version string, client *transport.Client, logs *nlog.Stream) (*Age
 	}
 	client.Hello = func() protocol.Message {
 		d := store.Snapshot()
-		return protocol.New("agent.hello", "", d.Revision, map[string]any{"agent_id": d.AgentID, "boot_id": a.BootID, "version": version, "xray_version": "v26.10.10", "config_revision": d.ConfigRevision, "ready": a.Runtime.Ready(), "capabilities": Capabilities, "upgrade_pending": a.Updater.Pending()})
+		return protocol.New("agent.hello", "", d.Revision, map[string]any{"agent_id": d.AgentID, "boot_id": a.BootID, "version": version, "xray_version": "v26.10.10", "config_revision": d.ConfigRevision, "ready": a.Runtime.Ready(), "capabilities": Capabilities, "upgrade_pending": a.Updater.Pending(), "binary_sha256": metadata.SHA256, "platform": metadata.Platform})
 	}
 	return a, nil
 }

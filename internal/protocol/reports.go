@@ -14,6 +14,8 @@ type AgentHello struct {
 	Ready          bool     `json:"ready"`
 	Capabilities   []string `json:"capabilities"`
 	UpgradePending bool     `json:"upgrade_pending,omitempty"`
+	BinarySHA256   string   `json:"binary_sha256,omitempty"`
+	Platform       string   `json:"platform,omitempty"`
 }
 
 type UserLimitStatus struct {

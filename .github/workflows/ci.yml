@@ -26,8 +26,8 @@ jobs:
           go mod verify
           git diff --check
       - name: Race and real-kernel regressions
-        # Xray's VLESS outbound uses uintptr-based TLS field offsets that checkptr rejects.
-        run: go test -race -gcflags='github.com/xtls/xray-core/proxy/vless/outbound=-d=checkptr=0' -count=1 -coverprofile=coverage.out ./...
+        # Xray's VLESS TLS splice paths use uintptr-based field offsets that checkptr rejects.
+        run: go test -race -gcflags='github.com/xtls/xray-core/proxy/vless/...=-d=checkptr=0' -count=1 -coverprofile=coverage.out ./...
       - name: Static analysis
         run: go vet ./...
       - name: API schemas

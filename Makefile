@@ -12,8 +12,8 @@ build-arm64:
 	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -ldflags '$(LDFLAGS)' -o dist/x-node-linux-arm64 ./cmd/x-node
 	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -ldflags '$(LDFLAGS)' -o dist/xnodectl-linux-arm64 ./cmd/xnodectl
 test:
-	# Xray's VLESS outbound uses uintptr-based TLS field offsets that checkptr rejects.
-	go test -race -gcflags='github.com/xtls/xray-core/proxy/vless/outbound=-d=checkptr=0' -count=1 -coverprofile=coverage.out ./...
+	# Xray's VLESS TLS splice paths use uintptr-based field offsets that checkptr rejects.
+	go test -race -gcflags='github.com/xtls/xray-core/proxy/vless/...=-d=checkptr=0' -count=1 -coverprofile=coverage.out ./...
 vet:
 	go vet ./...
 schemas:

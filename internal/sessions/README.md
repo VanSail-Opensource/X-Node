@@ -14,3 +14,6 @@ sessions on the next one-second control tick.
 Rates use actual elapsed seconds and payload bytes. Configured normal/burst Mbps
 remain a separate policy projection. Connection and source-IP snapshots are
 transient. Hosted cases cover quota races, expiry, counters and quiescence.
+
+`period_barrier.go` finishes revoked period handlers without closing renewed streams.
+`period_barrier_test.go` covers late old bytes, active-period rejection and renewal continuity in hosted CI.

@@ -92,4 +92,4 @@ func Schemas() map[string]any {
 }
 
 var MasterMessageTypes = []string{"state.sync", "config.apply", "users.sync", "users.delta", "user.controls", "traffic.ack", "command", "command.cancel"}
-var CommandNames = []string{"connections.list", "connections.close", "users.active_ips", "ips.control", "metrics.get", "jobs.list", "firewall.status", "firewall.confirm", "firewall.apply", "speedtest", "update.check", "update.install", "update.rollback", "runtime.reload", "geodata.refresh", "ddns.run", "certificates.get", "traffic.flush"}
+var CommandNames = []string{"connections.list", "connections.close", "users.active_ips", "ips.control", "metrics.get", "jobs.list", "firewall.status", "firewall.confirm", "firewall.apply", "speedtest", "update.check", "update.install", "update.rollback", "runtime.reload", "geodata.refresh", "ddns.run", "certificates.get", "traffic.flush", "config.validate"}

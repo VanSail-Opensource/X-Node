@@ -33,6 +33,7 @@ func (r *Registry) AcquireTracked(ctx context.Context, id int, identity, tag, ip
 }
 
 func (r *Registry) initializeAccounting(lease *Lease, tracked bool) {
+	lease.accountingPeriod = lease.user.policy.AccountingPeriod
 	lease.tracked, lease.finished = tracked, make(chan struct{})
 	if r.inflight == nil {
 		r.inflight = map[string]*Lease{}

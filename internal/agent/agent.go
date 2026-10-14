@@ -124,7 +124,7 @@ func New(dir, version string, client *transport.Client, logs *nlog.Stream) (*Age
 	return a, nil
 }
 
-var Capabilities = []string{"native_xray", "multi_inbound", "tcp_udp_limits", "session_revocation", "traffic_ack", "certificates", "ddns", "smartdns", "geodata", "nftables", "port_forward", "metrics", "logs", "peer_speedtest", "torrent_ban", "signed_updates", "traffic_periods_v1", "measured_user_rates", "authorization_expiry", "member_outbound_guards"}
+var Capabilities = []string{"native_xray", "multi_inbound", "tcp_udp_limits", "session_revocation", "traffic_ack", "certificates", "ddns", "smartdns", "geodata", "nftables", "port_forward", "metrics", "logs", "peer_speedtest", "torrent_ban", "signed_updates", "traffic_periods_v1", "measured_user_rates", "authorization_expiry", "member_outbound_guards", "traffic_period_barriers_v1", "config_validation_v1"}
 
 func (a *Agent) Run(ctx context.Context) error {
 	d := a.Store.Snapshot()
@@ -613,6 +613,15 @@ func (a *Agent) command(ctx context.Context, m protocol.Message) error {
 		switch request.Name {
 		case "traffic.flush":
 			return a.flushTraffic(ctx, args)
+		case "config.validate":
+			config, err := protocol.ParseConfig(args)
+			if err != nil {
+				return nil, err
+			}
+			if _, err = xray.Prepare(config); err != nil {
+				return nil, errors.New("native configuration validation failed")
+			}
+			return map[string]bool{"valid": true}, nil
 		case "connections.list":
 			var p struct {
 				After string `json:"after,omitempty"`

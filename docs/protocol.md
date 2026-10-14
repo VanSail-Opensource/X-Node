@@ -19,7 +19,16 @@ and must never be reused. Timestamp granularity is one second.
 `download_bytes_per_second`, and `sample_seconds`. These are payload byte rates;
 `users.speed` still describes decimal Mbps policy limits, not measured throughput.
 
-The `traffic.flush` command accepts optional `user_id` and `quiesce`.
+The `traffic.flush` command accepts optional `user_id`, `quiesce` and `accounting_period`.
+A period-specific quiescence waits for the old native handlers without closing
+renewed streams. It requires `traffic_period_barriers_v1`, a positive user ID,
+and an accounting period that no longer admits traffic. The response echoes
+`accounting_period`; only seal a period after its sequence is acknowledged.
+
+`config.validate` accepts a complete remote configuration and performs the
+same native preparation without listeners. It requires `config_validation_v1`
+and validates node-local certificates/assets before a provider handover. Its
+results and configuration stay out of durable command history.
 With quiescence, block new admission first; the agent closes matching sessions and
 waits for their native handlers before capture. The result contains `agent_id`,
 the sealed journal `sequence`, `through`, and `quiesced`. The master must commit

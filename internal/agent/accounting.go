@@ -13,6 +13,7 @@ import (
 type accountingRequest struct {
 	ctx      context.Context
 	quiesced bool
+	period   string
 	result   chan accountingResult
 }
 type accountingResult struct {
@@ -83,19 +84,25 @@ func (a *Agent) flushTraffic(ctx context.Context, raw []byte) (any, error) {
 	if err := protocol.Decode(raw, &args); err != nil {
 		return nil, err
 	}
-	if args.UserID < 0 {
+	if args.UserID < 0 || args.AccountingPeriod != "" && (!args.Quiesce || args.UserID <= 0 || !protocol.ValidName(args.AccountingPeriod)) {
 		return nil, errors.New("invalid traffic flush user")
 	}
 	child, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 	if args.Quiesce {
-		release, err := a.Registry.Quiesce(child, args.UserID)
+		var release func()
+		var err error
+		if args.AccountingPeriod != "" {
+			release, err = a.Registry.QuiescePeriod(child, args.UserID, args.AccountingPeriod)
+		} else {
+			release, err = a.Registry.Quiesce(child, args.UserID)
+		}
 		if err != nil {
 			return nil, err
 		}
 		defer release()
 	}
-	request := accountingRequest{ctx: child, quiesced: args.Quiesce, result: make(chan accountingResult, 1)}
+	request := accountingRequest{ctx: child, quiesced: args.Quiesce, period: args.AccountingPeriod, result: make(chan accountingResult, 1)}
 	select {
 	case a.accountingRequests <- request:
 	case <-child.Done():
@@ -124,6 +131,7 @@ func (a *Agent) handleAccounting(request accountingRequest) {
 		a.failStorage(err)
 	}
 	barrier.Quiesced = request.quiesced
+	barrier.AccountingPeriod = request.period
 	request.result <- accountingResult{barrier, err}
 	a.lastReport = time.Time{}
 }

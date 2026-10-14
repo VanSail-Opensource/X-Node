@@ -5,7 +5,7 @@ func durableJobHistory(history []JobResult) []JobResult {
 	out := make([]JobResult, 0, len(history))
 	for _, result := range history {
 		switch result.Command {
-		case "connections.list", "users.active_ips", "metrics.get", "jobs.list":
+		case "connections.list", "users.active_ips", "metrics.get", "jobs.list", "config.validate":
 			continue
 		default:
 			out = append(out, result)

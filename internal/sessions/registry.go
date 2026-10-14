@@ -36,35 +36,37 @@ type userState struct {
 	upload, download atomic.Uint64
 }
 type Registry struct {
-	mu          sync.RWMutex
-	prefix      string
-	sequence    uint64
-	users       map[int]*userState
-	connections map[string]*Lease
-	bans        map[int]time.Time
-	ports       []protocol.PortRange
-	rejects     map[string]uint64
-	paused      bool
-	epochs      map[string]string
-	OnBan       func(int, time.Time)
-	OnReject    func(AdmissionEvent)
-	ipBlocks    map[string]protocol.IPBlock
-	reportIPs   bool
-	accounting  map[accountingKey]*accountingCounters
-	inflight    map[string]*Lease
-	rates       map[int]protocol.UserRate
-	fences      map[int]int
+	mu           sync.RWMutex
+	prefix       string
+	sequence     uint64
+	users        map[int]*userState
+	connections  map[string]*Lease
+	bans         map[int]time.Time
+	ports        []protocol.PortRange
+	rejects      map[string]uint64
+	paused       bool
+	epochs       map[string]string
+	OnBan        func(int, time.Time)
+	OnReject     func(AdmissionEvent)
+	ipBlocks     map[string]protocol.IPBlock
+	reportIPs    bool
+	accounting   map[accountingKey]*accountingCounters
+	inflight     map[string]*Lease
+	rates        map[int]protocol.UserRate
+	fences       map[int]int
+	periodFences map[accountingKey]int
 }
 type Lease struct {
-	Info       Connection
-	once       sync.Once
-	registry   *Registry
-	user       *userState
-	cancel     func()
-	accounting *accountingCounters
-	tracked    bool
-	finished   chan struct{}
-	finishOnce sync.Once
+	Info             Connection
+	once             sync.Once
+	registry         *Registry
+	user             *userState
+	cancel           func()
+	accounting       *accountingCounters
+	accountingPeriod string
+	tracked          bool
+	finished         chan struct{}
+	finishOnce       sync.Once
 }
 
 func New() *Registry {
@@ -240,7 +242,7 @@ func (r *Registry) acquire(ctx context.Context, id int, identity, tag, ip, desti
 		reason = "ineligible"
 	case u.policy.ValidUntil != nil && !u.policy.ValidUntil.After(time.Now()):
 		reason = "expired"
-	case r.fences[id] > 0 || r.fences[0] > 0:
+	case r.fences[id] > 0 || r.fences[0] > 0 || r.periodFences[accountingKey{id, u.policy.AccountingPeriod}] > 0:
 		reason = "block_new"
 	case u.policy.BlockNew:
 		reason = "block_new"
@@ -423,7 +425,7 @@ func (r *Registry) Summary() Summary {
 		case u.policy.ValidUntil != nil && !u.policy.ValidUntil.After(time.Now()):
 			status.Limited = true
 			status.Reason = "expired"
-		case r.fences[id] > 0 || r.fences[0] > 0:
+		case r.fences[id] > 0 || r.fences[0] > 0 || r.periodFences[accountingKey{id, u.policy.AccountingPeriod}] > 0:
 			status.Limited = true
 			status.Reason = "block_new"
 		case u.policy.BlockNew:

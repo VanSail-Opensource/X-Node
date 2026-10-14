@@ -30,14 +30,16 @@ type UserRate struct {
 }
 
 type TrafficFlush struct {
-	UserID  int  `json:"user_id,omitempty"`
-	Quiesce bool `json:"quiesce,omitempty"`
+	UserID           int    `json:"user_id,omitempty"`
+	Quiesce          bool   `json:"quiesce,omitempty"`
+	AccountingPeriod string `json:"accounting_period,omitempty"`
 }
 
 // TrafficBarrier identifies the journal sequence covering a serialized capture.
 type TrafficBarrier struct {
-	AgentID  string    `json:"agent_id"`
-	Sequence uint64    `json:"sequence"`
-	Through  time.Time `json:"through"`
-	Quiesced bool      `json:"quiesced"`
+	AgentID          string    `json:"agent_id"`
+	Sequence         uint64    `json:"sequence"`
+	Through          time.Time `json:"through"`
+	Quiesced         bool      `json:"quiesced"`
+	AccountingPeriod string    `json:"accounting_period,omitempty"`
 }

@@ -705,7 +705,7 @@
     {
       "name": "traffic.flush",
       "description": "Seal captured traffic and obtain a durable accounting cutoff.",
-      "body": "## Accounting barrier\nThe optional user_id selects the user to quiesce; omission selects all users. Set quiesce only after new admission has been blocked. The agent waits for native handlers and their final payload bytes, then seals traffic without replacing an outstanding batch.\n\nThe result contains agent_id, sequence, through and quiesced. Commit all reports through that sequence before resetting or settling the old accounting period. A command result by itself does not prove the master has ingested the reports.",
+      "body": "## Accounting barrier\nThe optional user_id selects the user to quiesce; omission selects all users. Set quiesce only after new admission has been blocked. The agent waits for native handlers and their final payload bytes, then seals traffic without replacing an outstanding batch.\n\nThe result contains agent_id, sequence, through and quiesced. Commit all reports through that sequence before resetting or settling the old accounting period. A command result by itself does not prove the master has ingested the reports.\n\n## Renewal continuity\nSpecify accounting_period to wait only for a revoked old period. The current new period remains admitted. The barrier echoes the requested accounting period.",
       "fields": [
         [
           "user_id",
@@ -718,11 +718,42 @@
           "boolean",
           "Optional",
           "Close fenced sessions and wait for native completion before sealing."
+        ],
+        [
+          "accounting_period",
+          "string",
+          "Optional",
+          "With quiesce and a positive user ID, finish only this old period while renewed streams remain active. Requires traffic_period_barriers_v1."
         ]
       ],
       "args": {
         "user_id": 7,
         "quiesce": true
+      }
+    },
+    {
+      "name": "config.validate",
+      "description": "Validate a complete native configuration without starting listeners.",
+      "body": "## Node preflight\nSend the remote configuration directly as args, including users. The agent validates protocol policy, managed accounts, native fields, and node-local assets using its pinned core. No listener starts and no configuration becomes authoritative. Requires config_validation_v1. Command arguments and results remain memory-only.",
+      "fields": [
+        [
+          "xray",
+          "object",
+          "Required",
+          "Native Xray configuration."
+        ],
+        [
+          "users",
+          "array",
+          "Required",
+          "Managed accounts; an empty array revokes every account in the candidate."
+        ]
+      ],
+      "args": {
+        "xray": {
+          "inbounds": []
+        },
+        "users": []
       }
     }
   ]

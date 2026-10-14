@@ -1197,7 +1197,8 @@
                 "geodata.refresh",
                 "ddns.run",
                 "certificates.get",
-                "traffic.flush"
+                "traffic.flush",
+                "config.validate"
               ],
               "type": "string"
             }

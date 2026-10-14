@@ -1,0 +1,703 @@
+{
+  "guides": [
+    {
+      "key": "overview",
+      "title": "API overview",
+      "description": "Build a master for one Debian agent, one Xray runtime and one control connection.",
+      "body": "## One connection. Every control.\nX-Node is a Debian 13 binary agent with one embedded Xray runtime and multiple tagged inbounds. The production master is a separate application. This reference describes the contract that master implements.\n\nControl messages, user synchronization, telemetry and utility commands share one authenticated WebSocket. Certificate providers, artifact downloads and test transfers use their respective network protocols.\n\n## Integration path\n1. Accept an authenticated WSS connection using the `x-node.v1` subprotocol.\n2. Read `agent.hello`, then respond to `state.request` with an authoritative `state.sync`.\n3. Persist monotonic revisions and distinguish `state.accepted` from `state.applied`.\n4. Deduplicate `traffic.report` batch IDs before billing and acknowledge durable receipt.\n5. Replace online telemetry snapshots, issue user controls and request IP details only when needed.\n\n## At a glance\n| Property | Contract |\n| --- | --- |\n| Wire format | UTF-8 JSON, protocol version `1` |\n| Control transport | WSS with Bearer authentication |\n| Socket subprotocol | `x-node.v1` |\n| State authority | Master snapshots and revisioned deltas |\n| Machine metrics | One-second sample / five-second report defaults |\n| Active user IPs | Omitted by default; explicitly requested |\n| Traffic accounting | Durable acknowledged batches |\n| Local configuration | Connection URL and token only |\n\n## Explore the contract\n[Connect an agent](#/connection) · [State synchronization](#/synchronization) · [Command lifecycle](#/command-lifecycle) · [Remote configuration](#/configuration) · [Schemas & downloads](#/schemas)\n\nUse the left navigation to open a message or command. Each entry includes its direction, behavior and example JSON. The downloadable schema is the machine-readable source for payload shape."
+    },
+    {
+      "key": "connection",
+      "title": "Connection & authentication",
+      "description": "WSS upgrade, credentials, agent identity and reconnect behavior.",
+      "body": "## WebSocket upgrade\nThe agent initiates a WebSocket connection to the bootstrap URL supplied by the operator. `/v1/agents/connect` is the documented master endpoint. Agent connections require WSS, including local fixtures.\n\n```http\nGET /v1/agents/connect HTTP/1.1\nHost: master.example.com\nUpgrade: websocket\nConnection: Upgrade\nAuthorization: Bearer <agent-token>\nSec-WebSocket-Protocol: x-node.v1\n```\n\n| Response | Meaning |\n| --- | --- |\n| `101` | Upgrade accepted; begin the message exchange |\n| `401` | Missing or invalid Bearer credential |\n| `426` | A WebSocket upgrade is required |\n\nThe master validates enrollment and authorization. Keep credentials out of query strings, redirect URLs, traces and diagnostics. The agent redacts tokens, passwords and private keys before logging.\n\n## Envelope\n```json\n{\n  \"v\": 1,\n  \"type\": \"users.delta\",\n  \"id\": \"users-42\",\n  \"revision\": 42,\n  \"base_revision\": 41,\n  \"data\": {\"upsert\": [], \"remove\": [7]}\n}\n```\n\n| Field | Meaning |\n| --- | --- |\n| `v` | Required protocol version: `1` |\n| `type` | Required message name; maximum 64 characters |\n| `id` | Correlation or command ID; maximum 128 characters |\n| `revision` | Monotonic state revision for state mutations |\n| `base_revision` | Current authorization revision expected by an incremental mutation |\n| `data` | Message-specific typed JSON payload |\n\nThe maximum accepted frame is 16 MiB. Unknown envelope fields and malformed payloads are rejected. Send JSON arrays explicitly: missing or null `users` never means an empty authoritative set.\n\n## Identity and liveness\nThe first application frame on a new connection is `agent.hello`. It carries a durable agent ID and a fresh process boot ID. Preserve the state directory across upgrades so that identity and unacknowledged traffic remain stable.\n\nWebSocket Ping/Pong frames monitor transport liveness. Runtime readiness and synchronization are separate application status fields. A connected agent can still be applying configuration.\n\n## Reconnects\nReconnect uses bounded exponential backoff. The agent requests a full snapshot after reconnect, a revision gap or receive-buffer overflow. During a master outage it uses the last accepted private state, including admission blocks. A first boot without accepted state waits for an authoritative snapshot."
+    },
+    {
+      "key": "synchronization",
+      "title": "State synchronization",
+      "description": "Authoritative snapshots, exact base revisions and safe revocation.",
+      "body": "## Full snapshot\n`state.sync` establishes an authoritative baseline. It includes native `xray` configuration and an explicit `users` array. `users: []` removes every authorized user and closes revoked sessions.\n\n## Incremental changes\nAfter a successful snapshot, send `config.apply`, `users.sync`, `users.delta` or `user.controls` with a new `revision` and the current `base_revision`. The agent serializes application. A stale revision produces an error; a missing base or revision gap requests a new snapshot.\n\n| Message | Change |\n| --- | --- |\n| `state.sync` | Full configuration and authorization baseline |\n| `config.apply` | Complete configuration replacement |\n| `users.sync` | Complete user-set replacement |\n| `users.delta` | User additions, replacements and removals |\n| `user.controls` | Admission blocks without changing credentials |\n\nA repeated full snapshot at the successfully applied revision is acknowledged without repeating the change. Corrected configuration must use a higher revision.\n\n## Accepted versus applied\n`state.accepted` means the new authorization state has been persisted. `state.applied` means the proxy runtime has activated the configuration. `state.failed` reports an activation failure. Track both persisted authorization and runtime revision in the master.\n\nRevocation is authoritative even if an unrelated runtime update fails. Removed users, rotated credentials and removed inbound eligibility never regain access through rollback. Old multiplexed transports carry a generation-bound identity and cannot create new leaf streams after revocation.\n\n## Native runtime updates\nThe agent validates native Xray configuration before changing listeners. Compatible user-only changes use runtime managers; listener and global changes may require controlled reconstruction and close affected sessions. Keep inbound tags stable and define managed accounts in the separate user set."
+    },
+    {
+      "key": "command-lifecycle",
+      "title": "Command lifecycle",
+      "description": "Accepted jobs, progress, results, cancellation and deduplication.",
+      "body": "## Submit a typed command\n```json\n{\"v\":1,\"type\":\"command\",\"id\":\"list-001\",\"data\":{\"name\":\"connections.list\",\"args\":{\"limit\":100}}}\n```\n\nThe agent emits `command.accepted`, optional `command.progress`, then `command.result`. Match the operation using the request ID. Progress data is command-specific. Results contain `id`, `command`, `status`, completion time and optional `data` or `error`.\n\n## Concurrency and retries\nTwo utility workers execute jobs concurrently. The agent retains the last 128 completed results across restarts for request-ID deduplication. Use unique IDs beyond that bounded retention window; retry an uncertain operation using the same ID while it remains retained.\n\n`jobs.list` returns the current retained job view. A result indicating that runtime reconstruction was queued is not proof that the new runtime is ready; also observe telemetry and state activation.\n\n## Cancellation\n```json\n{\"v\":1,\"type\":\"command.cancel\",\"data\":{\"id\":\"list-001\"}}\n```\n\nCancellation propagates through the command context. It cannot reverse a DNS-provider mutation that has already succeeded, a committed firewall transaction or an installed release. Query retained results before deciding whether to retry.\n\n## Host safety\nPrivileged actions use typed argument structures. Firewall changes include an independent rollback watchdog and require confirmation from the master after connectivity testing. Update installation requires authenticated release artifacts. Speedtests use an isolated Xray client with bounded transfers and cancellation."
+    },
+    {
+      "key": "users-and-ips",
+      "title": "Users, IPs & admission",
+      "description": "Privacy-aware active-IP reporting and precise user/IP controls.",
+      "body": "## User identity and limits\nEach user has a positive numeric `id`, credentials, eligible `inbound_tags` and optional per-agent quotas. `active_ip_limit` counts distinct current source IPs; `connection_limit` counts authenticated logical TCP streams and UDP associations across every eligible inbound. Zero quotas are unlimited.\n\n`speed_limit_mbps` is the normal rate and `burst_speed_limit_mbps` is the always enforced ceiling. After `speed_limit_after_seconds` consecutive seconds above normal (default 10), the normal cap applies. Traffic below 90% of normal for `speed_limit_reset_seconds` (default 1) restores bursts. Upload/download and all inbounds share this policy. `users.speed` reports its active rate. `block_new` prevents new admission while preserving established eligible streams. Master decisions implement approximate global totals; the agent does not request a master reservation for every stream.\n\n## Active IPs are requested data\nBy default, routine user telemetry omits source IP addresses. Set `telemetry.include_active_ips: true` in accepted configuration to request active IPs in recurring reports, or issue `users.active_ips` for a one-time query. Every reported IP is associated with its `user_id`; an IP without an active stream is not an online observation.\n\nSession details returned by an explicit `connections.list` query include their source IP and user identity. Turning recurring reporting off does not prevent the master from making an explicit detail request.\n\n## Drop or temporarily block an IP\nUse `ips.control` with a literal `source_ip`, optional `user_id`, `drop` and/or `block_seconds`. Omit `user_id` for an agent-wide IP action; supply it for that user's sessions. `drop: true` closes matching current sessions. A temporary block of 1?604800 seconds rejects future admission until its durable deadline; combining both closes current sessions and prevents immediate reconnection.\n\n`unblock: true` removes the matching temporary IP restriction. It cannot be combined with `block_seconds`; it may accompany a drop. User/IP blocks match the canonical address, including IPv4-mapped IPv6 normalization. They are admission controls rather than a new host firewall ruleset.\n\n## Explain blocked admission\n`telemetry.report` includes a per-user admission status in `users.status[userID]` with an explicit `limited` boolean, a reason when restricted, and a `scope` of `new_connection` or `new_ip`. Reaching an active-IP quota restricts additional source IPs; already active source addresses remain eligible when other quotas permit. `admission.rejected` reports an attempted rejection with `user_id`, `limited: true` and a machine-readable `reason`. Its source IP is included only when recurring IP reporting has been requested.\n\nRejection reasons are `block_new`, `ip_temp_block`, `torrent_ban`, `active_ip_limit`, `connection_limit`, `blocked_port`, `ineligible` and `storage_backpressure`. A user-wide status describes restrictions known from the current snapshot; an IP-specific decision also depends on the attempted source IP.\n\n## Revocation and cleanup\nCredential rotation removes old authorization before new credentials are installed. Removing a user or inbound eligibility closes existing affected sessions. Reservations are released exactly once on failure, closure or UDP expiry. Session lists are snapshots: a returned session may close before a later control request."
+    },
+    {
+      "key": "reliable-traffic",
+      "title": "Traffic & telemetry",
+      "description": "Idempotent billing, online snapshots and bounded observability.",
+      "body": "## Durable billing batches\n`traffic.report` contains a stable batch `id` and a `traffic` map. Each key is a user ID and its value is `[upload_bytes, download_bytes]`, measured in bytes. Journal persistence happens before transmission. A restart or reconnect may replay the same batch.\n\nPersist the deduplication ID and bill the batch atomically in the master, then send `traffic.ack` with the batch ID in `data.id`. Never acknowledge before durable acceptance. Duplicate reports must be acknowledged again without charging twice. Only the matching pending batch is retired by the agent.\n\n## Backpressure\nThe journal has a storage bound and explicit backpressure. Storage exhaustion cannot silently discard traffic. Observe readiness and rejection reasons; address storage or acknowledgement failures before asking the agent to resume normal work.\n\n## Current online state\n`telemetry.report` is an authoritative current snapshot. Replace the master's current online set instead of merging indefinitely. A user missing from active connection counts has zero active sessions. IP details are omitted unless requested. A fresh `boot_id` distinguishes counter generations after restart.\n\nTrack `connected`, `liveness`, `ready`, `synchronized`, envelope `revision` and `config_revision` separately. Machine metrics and certificate status are snapshots; they do not require a traffic acknowledgement.\n\n## Logs and measurements\nOne shared sampler produces immutable machine metrics. The default sample interval is one second and reporting interval is five seconds. Throughput uses actual elapsed time. CPU, memory, swap, disks, interfaces, process/connection counts, uptime, virtualization and available GPU collectors are included. Unavailable collectors report status.\n\n`logs.report` carries bounded redacted entries and the number dropped from the log queue. Rejection and transport-drop counters help distinguish an idle user from a restricted or overloaded agent."
+    }
+  ],
+  "configuration_intro": "## Configuration authority\nOperational settings arrive inside `state.sync` or `config.apply`; the local bootstrap contains only the master connection URL and token. `xray` and `users` are required, including `users: []` when every account should be removed.\n\nThe tables below are generated directly from the tracked JSON Schema. Runtime validation also checks native Xray configuration, unique IDs/tags, provider references, port ranges and other semantic constraints. [Download configuration schema](downloads/schemas/config.schema.json).\n\n## Top-level fields",
+  "downloads_intro": "## Machine-readable contracts\n[Download OpenAPI 3.1](downloads/openapi.json) · [Download AsyncAPI 3.1](downloads/asyncapi.json) · [Master message JSON Schema](downloads/schemas/master-message.schema.json) · [Remote configuration JSON Schema](downloads/schemas/config.schema.json)\n\nOpenAPI describes the actual authenticated WebSocket upgrade. Operations after upgrade are application frames, documented through the accompanying schemas and AsyncAPI. Relative schema references resolve against the downloaded `schemas/` directory.\n\n## Source documentation\n[Protocol Markdown](downloads/docs/protocol.md) · [Native capability inventory](downloads/docs/features.md) · [Migration guide](downloads/docs/migration.md) · [Release notes](downloads/docs/release-notes.md)\n\nThese files are copied from the repository when the site is built. The site uses no external documentation renderer or runtime CDN.",
+  "fields": {
+    "xray": "Native root Xray configuration. Tagged inbounds and native outbounds, routing, transports and resolver settings are retained; managed accounts and accounting are generated separately.",
+    "users": "Authoritative user set. Empty removes all authorization; missing/null is invalid.",
+    "providers": "Named DNS-provider configurations and credentials used by certificate profiles and DDNS jobs. Treat every credential as secret.",
+    "certificates": "Named certificate profiles shared by inbounds. Reusing a profile shares its certificate manager.",
+    "inbound_certificates": "Map of inbound tag to named certificate profile.",
+    "ddns": "Managed A/AAAA jobs. Only each job's configured records are modified.",
+    "dns": "Resolver mode and optional guarded port-53 redirection. Xray DNS is the default.",
+    "firewall": "Complete host nftables policy with protected SSH access and independent rollback confirmation.",
+    "blocked_ports": "Outbound destination-port ranges enforced before dispatch; matching established flows close after policy changes.",
+    "asset_hashes": "Map of managed Geodata filename to expected SHA-256 digest. Verified files are staged atomically.",
+    "telemetry": "Sampler/report cadence and opt-in recurring source-IP reporting.",
+    "torrent": "BitTorrent detection and temporary user admission block policy.",
+    "updates": "Stable release policy. Daily checks run; automatic installation is disabled by default.",
+    "users.id": "Positive user ID assigned by the master; unique inside a snapshot.",
+    "users.uuid": "Default protocol account UUID when a per-inbound native credential is not supplied.",
+    "users.credentials": "Map of eligible inbound tag to native account object. The agent manages email and level identity fields.",
+    "users.inbound_tags": "Unique eligible managed inbound tags. At least one is required.",
+    "users.active_ip_limit": "Distinct active source-IP limit across inbounds. Zero means unlimited.",
+    "users.connection_limit": "Logical active TCP/UDP stream limit across inbounds. Zero means unlimited.",
+    "users.speed_limit_mbps": "Normal aggregate upload plus download rate in Mbps. Zero with no burst ceiling disables throttling.",
+    "users.block_new": "Reject newly admitted streams while retaining eligible established streams.",
+    "telemetry.sample_seconds": "Sample interval, default 1 second. Zero selects the default.",
+    "telemetry.report_seconds": "Report interval, default 5 seconds. Zero selects the default.",
+    "telemetry.include_active_ips": "Explicit request to include user-associated active IPs in recurring reports; default false.",
+    "torrent.enabled": "Enable classified BitTorrent detection, flow blocking and temporary user bans.",
+    "torrent.ban_seconds": "Ban duration, default 600 seconds (10 minutes). Zero selects the default.",
+    "updates.enabled": "Permit policy-driven automatic stable release installation. Default false.",
+    "updates.version": "Optional selected stable release version.",
+    "dns.mode": "xray (default) or optional smartdns.",
+    "dns.redirect": "Redirect port 53 only after the selected loopback resolver is ready for TCP and UDP.",
+    "dns.upstreams": "SmartDNS DNS-over-TLS endpoints using tls://host[:port]; required for SmartDNS mode.",
+    "providers.type": "Supported DNS-provider implementation name.",
+    "providers.credentials": "Provider-specific credential map delivered securely over WSS.",
+    "certificates.provider": "Named provider for certificate DNS challenge operations.",
+    "certificates.config": "Certificate source and ACME configuration; secret key material is redacted from reports.",
+    "certificates.config.domain": "Certificate domain name.",
+    "certificates.config.cert_mode": "Certificate mode supported by the manager: provided files/content or automatic issuance.",
+    "certificates.config.cert_file": "Provided certificate file path.",
+    "certificates.config.key_file": "Provided private-key file path.",
+    "certificates.config.cert_content": "Provided certificate PEM content.",
+    "certificates.config.key_content": "Provided private-key PEM content; secret.",
+    "certificates.config.email": "ACME account contact address.",
+    "certificates.config.dns_provider": "DNS provider name for DNS-01 issuance.",
+    "certificates.config.dns_env": "Provider environment values used by the certificate manager; secret.",
+    "certificates.config.propagation_delay": "DNS propagation delay duration.",
+    "certificates.config.startup_timeout_seconds": "Bound for initial certificate readiness.",
+    "certificates.config.http_port": "Challenge listener port when the selected issuance mode uses HTTP.",
+    "certificates.config.auto_tls": "Automatic TLS behavior of the certificate profile.",
+    "ddns.id": "Unique DDNS job identifier, used by ddns.run.",
+    "ddns.provider": "Named DNS provider configuration.",
+    "ddns.zone": "DNS zone managed by the selected provider.",
+    "ddns.name": "Record name whose A and/or AAAA records this job owns.",
+    "ddns.ipv4": "Explicit IPv4 address when not discovered dynamically.",
+    "ddns.ipv6": "Explicit IPv6 address when not discovered dynamically.",
+    "ddns.interface": "Interface used for local address discovery.",
+    "ddns.ipv4_url": "HTTPS address-discovery endpoint for IPv4.",
+    "ddns.ipv6_url": "HTTPS address-discovery endpoint for IPv6.",
+    "ddns.ttl_seconds": "Provider record TTL in seconds.",
+    "ddns.interval_seconds": "Refresh interval, default 300 seconds (5 minutes).",
+    "firewall.enabled": "Enable agent ownership of the host ruleset.",
+    "firewall.protect": "Enable probe protection and temporary source-prefix bans.",
+    "firewall.tcp_ports": "Allowed TCP listener ports.",
+    "firewall.udp_ports": "Allowed UDP listener ports.",
+    "firewall.ssh_ports": "SSH management ports retained during every transaction.",
+    "firewall.allow_prefixes": "IP/CIDR allowlist preserved in the generated policy.",
+    "firewall.forward": "Typed TCP/UDP forwarding rules with explicit destination addresses and ports.",
+    "blocked_ports.from": "First destination port in the inclusive blocked range (1–65535).",
+    "blocked_ports.to": "Last destination port in the inclusive blocked range; at least from.",
+    "blocked_ports.network": "tcp or udp; omitted applies to both.",
+    "users.burst_speed_limit_mbps": "Always enforced burst ceiling in Mbps, at least the normal rate. Omission keeps the fixed normal cap.",
+    "users.speed_limit_after_seconds": "Consecutive seconds above normal before applying the normal cap; default 10.",
+    "users.speed_limit_reset_seconds": "Seconds below 90% of normal before allowing bursts again; default 1."
+  },
+  "messages": [
+    {
+      "name": "agent.hello",
+      "direction": "Agent → master",
+      "description": "Identify the durable agent and current process before synchronization.",
+      "body": "## First frame\nSent before other application frames on every new socket. The payload identifies the persisted agent, a fresh process boot ID, agent/core versions, applied revision and supported capabilities. Use durable identity for enrollment and billing; use the boot ID to recognize a new process/counter generation.\n\n## Next step\nWait for `state.request`, then send an authoritative snapshot. A hello reports current state; it does not authorize the master to skip synchronization."
+    },
+    {
+      "name": "state.request",
+      "direction": "Agent → master",
+      "description": "Request a full authoritative state after connect or synchronization loss.",
+      "body": "## When emitted\nThe agent sends this after hello and after reconnect, a revision gap or receive-buffer overflow. Return a complete `state.sync` using the authoritative current revision. Cached operation continues during an outage; the master still needs to resynchronize when the socket returns."
+    },
+    {
+      "name": "state.sync",
+      "direction": "Master → agent",
+      "description": "Establish a complete native runtime and user authorization baseline.",
+      "body": "## Authoritative state\nSupply a complete remote configuration. Both `xray` and `users` are required. An explicit empty user array removes every user. Missing/null users produce a validation error.\n\nUse a monotonic revision. An identical successfully applied snapshot at the same revision is acknowledged without reapplication. Correct failures with a higher revision. Observe accepted and applied separately. [Configuration fields](#/configuration).",
+      "example": {
+        "v": 1,
+        "type": "state.sync",
+        "id": "snapshot-1",
+        "revision": 1,
+        "data": {
+          "xray": {
+            "inbounds": [],
+            "outbounds": [
+              {
+                "tag": "direct",
+                "protocol": "freedom"
+              }
+            ]
+          },
+          "users": []
+        }
+      }
+    },
+    {
+      "name": "config.apply",
+      "direction": "Master → agent",
+      "description": "Replace the complete accepted configuration with an exact base revision.",
+      "body": "## Replace configuration\nSend the full remote configuration, a new monotonic `revision` and the exact current `base_revision`. Omitted settings are replaced by their defaults. The agent validates before changing listeners. Authorization revocation remains effective if runtime activation fails.\n\nUse `state.sync` to recover from a base mismatch. [Configuration fields](#/configuration).",
+      "example": {
+        "v": 1,
+        "type": "config.apply",
+        "id": "configuration-2",
+        "revision": 2,
+        "base_revision": 1,
+        "data": {
+          "xray": {
+            "inbounds": []
+          },
+          "users": [],
+          "telemetry": {
+            "sample_seconds": 1,
+            "report_seconds": 5,
+            "include_active_ips": false
+          }
+        }
+      }
+    },
+    {
+      "name": "users.sync",
+      "direction": "Master → agent",
+      "description": "Replace the entire authorized user set without replacing native configuration.",
+      "body": "## Replace authorization\n`users` is an explicit required array. `[]` revokes every account. Credentials and eligible inbound tags are validated. Removed users and changed credentials close affected existing sessions. New credentials are installed after revocation.\n\nSupply a new `revision` and current `base_revision`.",
+      "fields": {
+        "users": "Complete user list; empty is authoritative removal."
+      },
+      "example": {
+        "v": 1,
+        "type": "users.sync",
+        "id": "users-3",
+        "revision": 3,
+        "base_revision": 2,
+        "data": {
+          "users": []
+        }
+      }
+    },
+    {
+      "name": "users.delta",
+      "direction": "Master → agent",
+      "description": "Add, replace and remove users against a known authorization revision.",
+      "body": "## Apply a delta\n`upsert` supplies full user replacements; `remove` supplies positive user IDs to revoke. A credential change or removed eligibility revokes affected sessions before new authorization is installed.\n\nSupply a new `revision` and exact current `base_revision`. A missing base or gap triggers a full state request.",
+      "fields": {
+        "upsert": "Complete user objects to insert or replace.",
+        "remove": "User IDs to remove from authorization."
+      },
+      "example": {
+        "v": 1,
+        "type": "users.delta",
+        "id": "delta-4",
+        "revision": 4,
+        "base_revision": 3,
+        "data": {
+          "upsert": [],
+          "remove": [
+            7
+          ]
+        }
+      }
+    },
+    {
+      "name": "user.controls",
+      "direction": "Master → agent",
+      "description": "Set per-user block_new decisions while retaining eligible existing streams.",
+      "body": "## Admission control\nEach item contains a positive user `id` and a `block_new` boolean. True rejects new streams; false removes this master-imposed restriction. Existing eligible streams remain open. Other restrictions, such as a temporary ban or reached quota, still apply.\n\nThis is a revisioned mutation with exact `base_revision`. Controls persist through outages and restarts.",
+      "fields": {
+        "users": "User IDs and explicit block_new decisions."
+      },
+      "example": {
+        "v": 1,
+        "type": "user.controls",
+        "id": "controls-5",
+        "revision": 5,
+        "base_revision": 4,
+        "data": {
+          "users": [
+            {
+              "id": 7,
+              "block_new": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "state.accepted",
+      "direction": "Agent → master",
+      "description": "Acknowledge durable acceptance of authorization and configuration intent.",
+      "body": "## Persistence acknowledgement\nThe requested authorization has been persisted under private state. The accepted revision is now authoritative for subsequent deltas. Runtime activation can still be pending. Do not interpret acceptance as proof that new listeners are serving.\n\nWait for `state.applied` or `state.failed` and observe telemetry readiness."
+    },
+    {
+      "name": "state.applied",
+      "direction": "Agent → master",
+      "description": "Acknowledge activation of the requested runtime revision.",
+      "body": "## Runtime activation\nThe proxy runtime has successfully activated the requested revision. Correlate the envelope ID and revision with the original mutation. Telemetry readiness and configuration revision provide the continuing current state."
+    },
+    {
+      "name": "state.failed",
+      "direction": "Agent → master",
+      "description": "Report a runtime activation error while preserving authoritative revocation.",
+      "body": "## Activation failure\nThe accepted authorization revision remains durable even when runtime replacement fails. A rollback cannot restore removed users or rotated credentials. The error is safe to display without raw credentials. Send corrected configuration with a higher revision and monitor runtime readiness."
+    },
+    {
+      "name": "telemetry.report",
+      "direction": "Agent → master",
+      "description": "Report runtime state, user admission status and immutable host metrics.",
+      "body": "## Current snapshot\nThe payload includes `agent_id`, `boot_id`, `time`, `connected`, `liveness`, `ready`, `synchronized`, `config_revision`, `users`, `machine`, `certificates` and transport-drop information. Envelope `revision` tracks accepted authorization.\n\n## Users and privacy\nReplace the master's current online connection set. Missing active users mean zero sessions. `users.status[userID]` supplies `user_id`, `limited: true/false`, a reason when blocked and `scope` (`new_connection` or `new_ip`). `users.connections` contains current counts and `users.active_ips` is present only when requested. IP/destination-specific restrictions are reported for attempted admissions; they do not claim that every new user stream is blocked. Source IPs are omitted by default. `telemetry.include_active_ips: true` explicitly requests user-associated active IPs in recurring snapshots. An explicit `users.active_ips` query obtains one-time details.\n\n## Delivery\nThe default report interval is five seconds. This is a disposable snapshot and needs no acknowledgement. Durable billing uses traffic.report instead."
+    },
+    {
+      "name": "traffic.report",
+      "direction": "Agent → master",
+      "description": "Replay-safe upload/download byte batches for durable billing.",
+      "body": "## Bill exactly once\nThe payload contains a stable `id` and `traffic`, a map of user IDs to `[upload_bytes, download_bytes]`. The journal is written before transmission. A replay after retry or restart uses the same ID.\n\nAtomically deduplicate and bill in the master, then send `traffic.ack`. Duplicate receipt should also be acknowledged, without billing again. Only the matching pending batch is retired.",
+      "example": {
+        "v": 1,
+        "type": "traffic.report",
+        "id": "agent-id:17",
+        "data": {
+          "id": "agent-id:17",
+          "traffic": {
+            "7": [
+              1024,
+              4096
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "traffic.ack",
+      "direction": "Master → agent",
+      "description": "Retire a matching batch after durable master-side acceptance.",
+      "body": "## Acknowledge durable receipt\nPut the exact traffic batch ID in `data.id`. Acknowledgements for a different pending batch never retire the current one. Send only after your deduplication and billing transaction commits.\n\nIf acknowledgement delivery is uncertain, acknowledge the replayed report again.",
+      "fields": {
+        "id": "Stable traffic.report batch ID already durably processed by the master."
+      },
+      "example": {
+        "v": 1,
+        "type": "traffic.ack",
+        "data": {
+          "id": "agent-id:17"
+        }
+      }
+    },
+    {
+      "name": "logs.report",
+      "direction": "Agent → master",
+      "description": "Stream bounded, redacted log entries and dropped-entry counts.",
+      "body": "## Log snapshot\n`entries` contains timestamped agent/core messages. `dropped` counts entries lost from the bounded queue. Tokens, account credentials and private certificate material are redacted before serialization. Do not use logs as an authoritative billing or state channel. No acknowledgement is required."
+    },
+    {
+      "name": "admission.rejected",
+      "direction": "Agent → master",
+      "description": "Explain why an attempted new user connection was denied.",
+      "body": "## Rejection event\nReports the `user_id`, `limited: true` and a machine-readable `reason` when a new authenticated stream is denied. The source IP is included only when recurring IP reporting has been requested.\n\nReasons identify the actual restriction, such as a master block, temporary ban, active-IP/connection quota, blocked destination or accounting backpressure. Rejection counters also appear in telemetry; an event stream is bounded and should not be used as billing data.\n\n## Fields\n| Field | Meaning |\n| --- | --- |\n| `user_id` | Numeric authenticated user identity |\n| `limited` | Always `true` for a rejected admission |\n| `reason` | `storage_backpressure`, `ineligible`, `block_new`, `torrent_ban`, `ip_temp_block`, `blocked_port`, `connection_limit` or `active_ip_limit` |\n| `scope` | `new_ip` for an active-IP quota, otherwise `new_connection` |\n| `source_ip` | Included only when recurring IP reporting is requested |",
+      "example": {
+        "v": 1,
+        "type": "admission.rejected",
+        "data": {
+          "user_id": 7,
+          "limited": true,
+          "reason": "connection_limit",
+          "scope": "new_connection"
+        }
+      }
+    },
+    {
+      "name": "command",
+      "direction": "Master → agent",
+      "description": "Submit one typed remotely managed utility operation.",
+      "body": "## Request structure\nThe envelope `id` is required for command correlation and deduplication. `data.name` selects a supported command and `data.args` is its typed argument object. An omitted args object defaults to `{}`. Unknown commands or malformed arguments fail validation.\n\nExpect accepted, optional progress and a final result. [Command lifecycle](#/command-lifecycle).",
+      "fields": {
+        "name": "Supported utility command name.",
+        "args": "Command-specific typed arguments."
+      },
+      "example": {
+        "v": 1,
+        "type": "command",
+        "id": "inspect-1",
+        "data": {
+          "name": "connections.list",
+          "args": {
+            "limit": 100
+          }
+        }
+      }
+    },
+    {
+      "name": "command.accepted",
+      "direction": "Agent → master",
+      "description": "Confirm that a command entered the bounded utility job queue.",
+      "body": "## Job acceptance\nCorrelate the request ID with the submitted command. Acceptance indicates queued work, not successful completion. Two workers execute utility jobs. Retried retained IDs return the existing retained result rather than repeating the operation."
+    },
+    {
+      "name": "command.progress",
+      "direction": "Agent → master",
+      "description": "Report an intermediate stage of a long-running utility operation.",
+      "body": "## Intermediate progress\nProgress is command-specific, for example a speedtest stage or update download/verification stage. Match the operation ID. It is optional and disposable; a final `command.result` determines completion."
+    },
+    {
+      "name": "command.result",
+      "direction": "Agent → master",
+      "description": "Return completion status, data or an error for a utility command.",
+      "body": "## Final result\nResults contain operation `id`, `command`, `status`, completion time and optional `data` or `error`. The last 128 completed results persist across restart. `jobs.list` exposes retained operations.\n\nSome commands, including runtime reconstruction, report queueing or preparation success. Observe runtime state and readiness for actual activation. Mutation results remain authoritative when a subsequent cancellation arrives."
+    },
+    {
+      "name": "command.cancel",
+      "direction": "Master → agent",
+      "description": "Cancel a queued or running operation by its original command ID.",
+      "body": "## Cooperative cancellation\n`data.id` names the original operation. Cancellation propagates to context-aware transfers and providers. It cannot reverse a mutation already committed by an external provider or host operation. Inspect retained results before retrying.",
+      "fields": {
+        "id": "Original command request ID to cancel."
+      },
+      "example": {
+        "v": 1,
+        "type": "command.cancel",
+        "data": {
+          "id": "speedtest-1"
+        }
+      }
+    },
+    {
+      "name": "error",
+      "direction": "Agent → master",
+      "description": "Report invalid frames, unsupported requests or stale revisions.",
+      "body": "## Protocol error\nCorrelate the envelope ID when present. Invalid shapes, unsupported message types and stale revisions produce a sanitized error. A synchronization gap also triggers `state.request`; send a full authoritative snapshot. Never send credentials or raw master messages to logs while diagnosing an error."
+    },
+    {
+      "name": "firewall.pending",
+      "direction": "Agent → master",
+      "description": "Announce an unconfirmed firewall transaction protected by rollback.",
+      "body": "## Connectivity confirmation\nThe live ruleset is applied with an independent watchdog. The master must test that it can communicate with the agent over the existing or re-established socket, then issue `firewall.confirm` using the transaction ID.\n\nTransactions default to 45 seconds. Missing confirmation restores both prior live rules and persisted policy. Keep configured SSH management ports available."
+    },
+    {
+      "name": "torrent.detected",
+      "direction": "Agent → master",
+      "description": "Report detected BitTorrent traffic and its user ban deadline.",
+      "body": "## Temporary user restriction\nWhen torrent policy is enabled, a classified flow is blocked, that user's sessions close and new sessions are rejected for the configured ban. The default is ten minutes. The event reports `user_id` and a deadline. Ban expiry is durable across restart.\n\nA master `block_new` decision remains independent of torrent expiry."
+    },
+    {
+      "name": "torrent.expired",
+      "direction": "Agent → master",
+      "description": "Report expiry of a durable temporary torrent ban.",
+      "body": "## Ban expiry\nThe torrent restriction has expired for the reported user. Other restrictions such as master `block_new`, IP bans and quotas still apply. Read the current admission status before treating a user as unrestricted."
+    }
+  ],
+  "commands": [
+    {
+      "name": "connections.list",
+      "description": "Inspect a bounded page of authenticated logical sessions.",
+      "body": "## Session details\nReturns current session records with user identity, source IP, inbound tag and destination metadata. This explicit query requests connection detail; it is separate from recurring IP-reporting policy.\n\n## Pagination\nPass `after` as the last returned session ID. Sessions are sorted by ID. This is a live snapshot, so entries may close between requests. The default page size is 100; the maximum supported size is 1000.",
+      "fields": [
+        [
+          "after",
+          "string",
+          "Optional",
+          "Exclusive last-seen session cursor."
+        ],
+        [
+          "limit",
+          "integer",
+          "Optional",
+          "Page size; default 100, maximum 1000."
+        ]
+      ],
+      "args": {
+        "limit": 100
+      }
+    },
+    {
+      "name": "connections.close",
+      "description": "Close one session or a user's matching inbound sessions.",
+      "body": "## Targeted closure\nChoose either a session `id` or a positive `user_id` with optional `inbound_tag`. Closing releases admission slots exactly once. User-wide closure returns an acknowledgement even when no current sessions match; a single session closure reports whether it was found.\n\nDropping a session alone permits reconnection when current policy allows it. Use ips.control to combine an IP drop with a temporary admission block.",
+      "fields": [
+        [
+          "id",
+          "string",
+          "One selector",
+          "Specific session ID."
+        ],
+        [
+          "user_id",
+          "integer",
+          "One selector",
+          "Positive user ID; when set, selects the user's sessions."
+        ],
+        [
+          "inbound_tag",
+          "string",
+          "Optional",
+          "Narrow user-session closure to one inbound."
+        ]
+      ],
+      "args": {
+        "user_id": 7
+      }
+    },
+    {
+      "name": "users.active_ips",
+      "description": "Request current active source IPs associated with user IDs.",
+      "body": "## Explicit IP request\nReturns active user/IP observations on demand. Source IPs are associated with positive user IDs and reflect established logical sessions. A user with no active sessions has no active source addresses.\n\nSupply `user_id` to narrow the query, or omit it to inspect all current users. This command does not turn on recurring IP reporting. Configure `telemetry.include_active_ips` separately if recurring observations are required.\n\n## Result data\nThe result is an array of `{user_id, source_ip, connections}` observations, sorted by user ID and source address. `connections` counts active logical sessions from that address. An empty array means no matching active source IPs.\n\n```json\n[{\"user_id\":7,\"source_ip\":\"203.0.113.25\",\"connections\":2}]\n```",
+      "fields": [
+        [
+          "user_id",
+          "integer",
+          "Optional",
+          "Positive user ID; omitted queries current users."
+        ]
+      ],
+      "args": {
+        "user_id": 7
+      }
+    },
+    {
+      "name": "ips.control",
+      "description": "Drop and/or temporarily block a specific source IP.",
+      "body": "## Scope and action\nA literal `source_ip` is required. `user_id` narrows the action to one user's sessions; omitted or zero applies agent-wide. At least one action is required: `drop: true`, `block_seconds` from 1 to 604800, or `unblock: true`. `unblock` cannot be combined with `block_seconds`.\n\nDropping closes current matches. A temporary block prevents matching new streams until its persisted deadline. `unblock: true` clears that exact user/IP block without removing other restrictions. Combining them prevents immediate reconnection. Address normalization includes IPv4-mapped IPv6. This command uses the agent admission registry; it does not replace the host firewall policy.\n\n## Result\nThe final result reports the applied action and temporary deadline where applicable. The current telemetry/rejection reason explains subsequent admission restrictions.",
+      "fields": [
+        [
+          "source_ip",
+          "string",
+          "Required",
+          "Literal IPv4 or IPv6 address to match."
+        ],
+        [
+          "user_id",
+          "integer",
+          "Optional",
+          "Positive user ID; omitted or zero means agent-wide."
+        ],
+        [
+          "drop",
+          "boolean",
+          "Optional action",
+          "Close matching established sessions."
+        ],
+        [
+          "block_seconds",
+          "integer",
+          "Optional action",
+          "Temporary admission-block duration: 1?604800 seconds."
+        ],
+        [
+          "unblock",
+          "boolean",
+          "Optional action",
+          "Clear the matching temporary IP block; incompatible with block_seconds."
+        ]
+      ],
+      "args": {
+        "source_ip": "203.0.113.25",
+        "user_id": 7,
+        "drop": true,
+        "block_seconds": 600
+      }
+    },
+    {
+      "name": "metrics.get",
+      "description": "Read the latest immutable machine sample.",
+      "body": "## Metrics snapshot\nReturns the shared sampler's current host, CPU, memory, swap, disk, interface, connection/process count, uptime, virtualization and runtime metrics. Available NVIDIA/AMD collectors are included; missing collectors expose unavailable status. Does not start a second sampler.\n\n## Arguments\nUse an empty object."
+    },
+    {
+      "name": "certificates.get",
+      "description": "Inspect certificate readiness, expiry and renewal status.",
+      "body": "## Certificate status\nReturns named profile status from shared certificate managers. Inbounds referencing the same profile reuse issuance and renewal work. Private keys and provider credentials are excluded.\n\n## Arguments\nUse an empty object."
+    },
+    {
+      "name": "jobs.list",
+      "description": "Inspect current and retained utility job results.",
+      "body": "## Retained operations\nReturns the agent's bounded job view, including statuses and retained completion results. The last 128 completed operations persist across restart. Use the original request ID to correlate commands and assess uncertain outcomes before retrying.\n\n## Arguments\nUse an empty object."
+    },
+    {
+      "name": "runtime.reload",
+      "description": "Queue reconstruction from the current accepted state.",
+      "body": "## Controlled reconstruction\nQueues runtime reconstruction using accepted native configuration, authorization, certificates and asset generation. A successful result indicates queue acceptance. Observe state/readiness telemetry for actual runtime activation. Existing affected streams may close.\n\n## Arguments\nUse an empty object."
+    },
+    {
+      "name": "ddns.run",
+      "description": "Run one accepted DDNS job immediately.",
+      "body": "## Managed records\n`job_id` must identify a job in the accepted remote configuration. The command uses that job's named DNS provider and only modifies its configured A/AAAA records. Unknown jobs fail. Provider errors remain visible in the result. Cancellation cannot undo an already accepted provider mutation.",
+      "fields": [
+        [
+          "job_id",
+          "string",
+          "Required",
+          "Accepted DDNS job ID."
+        ]
+      ],
+      "args": {
+        "job_id": "edge-address"
+      }
+    },
+    {
+      "name": "geodata.refresh",
+      "description": "Refresh verified assets and queue a new runtime generation.",
+      "body": "## Verified generations\nUses native Geodata asset/cron/outbound settings and remotely supplied hashes. Filenames stay in the managed directory. Files are staged, verified and replaced atomically as a generation. Required failure retains the previous valid files.\n\nSuccessful refresh queues reconstruction. Observe readiness for activation. The core's duplicate downloader is suppressed.\n\n## Arguments\nUse an empty object."
+    },
+    {
+      "name": "firewall.status",
+      "description": "Read current host policy and pending transaction status.",
+      "body": "## Host firewall status\nReturns managed nftables state and pending confirmation details. Use this to identify an unconfirmed transaction before issuing firewall.confirm. Host ruleset ownership is complete, including persisted nftables policy.\n\n## Arguments\nUse an empty object."
+    },
+    {
+      "name": "firewall.apply",
+      "description": "Atomically install a validated host ruleset with rollback protection.",
+      "body": "## Complete host policy\n`policy` supplies the typed remote firewall structure. Allowed services, SSH ports, IP prefixes, protection and TCP/UDP forwarding are rendered into one validated candidate. There is no conntrack connection quota.\n\nOptional DNS redirection is accepted only after loopback resolver readiness. A pending transaction is guarded by an independent systemd watchdog. Test master connectivity, then confirm its transaction ID before the default 45-second deadline. Missing confirmation restores live rules and persisted policy.",
+      "fields": [
+        [
+          "policy",
+          "object",
+          "Required",
+          "Complete FirewallPolicy; see remote configuration fields."
+        ],
+        [
+          "dns_redirect",
+          "boolean",
+          "Optional",
+          "Guarded port-53 redirection after resolver readiness."
+        ]
+      ],
+      "args": {
+        "policy": {
+          "enabled": true,
+          "protect": true,
+          "tcp_ports": [
+            443
+          ],
+          "ssh_ports": [
+            22
+          ]
+        },
+        "dns_redirect": false
+      }
+    },
+    {
+      "name": "firewall.confirm",
+      "description": "Confirm connectivity for a specific pending firewall transaction.",
+      "body": "## Commit after connectivity testing\nUse the transaction ID from firewall.pending or the apply result. Confirm through the existing or re-established control socket only after testing that the master can still reach the agent. A different or expired transaction ID fails. Successful confirmation cancels the rollback watchdog.",
+      "fields": [
+        [
+          "transaction_id",
+          "string",
+          "Required",
+          "Pending transaction to commit."
+        ]
+      ],
+      "args": {
+        "transaction_id": "firewall-operation-1"
+      }
+    },
+    {
+      "name": "speedtest",
+      "description": "Measure latency and throughput through a peer using isolated Xray.",
+      "body": "## Peer test\nSupply native `peer_outbound` credentials/settings and HTTPS upload/download endpoints controlled by the master. The agent uses an isolated outbound-only Xray client, never the managed inbound runtime. It reports connection/request latency and transfer throughput with cleanup and cancellation.\n\n## Bounds\nDefault latency sampling is three requests. Default transfers are bounded to 32 MiB download and 8 MiB upload within 60 seconds total. `max_bytes` may reach 64 MiB and `timeout_seconds` may reach 120. Endpoints must accept the intended test payloads.",
+      "fields": [
+        [
+          "peer_outbound",
+          "object",
+          "Required",
+          "Native Xray outbound object for the target peer."
+        ],
+        [
+          "download_url",
+          "string",
+          "Required",
+          "HTTPS bounded-download endpoint."
+        ],
+        [
+          "upload_url",
+          "string",
+          "Required",
+          "HTTPS upload endpoint."
+        ],
+        [
+          "max_bytes",
+          "integer",
+          "Optional",
+          "Transfer bound in bytes; maximum 64 MiB."
+        ],
+        [
+          "timeout_seconds",
+          "integer",
+          "Optional",
+          "Total deadline; default 60, maximum 120."
+        ]
+      ],
+      "args": {
+        "peer_outbound": {
+          "protocol": "vless",
+          "settings": {
+            "vnext": [
+              {
+                "address": "peer.example.com",
+                "port": 443,
+                "users": [
+                  {
+                    "id": "550e8400-e29b-41d4-a716-446655440000",
+                    "encryption": "none"
+                  }
+                ]
+              }
+            ]
+          },
+          "streamSettings": {
+            "network": "tcp",
+            "security": "tls",
+            "tlsSettings": {
+              "serverName": "peer.example.com"
+            }
+          }
+        },
+        "download_url": "https://speed.example.com/download",
+        "upload_url": "https://speed.example.com/upload",
+        "max_bytes": 8388608,
+        "timeout_seconds": 60
+      }
+    },
+    {
+      "name": "update.check",
+      "description": "Check the selected stable release and authenticated artifact metadata.",
+      "body": "## Stable release discovery\nReturns update availability for the current platform and policy. Checks also run daily. This command does not install a binary. Artifacts must have a SHA-256 manifest authenticated by the pinned Minisign production public key.\n\n## Arguments\nUse an empty object."
+    },
+    {
+      "name": "update.install",
+      "description": "Install a signed stable binary with rollback-aware lifecycle handling.",
+      "body": "## Verified installation\nOptional `version` selects a stable release. The agent verifies the manifest signature and binary hash before execution. Protected signing secrets belong to release infrastructure. Test signing keys never enter production trust roots.\n\nObserve progress/result and process reconnect/readiness. Retain the generated identity and pending traffic state through replacement.",
+      "fields": [
+        [
+          "version",
+          "string",
+          "Optional",
+          "Stable release version; otherwise use selected/latest stable policy."
+        ]
+      ],
+      "args": {
+        "version": "v1.0.0"
+      }
+    },
+    {
+      "name": "update.rollback",
+      "description": "Restore the retained prior binary without deleting durable state.",
+      "body": "## Prior release\nRestores the retained previous binary when rollback is available. Reconnect and readiness confirm the restarted agent's behavior. Preserve the state directory, identity, accepted restrictions and pending traffic.\n\n## Arguments\nUse an empty object."
+    }
+  ]
+}

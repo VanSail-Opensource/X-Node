@@ -1,0 +1,71 @@
+{
+  "asyncapi": "3.1.0",
+  "channels": {
+    "control": {
+      "address": "/v1/agents/connect",
+      "messages": {
+        "agentMessage": {
+          "payload": {
+            "additionalProperties": false,
+            "properties": {
+              "base_revision": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "data": {
+                "type": "object"
+              },
+              "id": {
+                "type": "string"
+              },
+              "revision": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "type": {
+                "type": "string"
+              },
+              "v": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "v",
+              "type"
+            ],
+            "type": "object"
+          }
+        },
+        "masterMessage": {
+          "payload": {
+            "$ref": "schemas/master-message.schema.json"
+          }
+        }
+      }
+    }
+  },
+  "info": {
+    "title": "X-Node control channel",
+    "version": "1.0.0"
+  },
+  "operations": {
+    "receiveMasterState": {
+      "action": "receive",
+      "channel": {
+        "$ref": "#/channels/control"
+      }
+    },
+    "sendAgentReports": {
+      "action": "send",
+      "channel": {
+        "$ref": "#/channels/control"
+      }
+    }
+  },
+  "servers": {
+    "master": {
+      "host": "master.example.com",
+      "protocol": "wss"
+    }
+  }
+}

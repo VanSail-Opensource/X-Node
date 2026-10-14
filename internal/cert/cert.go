@@ -22,11 +22,12 @@ import (
 	"time"
 
 	"github.com/caddyserver/certmagic"
+	"go.uber.org/zap"
 
-	"github.com/cedar2025/xboard-node/internal/cert/dnsproviders"
-	"github.com/cedar2025/xboard-node/internal/config"
-	"github.com/cedar2025/xboard-node/internal/kernel"
-	"github.com/cedar2025/xboard-node/internal/nlog"
+	"github.com/VanSail-Opensource/X-Node/internal/cert/dnsproviders"
+	"github.com/VanSail-Opensource/X-Node/internal/config"
+	"github.com/VanSail-Opensource/X-Node/internal/kernel"
+	"github.com/VanSail-Opensource/X-Node/internal/nlog"
 )
 
 // Manager handles TLS certificate lifecycle.
@@ -55,6 +56,7 @@ type Manager struct {
 	mat atomic.Pointer[certMaterial]
 
 	magic           *certmagic.Config
+	cache           *certmagic.Cache
 	renewed         atomic.Bool
 	acmeStarted     bool
 	acmeFingerprint string
@@ -254,7 +256,7 @@ func (m *Manager) TLSCert() kernel.TLSCert {
 	if mat == nil {
 		return kernel.TLSCert{}
 	}
-	return kernel.TLSCert{CertPEM: mat.certPEM, KeyPEM: mat.keyPEM}
+	return kernel.TLSCert{CertPEM: append([]byte(nil), mat.certPEM...), KeyPEM: append([]byte(nil), mat.keyPEM...)}
 }
 
 // pemEqual reports whether two TLSCert values carry identical PEM content.
@@ -290,7 +292,13 @@ func (m *Manager) Start(ctx context.Context) error {
 
 // Stop is a no-op: certmagic's background goroutine is cancelled via the
 // context passed to ManageAsync.
-func (m *Manager) Stop() {}
+func (m *Manager) Stop() {
+	m.tearDownACME()
+	if m.cache != nil {
+		m.cache.Stop()
+		m.cache = nil
+	}
+}
 
 // ─── Mode: file ────────────────────────────────────────────────────────────
 
@@ -408,12 +416,15 @@ func (m *Manager) startACME(ctx context.Context, dnsSolver *certmagic.DNS01Solve
 
 	var magic *certmagic.Config
 	cache := certmagic.NewCache(certmagic.CacheOptions{
+		Logger: zap.NewNop(),
 		GetConfigForCert: func(_ certmagic.Certificate) (*certmagic.Config, error) {
 			return magic, nil
 		},
 	})
+	m.cache = cache
 
 	magic = certmagic.New(cache, certmagic.Config{
+		Logger:  zap.NewNop(),
 		Storage: storage,
 		OnEvent: func(evtCtx context.Context, event string, data map[string]any) error {
 			// Only react to renewals; initial load happens explicitly after ObtainCertSync.
@@ -465,7 +476,13 @@ func (m *Manager) startACME(ctx context.Context, dnsSolver *certmagic.DNS01Solve
 	// Derived ctx so Reconfigure can cancel ACME background goroutines.
 	acmeCtx, acmeCancel := context.WithCancel(ctx)
 
-	if err := magic.ObtainCertSync(acmeCtx, m.cfg.Domain); err != nil {
+	startup := time.Duration(m.cfg.StartupTimeoutSeconds) * time.Second
+	if startup <= 0 {
+		startup = 120 * time.Second
+	}
+	obtainCtx, obtainCancel := context.WithTimeout(acmeCtx, startup)
+	defer obtainCancel()
+	if err := magic.ObtainCertSync(obtainCtx, m.cfg.Domain); err != nil {
 		acmeCancel()
 		return fmt.Errorf("obtain certificate: %w", err)
 	}
@@ -502,7 +519,15 @@ func (m *Manager) buildDNSSolver() (*certmagic.DNS01Solver, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &certmagic.DNS01Solver{DNSManager: certmagic.DNSManager{DNSProvider: provider}}, nil
+	delay, err := time.ParseDuration(m.cfg.PropagationDelay)
+	if m.cfg.PropagationDelay == "" {
+		delay = 0
+		err = nil
+	}
+	if err != nil || delay < 0 || delay > 10*time.Minute {
+		return nil, fmt.Errorf("invalid DNS propagation delay")
+	}
+	return &certmagic.DNS01Solver{DNSManager: certmagic.DNSManager{DNSProvider: provider, PropagationDelay: delay}}, nil
 }
 
 func (m *Manager) newDNSProvider() (certmagic.DNSProvider, error) {

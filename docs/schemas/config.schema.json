@@ -1,0 +1,395 @@
+{
+  "$id": "https://github.com/VanSail-Opensource/X-Node/config.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "asset_hashes": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "type": "object"
+    },
+    "blocked_ports": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "from": {
+            "type": "integer"
+          },
+          "network": {
+            "type": "string"
+          },
+          "to": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "from",
+          "to"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "certificates": {
+      "additionalProperties": {
+        "additionalProperties": false,
+        "properties": {
+          "config": {
+            "additionalProperties": false,
+            "properties": {
+              "auto_tls": {
+                "type": "boolean"
+              },
+              "cert_content": {
+                "type": "string"
+              },
+              "cert_file": {
+                "type": "string"
+              },
+              "cert_mode": {
+                "type": "string"
+              },
+              "dns_env": {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              "dns_provider": {
+                "type": "string"
+              },
+              "domain": {
+                "type": "string"
+              },
+              "email": {
+                "type": "string"
+              },
+              "http_port": {
+                "type": "integer"
+              },
+              "key_content": {
+                "type": "string"
+              },
+              "key_file": {
+                "type": "string"
+              },
+              "propagation_delay": {
+                "type": "string"
+              },
+              "startup_timeout_seconds": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "domain",
+              "cert_mode"
+            ],
+            "type": "object"
+          },
+          "provider": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "config"
+        ],
+        "type": "object"
+      },
+      "type": "object"
+    },
+    "ddns": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "interface": {
+            "type": "string"
+          },
+          "interval_seconds": {
+            "type": "integer"
+          },
+          "ipv4": {
+            "type": "string"
+          },
+          "ipv4_url": {
+            "type": "string"
+          },
+          "ipv6": {
+            "type": "string"
+          },
+          "ipv6_url": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "ttl_seconds": {
+            "type": "integer"
+          },
+          "zone": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "provider",
+          "zone",
+          "name"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "dns": {
+      "additionalProperties": false,
+      "properties": {
+        "mode": {
+          "type": "string"
+        },
+        "redirect": {
+          "type": "boolean"
+        },
+        "upstreams": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [],
+      "type": "object"
+    },
+    "firewall": {
+      "additionalProperties": false,
+      "properties": {
+        "allow_prefixes": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "forward": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "listen_ip": {
+                "type": "string"
+              },
+              "network": {
+                "type": "string"
+              },
+              "port": {
+                "type": "integer"
+              },
+              "target_ip": {
+                "type": "string"
+              },
+              "target_port": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "port",
+              "target_ip",
+              "target_port",
+              "network"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "protect": {
+          "type": "boolean"
+        },
+        "ssh_ports": {
+          "items": {
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "tcp_ports": {
+          "items": {
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "udp_ports": {
+          "items": {
+            "type": "integer"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "enabled",
+        "protect"
+      ],
+      "type": "object"
+    },
+    "inbound_certificates": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "type": "object"
+    },
+    "providers": {
+      "additionalProperties": {
+        "additionalProperties": false,
+        "properties": {
+          "credentials": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "credentials"
+        ],
+        "type": "object"
+      },
+      "type": "object"
+    },
+    "telemetry": {
+      "additionalProperties": false,
+      "properties": {
+        "include_active_ips": {
+          "type": "boolean"
+        },
+        "report_seconds": {
+          "type": "integer"
+        },
+        "sample_seconds": {
+          "type": "integer"
+        }
+      },
+      "required": [],
+      "type": "object"
+    },
+    "torrent": {
+      "additionalProperties": false,
+      "properties": {
+        "ban_seconds": {
+          "type": "integer"
+        },
+        "enabled": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "enabled"
+      ],
+      "type": "object"
+    },
+    "updates": {
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "enabled"
+      ],
+      "type": "object"
+    },
+    "users": {
+      "items": {
+        "additionalProperties": false,
+        "anyOf": [
+          {
+            "required": [
+              "uuid"
+            ]
+          },
+          {
+            "required": [
+              "credentials"
+            ]
+          }
+        ],
+        "properties": {
+          "active_ip_limit": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "block_new": {
+            "type": "boolean"
+          },
+          "burst_speed_limit_mbps": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "connection_limit": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "credentials": {
+            "additionalProperties": {
+              "type": "object"
+            },
+            "type": "object"
+          },
+          "id": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "inbound_tags": {
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          },
+          "speed_limit_after_seconds": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "speed_limit_mbps": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "speed_limit_reset_seconds": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "uuid": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "inbound_tags"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "xray": {
+      "type": "object"
+    }
+  },
+  "required": [
+    "xray",
+    "users"
+  ],
+  "title": "X-Node remote configuration",
+  "type": "object"
+}

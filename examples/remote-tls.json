@@ -1,0 +1,16 @@
+{
+  "xray": {
+    "log": {"loglevel": "warning"},
+    "inbounds": [{"tag": "trojan", "listen": "::", "port": 443, "protocol": "trojan", "settings": {}}],
+    "outbounds": [{"tag": "direct", "protocol": "freedom"}]
+  },
+  "users": [{"id": 1, "uuid": "replace-with-a-private-password", "inbound_tags": ["trojan"], "active_ip_limit": 2, "connection_limit": 10}],
+  "providers": {"dns": {"type": "cloudflare", "credentials": {"CLOUDFLARE_DNS_API_TOKEN": "replace-with-private-token"}}},
+  "certificates": {"node": {"provider": "dns", "config": {"domain": "node.example.com", "email": "admin@example.com", "cert_mode": "dns", "propagation_delay": "30s"}}},
+  "inbound_certificates": {"trojan": "node"},
+  "ddns": [{"id": "node", "provider": "dns", "zone": "example.com", "name": "node.example.com", "ipv4": "auto", "interface": "eth0", "interval_seconds": 300}],
+  "dns": {"mode": "xray", "redirect": false},
+  "blocked_ports": [{"from": 25, "to": 25}, {"from": 465, "to": 587}],
+  "torrent": {"enabled": true, "ban_seconds": 600},
+  "updates": {"enabled": false}
+}

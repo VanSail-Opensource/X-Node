@@ -1,0 +1,79 @@
+{
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  },
+  "info": {
+    "description": "The agent initiates one WSS connection. Application operations are WebSocket frames; no REST endpoints represent them.",
+    "title": "X-Node master WebSocket contract",
+    "version": "1.0.0"
+  },
+  "openapi": "3.1.1",
+  "paths": {
+    "/v1/agents/connect": {
+      "get": {
+        "operationId": "connectAgent",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Sec-WebSocket-Protocol",
+            "required": true,
+            "schema": {
+              "const": "x-node.v1",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "101": {
+            "description": "WebSocket connection established"
+          },
+          "401": {
+            "description": "Invalid or missing bearer credential"
+          },
+          "426": {
+            "description": "WebSocket upgrade required"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Upgrade the authenticated agent connection to WebSocket",
+        "x-websocket-messages": {
+          "agentToMaster": [
+            "agent.hello",
+            "state.request",
+            "state.accepted",
+            "state.applied",
+            "state.failed",
+            "telemetry.report",
+            "traffic.report",
+            "logs.report",
+            "command.accepted",
+            "command.progress",
+            "command.result",
+            "error",
+            "firewall.pending",
+            "torrent.detected",
+            "torrent.expired",
+            "admission.rejected"
+          ],
+          "masterToAgent": {
+            "$ref": "schemas/master-message.schema.json"
+          }
+        }
+      }
+    }
+  },
+  "servers": [
+    {
+      "url": "https://master.example.com"
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+[Unit]
+Description=Restore confirmed X-Node firewall policy before nftables
+DefaultDependencies=no
+Before=nftables.service
+ConditionPathExists=/var/lib/x-node/firewall/policy.json
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/xnodectl firewall-restore
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

@@ -2,7 +2,6 @@ package dnsproviders
 
 import (
 	"github.com/caddyserver/certmagic"
-	"github.com/libdns/vultr/v2"
 )
 
 func init() {
@@ -14,7 +13,7 @@ func init() {
 			if token == "" {
 				return nil, missingEnvErr("vultr", "VULTR_API_TOKEN")
 			}
-			return &vultr.Provider{APIToken: token}, nil
+			return &vultrProvider{token: token}, nil
 		},
 	})
 }

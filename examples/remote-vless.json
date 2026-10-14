@@ -1,0 +1,12 @@
+{
+  "xray": {
+    "log": {"loglevel": "warning"},
+    "inbounds": [{"tag": "vless", "listen": "127.0.0.1", "port": 8443, "protocol": "vless", "settings": {"decryption": "none"}}],
+    "outbounds": [{"tag": "direct", "protocol": "freedom"}],
+    "dns": {"servers": ["https://1.1.1.1/dns-query"]}
+  },
+  "users": [{"id": 1, "uuid": "550e8400-e29b-41d4-a716-446655440000", "inbound_tags": ["vless"], "active_ip_limit": 2, "connection_limit": 10, "speed_limit_mbps": 100}],
+  "telemetry": {"sample_seconds": 1, "report_seconds": 5},
+  "updates": {"enabled": false},
+  "torrent": {"enabled": false}
+}

@@ -1,34 +1,21 @@
-# Binaries
-/xboard-node
-/xboard-node-linux-*
+# Local bootstrap and secrets
+/bootstrap.json
+/.env
+*.key
+*.private
+
+# Build and verification artifacts
+/dist/
+/.cache/
+/coverage.out
 *.exe
+/vendor/
+__pycache__/
+*.pyc
 
-# Config files (may contain secrets)
-config.yml
-
-# Generated sing-box config
-singbox.json
-
-# IDE
+# Editor and OS state
 .idea/
 .vscode/
 *.swp
-*.swo
-
-# OS
 .DS_Store
 Thumbs.db
-
-# Go
-vendor/
-config.json
-benchmark/
-third_party
-bench-results
-internal/kernel/singbox/config_bench_test.go
-internal/kernel/xray/config_bench_test.go
-internal/service/service_bench_test.go
-internal/tracker/tracker_bench_test.go
-cmd/xboard-node-bench-compare
-cmd/xboard-node-bench
-.env

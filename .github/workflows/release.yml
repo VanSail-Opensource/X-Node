@@ -1,0 +1,53 @@
+name: Signed Debian release
+on:
+  push:
+    tags: ['v*.*.*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Stable release tag
+        required: true
+permissions:
+  contents: write
+jobs:
+  release:
+    if: github.repository == 'VanSail-Opensource/X-Node'
+    runs-on: ubuntu-24.04
+    # The signing secret is restricted to release tags by environment policy.
+    environment: release
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Verify the release commit passed Quality
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs?head_sha=$GITHUB_SHA&status=success" --jq '.workflow_runs[] | select(.name == "Quality" and .conclusion == "success") | .id' > /tmp/quality-runs
+          test -s /tmp/quality-runs
+      - name: Build release binaries
+        env:
+          RELEASE_VERSION: ${{ inputs.version || github.ref_name }}
+        run: |
+          [[ "$RELEASE_VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          make build VERSION="$RELEASE_VERSION"
+          python3 scripts/build_docs.py
+          (cd docs-site/dist && zip -q -r ../../dist/x-node-api-docs.zip .)
+          cp install.sh dist/install.sh
+          cd dist
+          sha256sum x-node-linux-* xnodectl-linux-* install.sh x-node-api-docs.zip > SHA256SUMS
+      - name: Sign and publish
+        env:
+          RELEASE_KEY: ${{ secrets.RELEASE_MINISIGN_SECRET_KEY }}
+          RELEASE_VERSION: ${{ inputs.version || github.ref_name }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          test -n "$RELEASE_KEY"
+          umask 077
+          printf '%s' "$RELEASE_KEY" > /tmp/x-node-release.key
+          trap 'rm -f /tmp/x-node-release.key' EXIT
+          go run ./cmd/release-sign --key-file /tmp/x-node-release.key --manifest dist/SHA256SUMS --version "$RELEASE_VERSION"
+          gh release create "$RELEASE_VERSION" dist/* --verify-tag --title "X-Node $RELEASE_VERSION" --notes-file docs/release-notes.md

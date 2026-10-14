@@ -31,9 +31,13 @@ func (m *Manager) requiredCapabilities() ([]string, error) {
 		return nil, errors.New("invalid private-state compatibility data")
 	}
 	required := map[string]bool{}
+	if len(data.Users) > 0 {
+		required["volatile_connection_controls_v1"] = true
+	}
 	for _, user := range data.Users {
 		if user.AccountingPeriod != "" {
 			required["traffic_periods_v1"] = true
+			required["traffic_period_barriers_v1"] = true
 		}
 		if user.ValidUntil != nil {
 			required["authorization_expiry"] = true
@@ -54,7 +58,7 @@ func (m *Manager) requiredCapabilities() ([]string, error) {
 		required["member_outbound_guards"] = true
 	}
 	var out []string
-	for _, key := range []string{"traffic_periods_v1", "authorization_expiry", "member_outbound_guards"} {
+	for _, key := range []string{"traffic_periods_v1", "traffic_period_barriers_v1", "authorization_expiry", "member_outbound_guards", "volatile_connection_controls_v1"} {
 		if required[key] {
 			out = append(out, key)
 		}

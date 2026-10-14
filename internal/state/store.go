@@ -61,6 +61,12 @@ func Open(dir string) (*Store, error) {
 	} else if !os.IsNotExist(err) {
 		return nil, err
 	}
+	if clean, changed := withoutConnectionControls(s.data); changed {
+		s.data = clean
+		if err := s.persist(clean); err != nil {
+			return nil, err
+		}
+	}
 	if s.data.AgentID == "" {
 		s.data = Data{AgentID: ID(), Users: []protocol.User{}}
 		if err := s.persist(s.data); err != nil {
@@ -90,6 +96,7 @@ func (s *Store) change(fn func(*Data) error) error {
 	return nil
 }
 func (s *Store) persist(d Data) error {
+	d, _ = withoutConnectionControls(d)
 	b, err := json.Marshal(d)
 	if err != nil {
 		return err

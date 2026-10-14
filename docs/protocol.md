@@ -140,3 +140,5 @@ Signed handover checks compare authenticated hello `binary_sha256` and `platform
 with the official version-bound minisign manifest. This measurement identifies
 a trusted enrolled agent build; it is not hardware attestation. Masters can use
 `pkg/releases` to apply the exact update trust policy.
+
+Connection-derived `block_new` controls remain in memory. The agent advertises `volatile_connection_controls_v1`; cached authorization keeps credentials, expiry and accounting periods, but never resurrects a historical global connection decision after restart.

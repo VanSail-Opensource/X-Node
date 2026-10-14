@@ -24,7 +24,7 @@ func TestBinaryCompatibilityRetainsAccountingAndExpiry(t *testing.T) {
 	if err = manager.checkCapabilities([]byte(`{"version":"v1.0.0"}`)); err == nil {
 		t.Fatal("incompatible binary accepted")
 	}
-	metadata, err := json.Marshal(map[string]any{"capabilities": []string{"traffic_periods_v1", "authorization_expiry"}})
+	metadata, err := json.Marshal(map[string]any{"capabilities": []string{"traffic_periods_v1", "traffic_period_barriers_v1", "authorization_expiry", "volatile_connection_controls_v1"}})
 	if err != nil {
 		t.Fatal(err)
 	}

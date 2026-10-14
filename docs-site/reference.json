@@ -223,7 +223,7 @@
       "name": "user.controls",
       "direction": "Master → agent",
       "description": "Set per-user block_new decisions while retaining eligible existing streams.",
-      "body": "## Admission control\nEach item contains a positive user `id` and a `block_new` boolean. True rejects new streams; false removes this master-imposed restriction. Existing eligible streams remain open. Other restrictions, such as a temporary ban or reached quota, still apply.\n\nThis is a revisioned mutation with exact `base_revision`. Controls persist through outages and restarts.",
+      "body": "## Admission control\nEach item contains a positive user `id` and a `block_new` boolean. True rejects new streams; false removes this master-imposed restriction. Existing eligible streams remain open. Other restrictions, such as a temporary ban or reached quota, still apply.\n\nThis is a revisioned mutation with exact `base_revision`. Connection-derived controls remain in memory across reconnects during this process lifetime. Restart clears them; the master recomputes controls from fresh available reports. The agent advertises `volatile_connection_controls_v1` and removes previously persisted controls on upgrade.",
       "fields": {
         "users": "User IDs and explicit block_new decisions."
       },

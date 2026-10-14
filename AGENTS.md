@@ -24,3 +24,5 @@ Keep local configuration limited to connection bootstrap. New operational settin
 Run `go test -race ./...`, `go vet ./...`, `go mod verify`, schema checks and Linux amd64/arm64 builds. Exercise real Xray streams for lifecycle changes. Privileged installation/firewall checks run in disposable Debian 13 VMs, never on the developer's host. Do not replace or delete user-owned untracked files such as Task.md.
 
 Release binaries require a signed manifest. Test signing keys must never enter production trust roots. Preserve required MPL/MIT notices when adapting reference code.
+
+Connection-derived `block_new` controls remain in memory. The agent advertises `volatile_connection_controls_v1`; cached authorization keeps credentials, expiry and accounting periods, but never resurrects a historical global connection decision after restart.

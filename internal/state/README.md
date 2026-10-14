@@ -16,3 +16,8 @@ is complete only when the master has committed every batch through its sequence.
 
 `accounting_test.go` covers restart, ordered replay, stable outstanding batches,
 separate periods and transactional overflow rejection.
+
+`connection_controls.go` excludes `block_new` decisions from serialized state
+while preserving live admission controls. Previously persisted decisions are
+scrubbed on open. `connection_controls_test.go` covers restart, upgrade cleanup,
+and preservation of credential/period/expiry fields.

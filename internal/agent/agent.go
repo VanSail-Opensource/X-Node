@@ -129,7 +129,7 @@ func New(dir, version string, client *transport.Client, logs *nlog.Stream) (*Age
 	return a, nil
 }
 
-var Capabilities = []string{"native_xray", "multi_inbound", "tcp_udp_limits", "session_revocation", "traffic_ack", "certificates", "ddns", "smartdns", "geodata", "nftables", "port_forward", "metrics", "logs", "peer_speedtest", "torrent_ban", "signed_updates", "traffic_periods_v1", "measured_user_rates", "authorization_expiry", "member_outbound_guards", "traffic_period_barriers_v1", "config_validation_v1", "volatile_connection_controls_v1"}
+var Capabilities = []string{"native_xray", "multi_inbound", "tcp_udp_limits", "session_revocation", "traffic_ack", "certificates", "ddns", "smartdns", "geodata", "nftables", "port_forward", "metrics", "logs", "peer_speedtest", "torrent_ban", "signed_updates", "traffic_periods_v1", "measured_user_rates", "authorization_expiry", "member_outbound_guards", "traffic_period_barriers_v1", "config_validation_v1", "volatile_connection_controls_v1", "native_auxiliary_inbounds_v1"}
 
 func (a *Agent) Run(ctx context.Context) error {
 	d := a.Store.Snapshot()
@@ -511,7 +511,7 @@ func (a *Agent) handle(ctx context.Context, m protocol.Message) {
 			fail(e)
 			return
 		}
-		if a.Updater != nil && a.Updater.Pending() && managedExtensions(c) && !managedExtensions(a.desired) {
+		if a.Updater != nil && a.Updater.Pending() && adoptsManagedExtensions(c, a.desired) {
 			fail(errors.New("upgrade confirmation is required before adopting managed extensions"))
 			return
 		}

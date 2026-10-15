@@ -12,3 +12,12 @@ This is a new control-plane contract. Existing Xboard, Hiddify, node/machine IDs
 Preserve the generated agent identity and private state when upgrading. Removing that state creates a new identity and loses locally pending traffic. Credential rotation is authoritative even when an unrelated native configuration fails; send a corrected snapshot with a higher revision.
 
 Firewall ownership is complete. Configure allowed services/forwarding explicitly, then confirm the apply transaction over WSS. SmartDNS is optional; Xray DNS is the default resolver mode.
+
+Native `dokodemo-door` / `tunnel` utility listeners are preserved separately from
+managed member inbounds. They require `native_auxiliary_inbounds_v1` and cannot
+contain user/account arrays. `internal/protocol/auxiliary.go` validates this
+boundary; `internal/kernel/xray/auxiliary.go` publishes the immutable utility
+allowlist to native dispatch. Real forwarding and revocation checks are in
+`internal/kernel/xray/auxiliary_test.go`, with protocol isolation and downgrade
+coverage in `internal/protocol/auxiliary_test.go` and
+`internal/update/compatibility_test.go`.

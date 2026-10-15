@@ -30,6 +30,7 @@ type Prepared struct {
 	BaseHash    [32]byte
 	InboundBase map[string]string
 	Epochs      map[string]string
+	Auxiliary   map[string]bool
 }
 
 func validateTLSMaterial(settings *serial.TypedMessage) error {
@@ -62,6 +63,21 @@ func validateTLSMaterial(settings *serial.TypedMessage) error {
 }
 
 func Prepare(c protocol.Config) (*Prepared, error) {
+	tags, err := protocol.AuxiliaryInboundTags(c.Xray)
+	if err != nil {
+		return nil, err
+	}
+	auxiliary := map[string]bool{}
+	for _, tag := range tags {
+		auxiliary[tag] = true
+	}
+	for _, user := range c.Users {
+		for _, tag := range user.InboundTags {
+			if auxiliary[tag] {
+				return nil, errors.New("managed users cannot bind auxiliary listeners")
+			}
+		}
+	}
 	var root map[string]any
 	if err := json.Unmarshal(c.Xray, &root); err != nil || root == nil {
 		return nil, errors.New("invalid native configuration")
@@ -106,7 +122,7 @@ func Prepare(c protocol.Config) (*Prepared, error) {
 		seen[tag] = true
 		proto, _ := in["protocol"].(string)
 		switch proto {
-		case "vmess", "vless", "trojan", "shadowsocks", "hysteria", "socks", "http", "mixed":
+		case "vmess", "vless", "trojan", "shadowsocks", "hysteria", "socks", "http", "mixed", "dokodemo-door", "tunnel":
 		default:
 			return nil, fmt.Errorf("unsupported managed inbound protocol %s", proto)
 		}
@@ -162,6 +178,9 @@ func Prepare(c protocol.Config) (*Prepared, error) {
 		}
 		b, _ := json.Marshal(in)
 		base[tag] = string(b)
+		if auxiliary[tag] {
+			continue
+		}
 		epochHash := sha256.Sum256(append(append([]byte(nil), identityJSON...), b...))
 		epochs[tag] = hex.EncodeToString(epochHash[:12])
 		clients := []any{}
@@ -298,7 +317,7 @@ func Prepare(c protocol.Config) (*Prepared, error) {
 	without := protocol.Clone(root)
 	delete(without, "inbounds")
 	global, _ := json.Marshal(without)
-	return &Prepared{Source: protocol.Clone(c), Native: root, Core: pb, Inbounds: pbmap, BaseHash: sha256.Sum256(global), InboundBase: base, Epochs: epochs}, nil
+	return &Prepared{Source: protocol.Clone(c), Native: root, Core: pb, Inbounds: pbmap, BaseHash: sha256.Sum256(global), InboundBase: base, Epochs: epochs, Auxiliary: auxiliary}, nil
 }
 
 func accountFor(proto, tag string, settings map[string]any, u protocol.User) (map[string]any, error) {

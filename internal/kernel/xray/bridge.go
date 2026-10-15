@@ -21,8 +21,9 @@ import (
 type bridgeKey struct{}
 type leaseKey struct{}
 type integration struct {
-	Registry *sessions.Registry
-	BanNanos atomic.Int64
+	Registry  *sessions.Registry
+	BanNanos  atomic.Int64
+	Auxiliary atomic.Pointer[map[string]bool]
 }
 type managedManager struct {
 	outbound.Manager
@@ -49,7 +50,8 @@ type managedOutbound struct {
 
 func (h *managedOutbound) Dispatch(ctx context.Context, link *transport.Link) {
 	si := session.InboundFromContext(ctx)
-	if si == nil || si.Tag == "_xnode_dns" {
+	// Native forwarding attaches a level-only MemoryUser with an empty email.
+	if si == nil || si.Tag == "_xnode_dns" || (si.User == nil || si.User.Email == "") && h.bridge.auxiliaryAllowed(si.Tag) {
 		h.Handler.Dispatch(ctx, link)
 		return
 	}

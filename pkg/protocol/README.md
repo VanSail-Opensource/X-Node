@@ -7,3 +7,7 @@ Masters can import it without depending on private implementation packages.
 entry points. Domain state, networking and runtime lifecycles remain outside
 this package. Pin an agent revision and negotiate optional capabilities before
 transmitting new fields.
+
+`AuxiliaryInboundTags` identifies native `dokodemo-door` / `tunnel` utility
+listeners for capability negotiation. They accept no managed user bindings or
+account lists and require `native_auxiliary_inbounds_v1` on the receiving agent.

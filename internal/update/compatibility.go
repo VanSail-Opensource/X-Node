@@ -3,6 +3,7 @@ package update
 import (
 	"encoding/json"
 	"errors"
+	"github.com/VanSail-Opensource/X-Node/internal/protocol"
 	"os"
 	"path/filepath"
 
@@ -57,8 +58,17 @@ func (m *Manager) requiredCapabilities() ([]string, error) {
 	if data.Config != nil && len(data.Config.MemberOutbounds) > 0 {
 		required["member_outbound_guards"] = true
 	}
+	if data.Config != nil {
+		tags, err := protocol.AuxiliaryInboundTags(data.Config.Xray)
+		if err != nil {
+			return nil, err
+		}
+		if len(tags) > 0 {
+			required["native_auxiliary_inbounds_v1"] = true
+		}
+	}
 	var out []string
-	for _, key := range []string{"traffic_periods_v1", "traffic_period_barriers_v1", "authorization_expiry", "member_outbound_guards", "volatile_connection_controls_v1"} {
+	for _, key := range []string{"traffic_periods_v1", "traffic_period_barriers_v1", "authorization_expiry", "member_outbound_guards", "volatile_connection_controls_v1", "native_auxiliary_inbounds_v1"} {
 		if required[key] {
 			out = append(out, key)
 		}

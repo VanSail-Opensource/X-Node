@@ -15,3 +15,7 @@ data remains in process memory. Corrupt or unwritable history fails construction
 
 Hosted cases in `accounting_test.go` and `job_privacy_test.go` verify closed-stream
 attribution and transient read results. Real stream tests live with the runtime.
+
+`compatibility.go` compares individual capability requirements before adopting
+new state during an unconfirmed upgrade. `compatibility_test.go` covers adding
+utilities or member guards when accounting extensions are already cached.

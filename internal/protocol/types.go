@@ -299,6 +299,9 @@ func ValidName(s string) bool {
 }
 
 func (c Config) Validate() error {
+	if err := validateAuxiliaryUsers(c); err != nil {
+		return err
+	}
 	if err := ValidateMemberOutbounds(c.Xray, c.MemberOutbounds); err != nil {
 		return err
 	}

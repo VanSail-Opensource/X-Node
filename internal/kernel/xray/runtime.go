@@ -62,6 +62,7 @@ func (r *Runtime) Apply(ctx context.Context, c wire.Config) error {
 	if r.instance != nil && r.current.BaseHash == next.BaseHash {
 		if r.bridge != nil {
 			r.bridge.BanNanos.Store(int64(c.BanDuration()))
+			r.bridge.setAuxiliary(next.Auxiliary)
 		}
 		err = r.updateInbounds(ctx, next)
 		if err == nil {
@@ -93,6 +94,7 @@ func (r *Runtime) Apply(ctx context.Context, c wire.Config) error {
 func (r *Runtime) start(ctx context.Context, p *Prepared, c wire.Config) error {
 	r.registry.SetInboundEpochs(p.Epochs)
 	bridge := &integration{Registry: r.registry}
+	bridge.setAuxiliary(p.Auxiliary)
 	bridge.BanNanos.Store(int64(c.BanDuration()))
 	child := context.WithValue(ctx, bridgeKey{}, bridge)
 	inst, err := core.NewWithContext(child, p.Core)

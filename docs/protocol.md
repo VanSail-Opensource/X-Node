@@ -1,5 +1,15 @@
 # WebSocket protocol v1
 
+`native_auxiliary_inbounds_v1` permits native `dokodemo-door` and `tunnel`
+forwarding/utility listeners. These listeners retain native settings, never
+receive managed accounts and are excluded from member connection/traffic
+accounting. Managed user bindings and account arrays on these tags are rejected.
+Masters must negotiate this capability before sending utility listeners.
+Unsupported utility protocols remain validation errors. A rollback binary must
+support every cached capability. Each newly introduced extension is blocked
+during an unconfirmed binary upgrade, including when older extensions already
+exist in the cache.
+
 Optional capabilities `traffic_periods_v1`, `measured_user_rates`,
 `authorization_expiry`, and `member_outbound_guards` identify the accounting-aware
 agent. Masters must verify capabilities before supplying the corresponding

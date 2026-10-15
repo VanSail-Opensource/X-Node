@@ -19,6 +19,9 @@ func PublicProxyAddress(address string) bool { return wire.PublicProxyAddress(ad
 func ValidateMemberOutbounds(raw json.RawMessage, tags []string) error {
 	return wire.ValidateMemberOutbounds(raw, tags)
 }
+func AuxiliaryInboundTags(raw json.RawMessage) ([]string, error) {
+	return wire.AuxiliaryInboundTags(raw)
+}
 func Clone[T any](value T) T  { return wire.Clone(value) }
 func CommandNames() []string  { return append([]string(nil), wire.CommandNames...) }
 func Schemas() map[string]any { return wire.Schemas() }

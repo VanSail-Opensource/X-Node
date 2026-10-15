@@ -32,3 +32,25 @@ func TestBinaryCompatibilityRetainsAccountingAndExpiry(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestBinaryDowngradeCannotLoseAuxiliaryListeners(t *testing.T) {
+	dir := t.TempDir()
+	store, err := state.Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	config := protocol.Config{Xray: json.RawMessage(`{"inbounds":[{"tag":"utility","protocol":"tunnel"}]}`), Users: []protocol.User{}}
+	if err = store.Authorize(config.Users, 1); err != nil {
+		t.Fatal(err)
+	}
+	if err = store.Accept(config, 1); err != nil {
+		t.Fatal(err)
+	}
+	manager := &Manager{Dir: filepath.Join(dir, "updates")}
+	if err = manager.checkCapabilities([]byte(`{"capabilities":[]}`)); err == nil {
+		t.Fatal("downgrade lost a configured utility listener")
+	}
+	if err = manager.checkCapabilities([]byte(`{"capabilities":["native_auxiliary_inbounds_v1"]}`)); err != nil {
+		t.Fatal(err)
+	}
+}

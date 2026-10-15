@@ -1,0 +1,21 @@
+# Embedded Xray runtime
+
+`config.go` validates native documents with the pinned core and expands managed
+account lists. `runtime.go` owns listener activation, account-only updates and
+safe fallback with current authorization. `bridge.go` wraps native outbound
+dispatch to enforce member admission, expiry, revocation and exact traffic
+accounting. Client probes use `client.go` and the public core interfaces.
+
+`auxiliary.go` publishes an immutable, atomically replaced allowlist for native
+`dokodemo-door` / `tunnel` utility listeners. Only unauthenticated flows from
+these explicitly configured listener tags bypass member accounting. They cannot
+receive managed accounts; user-bound proxy listeners always retain admission
+and accounting enforcement. Utility listener changes are part of normal native
+configuration reconciliation, while member changes leave unchanged utilities
+running. The master must negotiate `native_auxiliary_inbounds_v1`.
+
+`auxiliary_test.go` exercises real forwarding through both core aliases and
+checks that managed revocation neither restarts utility listeners nor charges
+their bytes to a member. `runtime_test.go`, `streams_test.go` and
+`shadowsocks_accounts_test.go` cover actual managed streams, accounting barriers,
+credential rotation, expiry and SS-2022 authentication in hosted Linux CI.

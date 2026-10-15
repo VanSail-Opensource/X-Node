@@ -42,7 +42,7 @@ Only two local fields are required in `/etc/x-node/bootstrap.json`:
 
 `XNODE_MASTER_URL` and `XNODE_TOKEN` may supply connection bootstrap through the process environment. The agent generates its identity under `/var/lib/x-node`. Operational settings arrive over WebSocket.
 
-On first startup, the service waits for an authoritative snapshot. On subsequent starts it restores the last accepted configuration and latest authorization state, then reconnects. An unavailable master does not erase cached users, limits or block decisions.
+On first startup, the service waits for an authoritative snapshot. On subsequent starts it restores the last accepted configuration and latest authorization state, then reconnects. An unavailable master retains cached users and configured limits until their authorization expiry. Connection-derived controls remain in memory and are cleared after an agent restart.
 
 ## Local administration
 

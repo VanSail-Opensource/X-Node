@@ -136,6 +136,13 @@ IP controls target exact client source addresses, normalized so IPv4-mapped IPv6
 
 Firewall transactions default to 45 seconds. The master must confirm using the existing or re-established socket after testing connectivity. An independent systemd watchdog restores both live rules and persisted policy if confirmation is absent.
 
+The native Go engine commits ordered rule/set changes as one atomic Netlink
+transaction while preserving existing bans, meters, and counters. Repeating the
+current transaction ID is idempotent; changing its inputs is rejected. Pending
+transactions are recovered after restart. The `native_firewall_v1` capability
+identifies binaries that support native policy restoration; firewall command and
+policy wire formats remain unchanged.
+
 Speedtests use a separate outbound-only Xray client and transfer HTTPS payloads through the peer. They default to three request-latency samples, at most 32 MiB download, 8 MiB upload and 60 seconds total. The transfer bound can reach 64 MiB and timeout 120 seconds. Test credentials and HTTP endpoints are supplied and managed by the master.
 
 `torrent.detected` reports `user_id` and ban deadline. `torrent.expired` reports expiry. `block_new` controls and per-machine connection reports implement approximate global totals; no per-admission master reservation is performed.

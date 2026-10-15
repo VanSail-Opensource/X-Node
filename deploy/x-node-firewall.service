@@ -1,7 +1,7 @@
 [Unit]
-Description=Restore confirmed X-Node firewall policy before nftables
-DefaultDependencies=no
-Before=nftables.service
+Description=Restore confirmed X-Node firewall policy
+After=local-fs.target systemd-sysctl.service nftables.service
+Before=x-node.service
 ConditionPathExists=/var/lib/x-node/firewall/policy.json
 
 [Service]

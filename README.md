@@ -87,7 +87,7 @@ Certificate profiles with the same configuration share a manager. DDNS owns expl
 
 Geodata assets stream to private staging files, are hash checked when hashes are provided, and are activated as one immutable generation. The previous generation remains available for rollback. Refresh scheduling is owned by the agent.
 
-Firewall management replaces the entire host ruleset. SSH ports are retained, candidates pass `nft -c`, and a separate systemd timer restores the previous rules unless the master confirms the transaction within 45 seconds. Proxy connection limits are enforced in the agent; no conntrack connection quota is generated. DNS redirection activates only after both loopback families answer TCP and UDP DNS probes.
+Firewall management owns the entire host ruleset through typed Go nftables transactions. SSH ports are retained, kernel-validated updates preserve live bans/meters/counters, and a separate systemd timer restores the previous rules unless the master confirms the transaction within 45 seconds. Confirmed JSON policy is restored through Go after nftables at boot; `nft` remains available for snapshots, legacy recovery, and uninstall. Proxy connection limits are enforced in the agent; no conntrack connection quota is generated. DNS redirection activates only after both loopback families answer TCP and UDP DNS probes.
 
 With DNS redirection enabled, Xray DNS must use explicit literal-IP upstreams on a port other than 53, such as `https://1.1.1.1/dns-query`. System DNS and hostname bootstrap upstreams are rejected to prevent resolution loops. SmartDNS uses pre-resolved DoT upstreams.
 
@@ -123,7 +123,7 @@ Runtime packages:
 | `internal/state`, `internal/sessions` | Durable state, journal, atomic admission and session control |
 | `internal/kernel/xray`, `internal/agent` | Native runtime integration and serialized desired state |
 | `internal/cert`, `internal/dns`, `internal/geodata` | Certificate profiles, DDNS, SmartDNS and asset lifecycle |
-| `internal/firewall`, `internal/host` | Typed Debian operations and rollback |
+| `internal/firewall`, `internal/host` | Native atomic firewall reconciliation, JSON boot policy, and typed Debian operations; see `internal/firewall/README.md` |
 | `internal/monitor`, `internal/nlog` | Shared metrics sampling and redacted logs |
 | `internal/speedtest`, `internal/update` | Isolated peer probes and verified releases |
 

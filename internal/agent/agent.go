@@ -129,9 +129,12 @@ func New(dir, version string, client *transport.Client, logs *nlog.Stream) (*Age
 	return a, nil
 }
 
-var Capabilities = []string{"native_xray", "multi_inbound", "tcp_udp_limits", "session_revocation", "traffic_ack", "certificates", "ddns", "smartdns", "geodata", "nftables", "port_forward", "metrics", "logs", "peer_speedtest", "torrent_ban", "signed_updates", "traffic_periods_v1", "measured_user_rates", "authorization_expiry", "member_outbound_guards", "traffic_period_barriers_v1", "config_validation_v1", "volatile_connection_controls_v1", "native_auxiliary_inbounds_v1"}
+var Capabilities = []string{"native_firewall_v1", "native_xray", "multi_inbound", "tcp_udp_limits", "session_revocation", "traffic_ack", "certificates", "ddns", "smartdns", "geodata", "nftables", "port_forward", "metrics", "logs", "peer_speedtest", "torrent_ban", "signed_updates", "traffic_periods_v1", "measured_user_rates", "authorization_expiry", "member_outbound_guards", "traffic_period_barriers_v1", "config_validation_v1", "volatile_connection_controls_v1", "native_auxiliary_inbounds_v1"}
 
 func (a *Agent) Run(ctx context.Context) error {
+	if err := a.Firewall.RestoreFile(ctx); err != nil {
+		return fmt.Errorf("restore confirmed firewall: %w", err)
+	}
 	d := a.Store.Snapshot()
 	a.Registry.SetUsers(d.Users)
 	a.Registry.RestoreBans(d.Bans)
@@ -397,6 +400,9 @@ func (a *Agent) activate(lifetime context.Context, job applyJob) error {
 	} else {
 		a.geoNext.Store(nextGeo.UnixNano())
 	}
+	if e = a.Updater.Confirm(job.Context); e != nil {
+		return e
+	}
 	if c.Firewall.Enabled && !job.Cached {
 		pending, e := a.Firewall.Apply(job.Context, fmt.Sprintf("revision-%d", job.Revision), c.Firewall, c.DNS.Redirect)
 		if e != nil {
@@ -405,10 +411,12 @@ func (a *Agent) activate(lifetime context.Context, job applyJob) error {
 		a.Client.Send(protocol.New("firewall.pending", job.ID, job.Revision, pending), true)
 	}
 	if job.Cached {
-		_ = a.Firewall.EnableConfirmedDNS(job.Context, c.DNS.Redirect)
-	}
-	if e = a.Updater.Confirm(job.Context); e != nil {
-		return e
+		if e = a.Firewall.Migrate(job.Context, c.DNS.Redirect); e != nil {
+			return e
+		}
+		if e = a.Firewall.EnableConfirmedDNS(job.Context, c.DNS.Redirect); e != nil {
+			return e
+		}
 	}
 	a.Registry.Pause(false)
 	a.systemdReady()

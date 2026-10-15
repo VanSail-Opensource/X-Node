@@ -1,7 +1,7 @@
 [Unit]
 Description=X-Node WebSocket-managed Xray agent
-After=network-online.target nftables.service
-Wants=network-online.target
+After=network-online.target nftables.service x-node-firewall.service
+Wants=network-online.target x-node-firewall.service
 StartLimitIntervalSec=0
 
 [Service]

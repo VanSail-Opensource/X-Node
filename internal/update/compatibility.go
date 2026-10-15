@@ -20,8 +20,15 @@ func (m *Manager) Pending() bool {
 
 // requiredCapabilities prevents downgrades from silently ignoring cached policy or journals.
 func (m *Manager) requiredCapabilities() ([]string, error) {
+	nativeFirewall, err := m.nativeFirewallRequired()
+	if err != nil {
+		return nil, err
+	}
 	raw, err := os.ReadFile(filepath.Join(filepath.Dir(m.Dir), "state.json"))
 	if os.IsNotExist(err) {
+		if nativeFirewall {
+			return []string{"native_firewall_v1"}, nil
+		}
 		return nil, nil
 	}
 	if err != nil {
@@ -32,6 +39,7 @@ func (m *Manager) requiredCapabilities() ([]string, error) {
 		return nil, errors.New("invalid private-state compatibility data")
 	}
 	required := map[string]bool{}
+	required["native_firewall_v1"] = nativeFirewall
 	if len(data.Users) > 0 {
 		required["volatile_connection_controls_v1"] = true
 	}
@@ -68,7 +76,7 @@ func (m *Manager) requiredCapabilities() ([]string, error) {
 		}
 	}
 	var out []string
-	for _, key := range []string{"traffic_periods_v1", "traffic_period_barriers_v1", "authorization_expiry", "member_outbound_guards", "volatile_connection_controls_v1", "native_auxiliary_inbounds_v1"} {
+	for _, key := range []string{"traffic_periods_v1", "traffic_period_barriers_v1", "authorization_expiry", "member_outbound_guards", "volatile_connection_controls_v1", "native_auxiliary_inbounds_v1", "native_firewall_v1"} {
 		if required[key] {
 			out = append(out, key)
 		}
@@ -93,7 +101,7 @@ func (m *Manager) checkCapabilities(metadata []byte) error {
 	}
 	for _, capability := range required {
 		if !supported[capability] {
-			return errors.New("binary cannot preserve current accounting or authorization policy")
+			return errors.New("binary cannot preserve current persisted policy")
 		}
 	}
 	return nil

@@ -13,6 +13,25 @@ Preserve the generated agent identity and private state when upgrading. Removing
 
 Firewall ownership is complete. Configure allowed services/forwarding explicitly, then confirm the apply transaction over WSS. SmartDNS is optional; Xray DNS is the default resolver mode.
 
+## Native firewall engine
+
+Existing firewall policies and command arguments remain compatible. The Go
+backend adopts the existing X-Node table and retains compatible live bans,
+per-source meters, and counters. Conflicting set definitions fail without flushing
+state. External tables are removed atomically with the policy update.
+
+After binary-upgrade confirmation, firewall confirmation (or cached-policy
+migration) installs native boot restoration. Confirmed JSON replaces the generated
+nft script as the source of truth. The managed nftables config becomes a comment;
+the X-Node restore unit runs after nftables and before the agent. Previous unit,
+config, policy, and forwarding files participate in rollback. Legacy pending
+transactions and original nft snapshots remain recoverable.
+
+An unconfirmed transaction is rolled back at agent startup or reboot. DNS
+redirection starts disabled until the agent verifies resolver readiness. Once
+native boot persistence is confirmed, binary upgrades/rollbacks require
+`native_firewall_v1`; older binaries cannot safely restore the new boot layout.
+
 Native `dokodemo-door` / `tunnel` utility listeners are preserved separately from
 managed member inbounds. They require `native_auxiliary_inbounds_v1` and cannot
 contain user/account arrays. `internal/protocol/auxiliary.go` validates this

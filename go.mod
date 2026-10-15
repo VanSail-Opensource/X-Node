@@ -5,6 +5,7 @@ go 1.27.2
 require (
 	aead.dev/minisign v0.3.0
 	github.com/caddyserver/certmagic v0.25.6
+	github.com/google/nftables v0.3.0
 	github.com/gorilla/websocket v1.5.3
 	github.com/libdns/alidns v1.0.7
 	github.com/libdns/azure v0.5.0
@@ -27,11 +28,13 @@ require (
 	github.com/libdns/porkbun v1.1.0
 	github.com/libdns/route53 v1.6.2
 	github.com/libdns/tencentcloud v1.4.3
+	github.com/mdlayher/netlink v1.7.3-0.20250113171957-fbb4dce95f42
 	github.com/miekg/dns v1.1.73
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/shirou/gopsutil/v4 v4.26.9
 	github.com/xtls/xray-core v1.260327.1-0.20261010092107-701af60772cd
 	go.uber.org/zap v1.28.0
+	go4.org/netipx v0.0.0-20231129151722-fdeea329fbba
 	golang.org/x/crypto v0.58.0
 	golang.org/x/mod v0.42.0
 	golang.org/x/sys v0.49.0
@@ -100,6 +103,7 @@ require (
 	github.com/go-viper/mapstructure/v2 v2.5.0 // indirect
 	github.com/golang-jwt/jwt/v5 v5.3.1 // indirect
 	github.com/google/btree v1.1.2 // indirect
+	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/google/go-querystring v1.2.0 // indirect
 	github.com/google/gopacket v1.1.19 // indirect
 	github.com/google/s2a-go v0.1.11 // indirect
@@ -119,6 +123,7 @@ require (
 	github.com/libp2p/go-netroute v0.2.1 // indirect
 	github.com/linode/linodego v1.69.1 // indirect
 	github.com/lufia/plan9stats v0.0.0-20211012122336-39d0f177ccd0 // indirect
+	github.com/mdlayher/socket v0.5.0 // indirect
 	github.com/mholt/acmez/v3 v3.1.7 // indirect
 	github.com/netlify/open-api/v2 v2.60.0 // indirect
 	github.com/oklog/ulid/v2 v2.1.2 // indirect
@@ -151,7 +156,6 @@ require (
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap/exp v0.3.0 // indirect
 	go.yaml.in/yaml/v3 v3.0.5 // indirect
-	go4.org/netipx v0.0.0-20231129151722-fdeea329fbba // indirect
 	golang.org/x/crypto/x509roots/fallback v0.0.0-20261005185213-c3db4df58582 // indirect
 	golang.org/x/exp v0.0.0-20240506185415-9bf2ced13842 // indirect
 	golang.org/x/net v0.61.0 // indirect

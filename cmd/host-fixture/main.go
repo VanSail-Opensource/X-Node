@@ -21,11 +21,35 @@ func main() {
 	if _, e := os.Stat("/etc/x-node-fixture-vm"); e != nil {
 		fail(fmt.Errorf("host integration requires a marked disposable VM"))
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
 	defer cancel()
-	runner := host.Commands{}
+	runner := fixtureRunner{}
+	if len(os.Args) > 1 && os.Args[1] == "--abandon" {
+		m := &firewall.Manager{Dir: "/var/lib/x-node/firewall", ConfigPath: "/etc/nftables.conf", Executable: "/usr/local/bin/xnodectl", Runner: runner}
+		tx, err := m.Apply(ctx, "fixture-real-watchdog", protocol.FirewallPolicy{Enabled: true, Protect: true, TCPPorts: []int{22, 443, 9443, 60001}, UDPPorts: []int{443, 9443}, Forward: forwardingPolicy()}, false)
+		if err != nil {
+			fail(err)
+		}
+		if err = json.NewEncoder(os.Stdout).Encode(tx); err != nil {
+			fail(err)
+		}
+		return
+	}
+	if len(os.Args) > 1 && os.Args[1] == "--after-reboot" {
+		if e := afterReboot(ctx, runner); e != nil {
+			fail(e)
+		}
+		fmt.Println("Native firewall reboot restoration and uninstall recovery passed")
+		return
+	}
+	if e := topology(ctx, runner); e != nil {
+		fail(e)
+	}
+	if _, e := runner.Run(ctx, "nft", "add", "table", "inet", "fixture_original"); e != nil {
+		fail(e)
+	}
 	m := &firewall.Manager{Dir: "/var/lib/x-node/firewall", ConfigPath: "/etc/nftables.conf", Executable: "/usr/local/bin/xnodectl", Runner: runner}
-	policy := protocol.FirewallPolicy{Enabled: true, Protect: true, TCPPorts: []int{443}, UDPPorts: []int{443}, SSHPorts: []int{22}, Forward: []protocol.Forward{{Port: 24443, TargetIP: "127.0.0.1", TargetPort: 443, Network: "tcp"}}}
+	policy := protocol.FirewallPolicy{Enabled: true, Protect: true, TCPPorts: []int{443, 9443}, UDPPorts: []int{443, 9443}, SSHPorts: []int{22}, Forward: forwardingPolicy()}
 	pending, e := m.Apply(ctx, "fixture-rollback", policy, false)
 	if e != nil {
 		fail(e)
@@ -49,7 +73,16 @@ func main() {
 	if e = m.RestoreFile(ctx); e != nil {
 		fail(e)
 	}
-	if e = m.RestoreOriginal(ctx); e != nil {
+	if e = packetChecks(ctx, runner); e != nil {
+		fail(e)
+	}
+	if e = liveStateChecks(ctx, m, policy); e != nil {
+		fail(e)
+	}
+	if e = watchdogCheck(ctx, m, policy); e != nil {
+		fail(e)
+	}
+	if e = dnsChecks(ctx, m, policy); e != nil {
 		fail(e)
 	}
 	for _, binary := range []string{"/usr/local/bin/x-node", "/usr/local/bin/xnodectl"} {

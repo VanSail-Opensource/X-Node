@@ -66,8 +66,8 @@ install -m 0755 "$stage_dir/xnodectl-linux-$arch" /usr/local/bin/xnodectl
 cat >/etc/systemd/system/x-node.service <<'UNIT'
 [Unit]
 Description=X-Node WebSocket-managed Xray agent
-After=network-online.target nftables.service
-Wants=network-online.target
+After=network-online.target nftables.service x-node-firewall.service
+Wants=network-online.target x-node-firewall.service
 StartLimitIntervalSec=0
 [Service]
 Type=notify
@@ -88,8 +88,8 @@ UNIT
 cat >/etc/systemd/system/x-node-firewall.service <<'UNIT'
 [Unit]
 Description=Restore confirmed X-Node firewall policy
-DefaultDependencies=no
-Before=nftables.service
+After=local-fs.target systemd-sysctl.service nftables.service
+Before=x-node.service
 ConditionPathExists=/var/lib/x-node/firewall/policy.json
 [Service]
 Type=oneshot

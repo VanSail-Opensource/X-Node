@@ -1,3 +1,10 @@
+# X-Node v2.0.1
+
+The managed firewall now reconciles policy with native nftables transactions.
+Incremental updates retain unchanged rule handles, counters, timed bans and
+meters. An independent systemd watchdog still restores the previous policy
+unless the master confirms the change.
+
 # X-Node v1.0.1
 
 Maintenance release with no runtime behavior changes. Refreshes signed amd64 and arm64 artifacts from the latest main commit.

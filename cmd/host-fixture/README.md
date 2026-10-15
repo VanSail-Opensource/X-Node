@@ -12,7 +12,9 @@ check retained rule handles, timed bans, meters, and foreign-table removal.
 Loopback DNS fixtures check readiness and actual TCP/UDP output redirection.
 
 The `--abandon` subprocess applies a policy and exits without confirmation. The
-parent observes the independent systemd watchdog restoring the previous policy.
+parent waits 45 seconds from process exit plus 15 seconds of scheduler tolerance
+for the independent systemd watchdog to restore the previous policy. If it does
+not, the fixture reports timer/service state, journal entries and pending state.
 After reboot, `--after-reboot` checks live native restoration, disabled DNS before
 readiness, and a real uninstall restoring the original firewall. The surrounding
 script verifies a fresh SSH connection survives the reboot.

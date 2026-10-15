@@ -129,6 +129,10 @@ func watchdogCheck(ctx context.Context, m *firewall.Manager, p protocol.Firewall
 	if err = json.Unmarshal(raw, &tx); err != nil {
 		return err
 	}
+	// Apply records its confirmation deadline before systemd-run arms the
+	// independent timer. Start the fixture's 45-second timer window when the
+	// applying process exits, then allow 15 seconds for scheduler delay.
+	rollbackDeadline := time.Now().Add(60 * time.Second)
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 	for {
@@ -136,7 +140,7 @@ func watchdogCheck(ctx context.Context, m *firewall.Manager, p protocol.Firewall
 		if ok && status.Status == "rolled_back" {
 			return nil
 		}
-		if time.Now().After(tx.Deadline.Add(15 * time.Second)) {
+		if time.Now().After(rollbackDeadline) {
 			return fmt.Errorf("independent watchdog did not restore policy: %s", watchdogDiagnostics(ctx, runner, tx))
 		}
 		select {

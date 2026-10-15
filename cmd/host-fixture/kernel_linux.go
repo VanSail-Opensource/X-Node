@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"reflect"
+	"strings"
 	"time"
 )
 
@@ -115,7 +116,7 @@ func liveStateChecks(ctx context.Context, m *firewall.Manager, p protocol.Firewa
 	return nil
 }
 
-func watchdogCheck(ctx context.Context, m *firewall.Manager, p protocol.FirewallPolicy) error {
+func watchdogCheck(ctx context.Context, m *firewall.Manager, p protocol.FirewallPolicy, runner host.Runner) error {
 	executable, err := os.Executable()
 	if err != nil {
 		return err

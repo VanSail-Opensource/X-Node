@@ -79,7 +79,7 @@ func main() {
 	if e = liveStateChecks(ctx, m, policy); e != nil {
 		fail(e)
 	}
-	if e = watchdogCheck(ctx, m, policy); e != nil {
+	if e = watchdogCheck(ctx, m, policy, runner); e != nil {
 		fail(e)
 	}
 	if e = dnsChecks(ctx, m, policy); e != nil {

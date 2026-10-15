@@ -87,7 +87,7 @@ func TestConfirmationAndRollback(t *testing.T) {
 		t.Run(map[bool]string{false: "rollback", true: "confirm"}[confirm], func(t *testing.T) {
 			m, f, b := fixture(t)
 			p := applyFixture(t, m)
-			if b.calls != 1 || !strings.Contains(f.log(), "--on-active=45s") {
+			if b.calls != 1 || !strings.Contains(f.log(), "--on-active=45s") || !strings.Contains(f.log(), "--timer-property=AccuracySec=1s") {
 				t.Fatal("missing native apply or independent watchdog")
 			}
 			if strings.Contains(f.log(), "candidate.nft") || strings.Contains(f.log(), "nft -c") {

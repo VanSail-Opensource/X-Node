@@ -81,7 +81,7 @@ func (m *Manager) apply(ctx context.Context, id string, p protocol.FirewallPolic
 	if err = writeRecord(m.path(), tx); err != nil {
 		return tx.Pending, err
 	}
-	if _, err = m.Runner.Run(ctx, "systemd-run", "--unit="+tx.Unit, "--on-active=45s", "--property=Restart=on-failure", "--property=RestartSec=5s", "--collect", m.Executable, "firewall-rollback", "--state-dir", m.Dir, "--request-id", id); err != nil {
+	if _, err = m.Runner.Run(ctx, "systemd-run", "--unit="+tx.Unit, "--on-active=45s", "--timer-property=AccuracySec=1s", "--property=Restart=on-failure", "--property=RestartSec=5s", "--collect", m.Executable, "firewall-rollback", "--state-dir", m.Dir, "--request-id", id); err != nil {
 		tx.Status = "failed"
 		return tx.Pending, errors.Join(err, writeRecord(m.path(), tx))
 	}

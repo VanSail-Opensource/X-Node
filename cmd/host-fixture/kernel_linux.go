@@ -136,7 +136,7 @@ func watchdogCheck(ctx context.Context, m *firewall.Manager, p protocol.Firewall
 			return nil
 		}
 		if time.Now().After(tx.Deadline.Add(15 * time.Second)) {
-			return fmt.Errorf("independent watchdog did not restore policy")
+			return fmt.Errorf("independent watchdog did not restore policy: %s", watchdogDiagnostics(ctx, runner, tx))
 		}
 		select {
 		case <-ctx.Done():
@@ -144,6 +144,25 @@ func watchdogCheck(ctx context.Context, m *firewall.Manager, p protocol.Firewall
 		case <-ticker.C:
 		}
 	}
+}
+
+func watchdogDiagnostics(ctx context.Context, runner host.Runner, tx firewall.Pending) string {
+	checks := [][]string{
+		{"systemctl", "show", tx.Unit + ".timer", "--property=ActiveState,SubState,Result"},
+		{"systemctl", "show", tx.Unit + ".service", "--property=ActiveState,SubState,Result,ExecMainStatus"},
+		{"journalctl", "-u", tx.Unit + ".service", "--no-pager", "-n", "30"},
+		{"cat", "/var/lib/x-node/firewall/pending.json"},
+	}
+	var details strings.Builder
+	for _, args := range checks {
+		output, err := runner.Run(ctx, args[0], args[1:]...)
+		fmt.Fprintf(&details, "%s: %s", strings.Join(args, " "), strings.TrimSpace(string(output)))
+		if err != nil {
+			fmt.Fprintf(&details, " (%v)", err)
+		}
+		details.WriteString("; ")
+	}
+	return details.String()
 }
 
 func afterReboot(ctx context.Context, r host.Runner) error {

@@ -1,6 +1,6 @@
 # X-Node
 
-X-Node is a Debian 13 agent that embeds Xray and receives its configuration from a master over one authenticated WebSocket. One process manages multiple tagged inbounds. It runs as a systemd service and ships Linux amd64 and arm64 binaries.
+X-Node is a Linux agent that embeds Xray and receives its configuration from a master over one authenticated WebSocket. One process manages multiple tagged inbounds. It runs as a systemd service and ships Linux amd64 and arm64 binaries.
 
 The master server is a separate application. X-Node defines its versioned contract and includes integration fixtures and a runnable example master. It uses a new protocol and does not connect to the Xboard API.
 
@@ -22,7 +22,7 @@ Xray is pinned to upstream `v26.10.10` by commit. Upstream marks this tag as pre
 
 ## Installation
 
-Download and review the installer from this repository, then run it on Debian 13:
+Download and review the installer from this repository, then run it on an apt-based Linux host with systemd, including Debian 13 and Ubuntu 24.04:
 
 ```sh
 curl -fsSLo install.sh https://raw.githubusercontent.com/VanSail-Opensource/X-Node/main/install.sh
@@ -30,6 +30,8 @@ sudo bash install.sh --master-url wss://master.example.com/v1/agents/connect
 ```
 
 The installer asks for the token without echoing it. For automation, use `--token-stdin`. Credentials are never required in process arguments. Release manifests and binaries are signature/hash checked before any downloaded binary is executed.
+
+Installation checks the required package manager, service manager and architecture rather than a distribution name or version. Package repositories must provide the installer dependencies, including `minisign` ([Ubuntu 24.04 universe](https://packages.ubuntu.com/en/noble/misc/minisign)). Privileged hosted integration remains covered on Debian 13; removing the installer restriction does not establish full Ubuntu host validation.
 
 Only two local fields are required in `/etc/x-node/bootstrap.json`:
 

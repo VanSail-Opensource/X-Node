@@ -1,6 +1,6 @@
 # X-Node engineering guidance
 
-X-Node is a Debian 13 binary agent with one embedded Xray runtime. All master control uses one authenticated WebSocket; provider and artifact traffic may use their native protocols.
+X-Node is a Linux binary agent for apt-based systemd hosts, including Debian 13 and Ubuntu 24.04, with one embedded Xray runtime. Do not require a particular distribution name or version in the installer. All master control uses one authenticated WebSocket; provider and artifact traffic may use their native protocols.
 
 ## Architecture
 

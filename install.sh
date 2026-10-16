@@ -17,9 +17,8 @@ while (($#)); do
     esac
 done
 [[ $(id -u) == 0 ]] || { echo 'Run the installer as root.' >&2; exit 1; }
-# shellcheck source=/dev/null
-source /etc/os-release
-[[ ${ID:-} == debian && ${VERSION_ID:-} == 13 ]] || { echo 'X-Node requires Debian 13.' >&2; exit 1; }
+command -v apt-get >/dev/null 2>&1 || { echo 'X-Node installation requires apt-get.' >&2; exit 1; }
+command -v systemctl >/dev/null 2>&1 || { echo 'X-Node installation requires systemd.' >&2; exit 1; }
 case "$(uname -m)" in x86_64) arch=amd64 ;; aarch64|arm64) arch=arm64 ;; *) echo 'Only amd64 and arm64 are supported.' >&2; exit 1 ;; esac
 [[ -n "$master_url" || -f /etc/x-node/bootstrap.json ]] || { echo '--master-url is required for a fresh installation.' >&2; exit 1; }
 export DEBIAN_FRONTEND=noninteractive

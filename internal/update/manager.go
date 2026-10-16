@@ -103,9 +103,9 @@ func (m *Manager) Install(ctx context.Context, id, version string, progress func
 		return result, nil
 	}
 	if runtime.GOOS != "linux" || runtime.GOARCH != "amd64" && runtime.GOARCH != "arm64" {
-		return result, errors.New("binary upgrades require Debian amd64/arm64")
+		return result, errors.New("binary upgrades require Linux amd64/arm64")
 	}
-	if e = host.CheckDebian(); e != nil {
+	if e = host.CheckLinux(); e != nil {
 		return result, e
 	}
 	if _, e = PublicKey(); e != nil {

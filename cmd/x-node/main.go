@@ -42,7 +42,7 @@ func main() {
 		fmt.Println("Remote configuration shape is valid; TLS material and native Xray are validated during activation.")
 		return
 	}
-	if e := host.CheckDebian(); e != nil {
+	if e := host.CheckLinux(); e != nil {
 		fail(e.Error())
 	}
 	bootstrap, e := config.Load(*path)

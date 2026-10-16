@@ -1,3 +1,15 @@
+# X-Node v2.0.3
+
+Removes the remaining Debian-only runtime checks from the agent, CLI and updater.
+Ubuntu 24.04 can now complete token-based bootstrap and start the agent. The
+installer still requires apt-get, systemd and Linux amd64/arm64, and verifies
+version-bound signed manifests and binary hashes before running downloads.
+
+A hosted Ubuntu 24.04 regression runs the compiled CLI configuration command and
+verifies the private bootstrap file. The privileged destructive fixture retains
+its Debian 13 and disposable-VM checks. Use this release's installer and binaries;
+v2.0.2's CLI and agent still reject Ubuntu even with a newer shell installer.
+
 # X-Node v2.0.2
 
 Publishes version-bound signed amd64 and arm64 artifacts for the native VanSail

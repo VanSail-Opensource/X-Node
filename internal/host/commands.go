@@ -1,4 +1,4 @@
-// Package host runs typed Debian utilities. It never evaluates a shell command.
+// Package host runs typed Linux utilities. It never evaluates a shell command.
 package host
 
 import (
@@ -16,8 +16,8 @@ type Runner interface {
 type Commands struct{}
 
 func (Commands) Run(ctx context.Context, name string, args ...string) ([]byte, error) {
-	if runtime.GOOS != "linux" {
-		return nil, errors.New("host utility requires Debian 13")
+	if err := CheckLinux(); err != nil {
+		return nil, err
 	}
 	cmd := exec.CommandContext(ctx, name, args...)
 	out, err := cmd.Output()
@@ -26,9 +26,20 @@ func (Commands) Run(ctx context.Context, name string, args ...string) ([]byte, e
 	}
 	return out, nil
 }
-func CheckDebian() error {
+
+// CheckLinux validates the runtime platform without restricting distributions.
+func CheckLinux() error {
 	if runtime.GOOS != "linux" {
-		return errors.New("X-Node supports Debian 13 only")
+		return errors.New("X-Node requires Linux")
+	}
+	return nil
+}
+
+// CheckDebian restricts the destructive host fixture to its Debian 13 VM.
+// Production agent, CLI and update paths use CheckLinux instead.
+func CheckDebian() error {
+	if err := CheckLinux(); err != nil {
+		return err
 	}
 	b, e := os.ReadFile("/etc/os-release")
 	if e != nil {

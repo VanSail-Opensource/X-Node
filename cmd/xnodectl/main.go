@@ -35,7 +35,7 @@ func run(args []string) error {
 	if args[0] == "--version" || args[0] == "version" {
 		return json.NewEncoder(os.Stdout).Encode(map[string]string{"version": version, "build_time": buildTime, "commit": commit})
 	}
-	if e := host.CheckDebian(); e != nil {
+	if e := host.CheckLinux(); e != nil {
 		return e
 	}
 	ctx := context.Background()

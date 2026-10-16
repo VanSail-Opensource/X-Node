@@ -61,6 +61,18 @@ jobs:
           go-version-file: go.mod
           cache: true
       - run: make build-${{ matrix.arch }}
+      - name: Ubuntu CLI bootstrap regression
+        if: matrix.arch == 'amd64'
+        run: |
+          stage_dir=$(mktemp -d -t x-node-ubuntu-bootstrap.XXXXXXXX)
+          trap 'rm -rf -- "$stage_dir"' EXIT
+          printf '%s' 'disposable-ubuntu-bootstrap-token' | dist/xnodectl-linux-amd64 configure --master-url wss://127.0.0.1:65534/v1/agents/connect --config "$stage_dir/bootstrap.json" --token-stdin
+          python3 - "$stage_dir/bootstrap.json" <<'PY'
+          import json, pathlib, stat, sys
+          path = pathlib.Path(sys.argv[1])
+          assert json.loads(path.read_text()) == {"master_url": "wss://127.0.0.1:65534/v1/agents/connect", "token": "disposable-ubuntu-bootstrap-token"}
+          assert stat.S_IMODE(path.stat().st_mode) == 0o600
+          PY
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: binaries-${{ matrix.arch }}

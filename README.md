@@ -31,7 +31,7 @@ sudo bash install.sh --master-url wss://master.example.com/v1/agents/connect
 
 The installer asks for the token without echoing it. For automation, use `--token-stdin`. Credentials are never required in process arguments. Release manifests and binaries are signature/hash checked before any downloaded binary is executed.
 
-Installation checks the required package manager, service manager and architecture rather than a distribution name or version. Package repositories must provide the installer dependencies, including `minisign` ([Ubuntu 24.04 universe](https://packages.ubuntu.com/en/noble/misc/minisign)). Privileged hosted integration remains covered on Debian 13; removing the installer restriction does not establish full Ubuntu host validation.
+Installation checks the required package manager, service manager and architecture rather than a distribution name or version. The agent, CLI and updater also accept Linux without a distribution/version gate. Package repositories must provide the installer dependencies, including `minisign` ([Ubuntu 24.04 universe](https://packages.ubuntu.com/en/noble/misc/minisign)). Hosted Ubuntu 24.04 checks exercise CLI bootstrap after token entry; privileged firewall/reboot integration remains covered on Debian 13.
 
 Only two local fields are required in `/etc/x-node/bootstrap.json`:
 
@@ -125,7 +125,7 @@ Runtime packages:
 | `internal/state`, `internal/sessions` | Durable state, journal, atomic admission and session control |
 | `internal/kernel/xray`, `internal/agent` | Native runtime integration and serialized desired state |
 | `internal/cert`, `internal/dns`, `internal/geodata` | Certificate profiles, DDNS, SmartDNS and asset lifecycle |
-| `internal/firewall`, `internal/host` | Native atomic firewall reconciliation, JSON boot policy, and typed Debian operations; see `internal/firewall/README.md` |
+| `internal/firewall`, `internal/host` | Native atomic firewall reconciliation, JSON boot policy, and typed Linux operations; see `internal/firewall/README.md` and `internal/host/README.md` |
 | `internal/monitor`, `internal/nlog` | Shared metrics sampling and redacted logs |
 | `internal/speedtest`, `internal/update` | Isolated peer probes and verified releases |
 

@@ -315,42 +315,12 @@ func (c Config) Validate() error {
 	if c.DNS.Mode != "" && c.DNS.Mode != "xray" && c.DNS.Mode != "smartdns" {
 		return errors.New("unsupported resolver mode")
 	}
-	for _, upstream := range c.DNS.Upstreams {
-		u, e := url.Parse(upstream)
-		if e != nil || u.Scheme != "tls" || u.Hostname() == "" || u.User != nil || u.RawQuery != "" || u.Path != "" {
-			return errors.New("SmartDNS upstreams must be tls://host[:port]")
-		}
-	}
-	if c.DNS.Mode == "smartdns" && len(c.DNS.Upstreams) == 0 {
-		return errors.New("SmartDNS requires DoT upstreams")
-	}
 	if c.DNS.Redirect && c.DNS.Mode != "smartdns" {
-		var dns struct {
+		var resolver struct {
 			Servers []json.RawMessage `json:"servers"`
 		}
-		if json.Unmarshal(native["dns"], &dns) != nil || len(dns.Servers) == 0 {
-			return errors.New("DNS redirect requires explicit independent Xray DNS servers")
-		}
-		for _, raw := range dns.Servers {
-			var address string
-			if json.Unmarshal(raw, &address) != nil {
-				var server struct {
-					Address string `json:"address"`
-					Port    int    `json:"port"`
-				}
-				if json.Unmarshal(raw, &server) != nil {
-					return errors.New("invalid redirect DNS server")
-				}
-				address = server.Address
-				if ip, e := netip.ParseAddr(address); e == nil && !ip.IsLoopback() && !ip.IsUnspecified() && server.Port > 0 && server.Port != 53 {
-					continue
-				}
-			}
-			u, e := url.Parse(address)
-			ip, ipError := netip.ParseAddr(uHost(u))
-			if e != nil || ipError != nil || ip.IsLoopback() || ip.IsUnspecified() || u.Port() == "53" || !(u.Scheme == "https" || u.Scheme == "https+local" || u.Scheme == "quic+local" || u.Scheme == "tcp" && u.Port() != "") {
-				return errors.New("DNS redirect upstreams must use literal non-loopback IPs and a port other than 53")
-			}
+		if json.Unmarshal(native["dns"], &resolver) != nil || len(resolver.Servers) == 0 {
+			return errors.New("DNS interception requires explicit Xray DNS servers")
 		}
 	}
 	if c.Telemetry.SampleSeconds < 0 || c.Telemetry.SampleSeconds > 3600 || c.Telemetry.ReportSeconds < 0 || c.Telemetry.ReportSeconds > 3600 || c.Torrent.BanSeconds < 0 || c.Torrent.BanSeconds > 604800 {

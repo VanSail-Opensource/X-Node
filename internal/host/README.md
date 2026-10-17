@@ -4,9 +4,11 @@
 execution and argument arrays. It never starts a shell and returns sanitized
 command failures. Callers supply their existing typed command policy.
 
-`CheckLinux` is the platform gate for agent startup, `xnodectl` and binary updates.
-It accepts Linux without reading a distribution name or version. The installer
-separately requires apt-get, systemd and a supported binary architecture.
+`CheckRequirements` verifies Linux amd64/arm64, root, required utilities, running
+systemd and readable nftables kernel state for agent startup and upgrades. The
+CLI can configure a private bootstrap using `CheckLinux` without host mutations.
+The installer skips package installation when its dependencies already exist;
+apt-get is an optional dependency installer rather than an OS compatibility gate.
 
 `CheckDebian` is reserved for the destructive `cmd/host-fixture` program. Its
 Debian 13 check and the fixture's disposable-VM marker protect privileged CI;

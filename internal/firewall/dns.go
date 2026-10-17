@@ -5,7 +5,7 @@ import (
 	"os"
 )
 
-// EnableConfirmedDNS changes only the confirmed DNS chain, after readiness.
+// EnableConfirmedDNS removes legacy host-wide redirects, regardless of intent.
 func (m *Manager) EnableConfirmedDNS(ctx context.Context, enabled bool) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -14,12 +14,12 @@ func (m *Manager) EnableConfirmedDNS(ctx context.Context, enabled bool) error {
 		return err
 	}
 	defer release()
-	p, err := m.ensureConfirmed(ctx)
+	_, err = m.ensureConfirmed(ctx)
 	if os.IsNotExist(err) {
 		return nil
 	}
 	if err != nil {
 		return err
 	}
-	return m.backend().DNS(ctx, enabled && p.Redirect)
+	return m.backend().DNS(ctx, false)
 }

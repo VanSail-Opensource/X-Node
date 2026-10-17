@@ -17,13 +17,25 @@ while (($#)); do
     esac
 done
 [[ $(id -u) == 0 ]] || { echo 'Run the installer as root.' >&2; exit 1; }
-command -v apt-get >/dev/null 2>&1 || { echo 'X-Node installation requires apt-get.' >&2; exit 1; }
-command -v systemctl >/dev/null 2>&1 || { echo 'X-Node installation requires systemd.' >&2; exit 1; }
+[[ $(uname -s) == Linux ]] || { echo 'X-Node requires Linux.' >&2; exit 1; }
 case "$(uname -m)" in x86_64) arch=amd64 ;; aarch64|arm64) arch=arm64 ;; *) echo 'Only amd64 and arm64 are supported.' >&2; exit 1 ;; esac
 [[ -n "$master_url" || -f /etc/x-node/bootstrap.json ]] || { echo '--master-url is required for a fresh installation.' >&2; exit 1; }
-export DEBIAN_FRONTEND=noninteractive
-apt-get update -qq
-apt-get install -y -qq ca-certificates curl minisign python3 nftables openssh-server
+missing=()
+for command in curl minisign python3 nft sshd ss ip systemctl systemd-run sha256sum; do
+    command -v "$command" >/dev/null 2>&1 || missing+=("$command")
+done
+if ((${#missing[@]})); then
+    if command -v apt-get >/dev/null 2>&1; then
+        export DEBIAN_FRONTEND=noninteractive
+        apt-get update -qq
+        apt-get install -y -qq ca-certificates curl minisign python3 nftables openssh-server iproute2
+    fi
+    for command in "${missing[@]}"; do
+        command -v "$command" >/dev/null 2>&1 || { printf 'Missing required utility: %s\n' "$command" >&2; exit 1; }
+    done
+fi
+[[ -d /run/systemd/system ]] || { echo 'A running systemd instance is required.' >&2; exit 1; }
+nft list tables >/dev/null || { echo 'nftables kernel support and privileges are required.' >&2; exit 1; }
 if [[ -z "$version" ]]; then
     version=$(curl --fail --silent --show-error --location "https://api.github.com/repos/$REPOSITORY/releases/latest" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert not d["draft"] and not d["prerelease"]; print(d["tag_name"])')
 fi

@@ -10,17 +10,9 @@ import (
 	"net/netip"
 )
 
-func (b *policyPlan) redirect(enabled bool) {
-	if !enabled {
-		return
-	}
-	for _, v6 := range []bool{false, true} {
-		for _, proto := range []byte{unix.IPPROTO_UDP, unix.IPPROTO_TCP} {
-			b.add("dns_output", fmt.Sprintf("dns-%t-%d", v6, proto), family(v6), port(proto, 53, true), counter("dns_redirects"),
-				expressions{&expr.Immediate{Register: 1, Data: binaryutil.BigEndian.PutUint16(53)}, &expr.Redir{RegisterProtoMin: 1}})
-		}
-	}
-}
+// Retain the empty legacy chain so reconciliation removes previously installed
+// redirects atomically. DNS interception belongs exclusively to Xray routing.
+func (b *policyPlan) redirect(_ bool) {}
 func (b *policyPlan) nat(forwards []protocol.Forward, redirect bool) {
 	b.redirect(redirect)
 	if len(forwards) == 0 {

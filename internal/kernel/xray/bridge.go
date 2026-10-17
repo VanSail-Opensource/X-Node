@@ -51,7 +51,7 @@ type managedOutbound struct {
 func (h *managedOutbound) Dispatch(ctx context.Context, link *transport.Link) {
 	si := session.InboundFromContext(ctx)
 	// Native forwarding attaches a level-only MemoryUser with an empty email.
-	if si == nil || si.Tag == "_xnode_dns" || (si.User == nil || si.User.Email == "") && h.bridge.auxiliaryAllowed(si.Tag) {
+	if si == nil || si.Tag == coreDNSTag || (si.User == nil || si.User.Email == "") && h.bridge.auxiliaryAllowed(si.Tag) {
 		h.Handler.Dispatch(ctx, link)
 		return
 	}

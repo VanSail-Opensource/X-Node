@@ -1,3 +1,13 @@
+# X-Node v2.0.4
+
+DNS interception now applies inside Xray only to managed authenticated traffic.
+Core resolver queries bypass interception; loopback and public port-53 upstreams
+are supported. Host-wide DNS NAT and SmartDNS lifecycle management are removed.
+Existing resolver services remain externally managed. Startup and installation
+verify operational dependencies without requiring a distribution or OS version.
+The master must require `xray_scoped_dns_v1` before enabling interception; signed
+upgrades retain the capability when cached configuration depends on it.
+
 # X-Node v2.0.3
 
 Removes the remaining Debian-only runtime checks from the agent, CLI and updater.

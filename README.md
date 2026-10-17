@@ -13,7 +13,7 @@ The master server is a separate application. X-Node defines its versioned contra
 - Requested user/IP reports, exact source-IP drops/temporary blocks, and explicit `limited` status/rejection reasons.
 - Native Xray configuration, DNS, logging, Observatory/balancers, FakeDNS, reverse routing and verified Geodata downloads.
 - Shared certificate profiles, ACME HTTP/DNS challenges, supplied/file/self-signed certificates, provider credentials and DDNS.
-- Optional managed SmartDNS and readiness-checked loopback DNS redirection.
+- Xray-scoped DNS interception with independent loopback or public resolvers.
 - Complete nftables ownership, probe protection, IPv4/IPv6 bans, explicit allowlists and TCP/UDP port forwarding with rollback.
 - Machine metrics, bounded redacted log reports, peer-proxy speedtests and temporary user bans for classified BitTorrent traffic.
 - Private cached operation and acknowledged traffic replay, signed binary updates and rollback.
@@ -89,9 +89,9 @@ Certificate profiles with the same configuration share a manager. DDNS owns expl
 
 Geodata assets stream to private staging files, are hash checked when hashes are provided, and are activated as one immutable generation. The previous generation remains available for rollback. Refresh scheduling is owned by the agent.
 
-Firewall management owns the entire host ruleset through typed Go nftables transactions. SSH ports are retained, kernel-validated updates preserve live bans/meters/counters, and a separate systemd timer restores the previous rules unless the master confirms the transaction within 45 seconds. Confirmed JSON policy is restored through Go after nftables at boot; `nft` remains available for snapshots, legacy recovery, and uninstall. Proxy connection limits are enforced in the agent; no conntrack connection quota is generated. DNS redirection activates only after both loopback families answer TCP and UDP DNS probes.
+Firewall management owns the entire host ruleset through typed Go nftables transactions. SSH ports are retained, kernel-validated updates preserve live bans/meters/counters, and a separate systemd timer restores the previous rules unless the master confirms the transaction within 45 seconds. Confirmed JSON policy is restored through Go after nftables at boot; `nft` remains available for snapshots, legacy recovery, and uninstall. Proxy connection limits are enforced in the agent; no conntrack connection quota is generated. Legacy host-wide DNS redirection is removed; user DNS is routed inside Xray.
 
-With DNS redirection enabled, Xray DNS must use explicit literal-IP upstreams on a port other than 53, such as `https://1.1.1.1/dns-query`. System DNS and hostname bootstrap upstreams are rejected to prevent resolution loops. SmartDNS uses pre-resolved DoT upstreams.
+With DNS interception enabled, configure native Xray DNS servers, including loopback or public port-53 upstreams. Only managed user inbounds are intercepted. Core-generated queries use a reserved internal route and cannot re-enter interception. Existing SmartDNS installations remain externally managed; the agent never installs, configures or stops them.
 
 BitTorrent classification blocks the detected flow, closes the user's sessions, and bans new sessions for ten minutes by default. This uses Xray's protocol classification and does not inspect arbitrary encrypted application payloads. Expiry is persisted and reported.
 
@@ -124,7 +124,7 @@ Runtime packages:
 | `internal/protocol`, `internal/transport` | Typed messages, schemas, authentication and socket lifecycle |
 | `internal/state`, `internal/sessions` | Durable state, journal, atomic admission and session control |
 | `internal/kernel/xray`, `internal/agent` | Native runtime integration and serialized desired state |
-| `internal/cert`, `internal/dns`, `internal/geodata` | Certificate profiles, DDNS, SmartDNS and asset lifecycle |
+| `internal/cert`, `internal/dns`, `internal/geodata` | Certificate profiles, DDNS, resolver probes and asset lifecycle |
 | `internal/firewall`, `internal/host` | Native atomic firewall reconciliation, JSON boot policy, and typed Linux operations; see `internal/firewall/README.md` and `internal/host/README.md` |
 | `internal/monitor`, `internal/nlog` | Shared metrics sampling and redacted logs |
 | `internal/speedtest`, `internal/update` | Isolated peer probes and verified releases |

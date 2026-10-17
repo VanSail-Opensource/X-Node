@@ -57,8 +57,8 @@ the previously confirmed policy without changing its redirect intent. The
 `native_firewall_v1` capability prevents subsequent unsafe binary downgrades.
 
 Boot restoration and agent startup recover unconfirmed transactions and reconcile
-the confirmed policy through Go, with DNS redirection disabled. The agent enables
-redirection only after both loopback families answer TCP and UDP DNS probes. An
+the confirmed policy through Go, with DNS redirection disabled. Legacy DNS output chains are reconciled empty, even for cached redirect intent.
+DNS interception belongs exclusively to authenticated Xray traffic. An
 agent startup restore also supports upgrades from the old service ordering.
 
 The `nft` executable remains necessary for complete arbitrary-ruleset snapshots,
@@ -74,3 +74,5 @@ VM fixture verifies real packets, live-state retention, watchdog recovery after
 the applying subprocess exits, reboot ordering, and uninstall. Never execute the
 privileged fixture on a developer host. Keep new policy settings in the existing
 protocol/schema, and extend the compiler rather than adding another executor.
+
+The deprecated redirect argument remains readable for upgrade compatibility; it never installs DNS NAT rules.

@@ -24,8 +24,8 @@ func TestPolicyCompilationAndBoundaries(t *testing.T) {
 	if counts["lan_v4"] != 2 || counts["lan_v6"] != 2 || counts["tcp_ports"] != 4 || counts["udp_ports"] != 1 {
 		t.Fatal("prefixes expanded or ports duplicated", counts)
 	}
-	if len(b.rules["dns_output"]) != 4 {
-		t.Fatal("missing dual-stack TCP/UDP DNS")
+	if len(b.rules["dns_output"]) != 0 {
+		t.Fatal("host-wide DNS interception retained")
 	}
 	for chain, rules := range b.rules {
 		ids := map[string]bool{}

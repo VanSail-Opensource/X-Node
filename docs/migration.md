@@ -11,7 +11,7 @@ This is a new control-plane contract. Existing Xboard, Hiddify, node/machine IDs
 
 Preserve the generated agent identity and private state when upgrading. Removing that state creates a new identity and loses locally pending traffic. Credential rotation is authoritative even when an unrelated native configuration fails; send a corrected snapshot with a higher revision.
 
-Firewall ownership is complete. Configure allowed services/forwarding explicitly, then confirm the apply transaction over WSS. SmartDNS is optional; Xray DNS is the default resolver mode.
+Firewall ownership is complete. Configure allowed services/forwarding explicitly, then confirm the apply transaction over WSS. DNS interception belongs to Xray user routing. Legacy SmartDNS mode uses an externally managed loopback resolver and never changes host services.
 
 ## Native firewall engine
 

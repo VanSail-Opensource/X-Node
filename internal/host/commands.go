@@ -1,13 +1,15 @@
-// Package host runs typed Linux utilities. It never evaluates a shell command.
+// Package host runs typed Debian utilities. It never evaluates a shell command.
 package host
 
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"runtime"
 	"strings"
+	"time"
 )
 
 type Runner interface {
@@ -16,8 +18,8 @@ type Runner interface {
 type Commands struct{}
 
 func (Commands) Run(ctx context.Context, name string, args ...string) ([]byte, error) {
-	if err := CheckLinux(); err != nil {
-		return nil, err
+	if runtime.GOOS != "linux" {
+		return nil, errors.New("host utility requires Linux")
 	}
 	cmd := exec.CommandContext(ctx, name, args...)
 	out, err := cmd.Output()
@@ -25,6 +27,34 @@ func (Commands) Run(ctx context.Context, name string, args ...string) ([]byte, e
 		return nil, errors.New(name + " failed")
 	}
 	return out, nil
+}
+
+// CheckRequirements checks operational capabilities without a distribution gate.
+func CheckRequirements() error {
+	if runtime.GOOS != "linux" || runtime.GOARCH != "amd64" && runtime.GOARCH != "arm64" {
+		return errors.New("X-Node requires Linux amd64/arm64")
+	}
+	if os.Geteuid() != 0 {
+		return errors.New("X-Node requires root privileges")
+	}
+	var missing []string
+	for _, name := range []string{"nft", "systemctl", "systemd-run", "ss", "ip", "sshd"} {
+		if _, err := exec.LookPath(name); err != nil {
+			missing = append(missing, name)
+		}
+	}
+	if len(missing) > 0 {
+		return fmt.Errorf("missing required host utilities: %s", strings.Join(missing, ", "))
+	}
+	if _, err := os.Stat("/run/systemd/system"); err != nil {
+		return errors.New("a running systemd instance is required")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if _, err := (Commands{}).Run(ctx, "nft", "list", "tables"); err != nil {
+		return errors.New("nftables kernel support and network-administration privileges are required")
+	}
+	return nil
 }
 
 // CheckLinux validates the runtime platform without restricting distributions.

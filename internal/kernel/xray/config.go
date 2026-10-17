@@ -252,18 +252,9 @@ func Prepare(c protocol.Config) (*Prepared, error) {
 		routing["rules"] = append([]any{map[string]any{"type": "field", "protocol": []string{"bittorrent"}, "outboundTag": "_xnode_torrent"}}, rules...)
 		root["routing"] = routing
 	}
-	if c.DNS.Redirect && c.DNS.Mode != "smartdns" {
-		for _, addr := range []string{"127.0.0.1", "::1"} {
-			inbounds = append(inbounds, map[string]any{"tag": "_xnode_dns", "listen": addr, "port": 53, "protocol": "dokodemo-door", "settings": map[string]any{"address": "1.1.1.1", "port": 53, "network": "tcp,udp"}})
-		}
-		outs = append(outs, map[string]any{"protocol": "dns", "tag": "_xnode_dns_out"})
-		routing, _ := root["routing"].(map[string]any)
-		if routing == nil {
-			routing = map[string]any{}
-		}
-		rules, _ := routing["rules"].([]any)
-		routing["rules"] = append([]any{map[string]any{"type": "field", "inboundTag": []string{"_xnode_dns"}, "outboundTag": "_xnode_dns_out"}}, rules...)
-		root["routing"] = routing
+	outs, err = scopedDNS(root, outs, c.DNS, c.Users)
+	if err != nil {
+		return nil, err
 	}
 	root["inbounds"] = inbounds
 	root["outbounds"] = outs

@@ -1,4 +1,4 @@
-// Package dns manages explicit DDNS RRsets and the optional SmartDNS service.
+// Package dns manages explicit DDNS RRsets and diagnostic resolver probes.
 package dns
 
 import (

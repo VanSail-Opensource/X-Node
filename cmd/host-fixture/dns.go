@@ -68,8 +68,8 @@ func dnsChecks(ctx context.Context, m *firewall.Manager, p protocol.FirewallPoli
 			question.SetQuestion("localhost.", mdns.TypeA)
 			c := &mdns.Client{Net: network, Timeout: 2 * time.Second}
 			reply, _, err := c.ExchangeContext(ctx, question, address)
-			if err != nil || reply == nil || reply.Id != question.Id {
-				return fmt.Errorf("%s DNS redirect %s failed: %w", network, address, err)
+			if err == nil && reply != nil {
+				return fmt.Errorf("%s host DNS was intercepted at %s", network, address)
 			}
 		}
 	}

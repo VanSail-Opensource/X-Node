@@ -129,7 +129,7 @@ func New(dir, version string, client *transport.Client, logs *nlog.Stream) (*Age
 	return a, nil
 }
 
-var Capabilities = []string{"native_firewall_v1", "native_xray", "multi_inbound", "tcp_udp_limits", "session_revocation", "traffic_ack", "certificates", "ddns", "smartdns", "geodata", "nftables", "port_forward", "metrics", "logs", "peer_speedtest", "torrent_ban", "signed_updates", "traffic_periods_v1", "measured_user_rates", "authorization_expiry", "member_outbound_guards", "traffic_period_barriers_v1", "config_validation_v1", "volatile_connection_controls_v1", "native_auxiliary_inbounds_v1"}
+var Capabilities = []string{"native_firewall_v1", "native_xray", "multi_inbound", "tcp_udp_limits", "session_revocation", "traffic_ack", "certificates", "ddns", "xray_scoped_dns_v1", "geodata", "nftables", "port_forward", "metrics", "logs", "peer_speedtest", "torrent_ban", "signed_updates", "traffic_periods_v1", "measured_user_rates", "authorization_expiry", "member_outbound_guards", "traffic_period_barriers_v1", "config_validation_v1", "volatile_connection_controls_v1", "native_auxiliary_inbounds_v1"}
 
 func (a *Agent) Run(ctx context.Context) error {
 	if err := a.Firewall.RestoreFile(ctx); err != nil {
@@ -347,23 +347,6 @@ func (a *Agent) activate(lifetime context.Context, job applyJob) error {
 	if e = a.Firewall.EnableConfirmedDNS(job.Context, false); e != nil {
 		return e
 	}
-	if c.DNS.Mode != "smartdns" {
-		marker := filepath.Join(a.Dir, "smartdns-managed")
-		if _, e := os.Stat(marker); e == nil {
-			if _, e = a.Runner.Run(job.Context, "systemctl", "disable", "--now", "smartdns.service"); e != nil {
-				return e
-			}
-		}
-	}
-	if c.DNS.Mode == "smartdns" {
-		a.Runtime.Stop()
-		if e = dns.ConfigureSmartDNS(job.Context, c.DNS, a.Runner); e != nil {
-			return e
-		}
-		if e = state.AtomicWrite(filepath.Join(a.Dir, "smartdns-managed"), []byte("managed\n"), 0600); e != nil {
-			return e
-		}
-	}
 	// Every native asset path resolves inside the managed directory.
 	var native map[string]any
 	_ = json.Unmarshal(resolved.Xray, &native)
@@ -383,11 +366,6 @@ func (a *Agent) activate(lifetime context.Context, job applyJob) error {
 	}
 	if job.Context.Err() != nil {
 		return job.Context.Err()
-	}
-	if c.DNS.Redirect {
-		if e = dns.ResolverReady(job.Context); e != nil {
-			return e
-		}
 	}
 	if e = a.Store.Accept(c, job.Revision); e != nil {
 		return e
@@ -760,11 +738,6 @@ func (a *Agent) command(ctx context.Context, m protocol.Message) error {
 			}
 			if e := protocol.Decode(args, &p); e != nil {
 				return nil, e
-			}
-			if p.DNSRedirect {
-				if e := dns.ResolverReady(ctx); e != nil {
-					return nil, e
-				}
 			}
 			return a.Firewall.Apply(ctx, m.ID, p.Policy, p.DNSRedirect)
 		case "speedtest":

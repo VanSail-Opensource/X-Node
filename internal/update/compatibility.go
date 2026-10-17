@@ -67,6 +67,9 @@ func (m *Manager) requiredCapabilities() ([]string, error) {
 		required["member_outbound_guards"] = true
 	}
 	if data.Config != nil {
+		if data.Config.DNS.Redirect {
+			required["xray_scoped_dns_v1"] = true
+		}
 		tags, err := protocol.AuxiliaryInboundTags(data.Config.Xray)
 		if err != nil {
 			return nil, err
@@ -76,7 +79,7 @@ func (m *Manager) requiredCapabilities() ([]string, error) {
 		}
 	}
 	var out []string
-	for _, key := range []string{"traffic_periods_v1", "traffic_period_barriers_v1", "authorization_expiry", "member_outbound_guards", "volatile_connection_controls_v1", "native_auxiliary_inbounds_v1", "native_firewall_v1"} {
+	for _, key := range []string{"traffic_periods_v1", "traffic_period_barriers_v1", "authorization_expiry", "member_outbound_guards", "volatile_connection_controls_v1", "native_auxiliary_inbounds_v1", "native_firewall_v1", "xray_scoped_dns_v1"} {
 		if required[key] {
 			out = append(out, key)
 		}

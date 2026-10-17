@@ -76,3 +76,42 @@ privileged fixture on a developer host. Keep new policy settings in the existing
 protocol/schema, and extend the compiler rather than adding another executor.
 
 The deprecated redirect argument remains readable for upgrade compatibility; it never installs DNS NAT rules.
+
+## Master-authorized bans and reports
+
+`ban_state.go`, `guard_runtime.go` and `detection.go` separate observations from
+restrictions. Default detection is three hits in 24 hours; no detector can add
+a ban. `nflog_linux.go` reads Linux NFLOG group 100 using bounded header-only
+packet copies, without parsing kernel text logs. Xray supplies public inbound
+observations. Disabled rules do not report; blacklist hits extend existing
+authorized deadlines without creating fresh detection reports.
+
+`ban_sync.go`, `ban_snapshot.go`, `ban_update.go` and `ban_validation.go` implement
+ordered snapshots, source references and immediate deltas. Master versions and
+absolute deadlines prevent stale retries from reviving older state. Sources stay
+compact CIDRs. Repeated generations preserve local extensions; a new generation
+can shorten a restriction. Exact exemptions bypass blacklist lookup only and
+never bypass ordinary port, invalid-packet or forwarding checks.
+
+`ban_journal.go`, `ban_persistence.go` and `ban_writes.go` use private gzip
+checkpoints plus a bounded append journal. Changes fsync before command success.
+A stable event namespace and monotonic sequence allow replay-safe master cursors.
+Acknowledged events and expired records are pruned; torn final journal members
+are removed without losing committed records. Compaction epochs prevent stale
+journal replay, and expiry acknowledgments cannot remove a newer source.
+
+`ban_backend.go`, `ban_sets_linux.go`, `ban_rules_linux.go`, `source_sets_linux.go`
+and `ban_other.go` bind durable state to native sets. Large source generations
+are populated while unreferenced through bounded transactions, then selected
+atomically. Immediate ban/exemption updates use independent revisions and are
+not queued behind inventory population. Source lookup chains survive ordinary
+policy reconciliation. All restrictions match inbound/original direction;
+outbound connections and their reply packets remain usable. Boot restoration
+replays remaining lifetimes before the agent starts.
+
+`ban_status.go` exposes memory-only status. `guard_test.go`,
+`guard_persistence_test.go` and `guard_snapshot_test.go` provide hosted regressions
+for threshold windows, command authority, shortening, replay, torn tails,
+compaction, source references, stale generations and exact IPv6 exemptions.
+
+`guard_runtime.go` keeps observation processing active while native inventories stage. Per-namespace monotonic event IDs and master versions reject replay and stale state; dynamic restrictions and source generations use separate kernel revisions. Existing agent/renderer lifecycle files retain their native-core orchestration; new firewall responsibilities are isolated here.

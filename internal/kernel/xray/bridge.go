@@ -21,6 +21,7 @@ import (
 type bridgeKey struct{}
 type leaseKey struct{}
 type integration struct {
+	Observe   func(InboundObservation)
 	Registry  *sessions.Registry
 	BanNanos  atomic.Int64
 	Auxiliary atomic.Pointer[map[string]bool]

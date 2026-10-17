@@ -3,6 +3,7 @@ package firewall
 import (
 	"context"
 	"errors"
+	"github.com/VanSail-Opensource/X-Node/internal/protocol"
 	"github.com/VanSail-Opensource/X-Node/internal/state"
 	"os"
 	"path/filepath"
@@ -10,32 +11,42 @@ import (
 
 // RestoreFile retains the CLI entry point, restoring live policy through Go.
 func (m *Manager) RestoreFile(ctx context.Context) error {
+	policy, err := m.restorePolicy(ctx)
+	if err != nil || policy == nil {
+		return err
+	}
+	return m.restoreBans(ctx, *policy)
+}
+func (m *Manager) restorePolicy(ctx context.Context) (*protocol.FirewallPolicy, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	release, err := m.locked(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer release()
 	tx, err := readRecord(m.path())
 	if err == nil && tx.Status == "pending" {
 		if err = m.recover(ctx, &tx, true); err != nil {
-			return err
+			return nil, err
 		}
 	} else if err != nil && !os.IsNotExist(err) {
-		return err
+		return nil, err
 	}
 	p, err := readRecord(filepath.Join(m.Dir, "policy.json"))
 	if os.IsNotExist(err) {
-		return nil
+		return nil, nil
 	}
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if err = m.applyForwarding(ctx, p.Pending); err != nil {
-		return err
+		return nil, err
 	}
-	return m.backend().Reconcile(ctx, p.Policy, false, p.SSH)
+	if err = m.backend().Reconcile(ctx, p.Policy, false, p.SSH); err != nil {
+		return nil, err
+	}
+	return &p.Policy, nil
 }
 
 func (m *Manager) RestoreOriginal(ctx context.Context) error {

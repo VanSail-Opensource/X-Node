@@ -301,9 +301,19 @@ func Prepare(c protocol.Config) (*Prepared, error) {
 	}
 	pbmap := map[string]*core.InboundHandlerConfig{}
 	for _, in := range pb.Inbound {
-		if in.Tag != "_xnode_dns" {
-			pbmap[in.Tag] = in
+		if !auxiliary[in.Tag] {
+			reality := false
+			for _, raw := range inbounds {
+				item, _ := raw.(map[string]any)
+				if item["tag"] == in.Tag {
+					stream, _ := item["streamSettings"].(map[string]any)
+					reality = stream["security"] == "reality"
+					break
+				}
+			}
+			in.ProxySettings = serial.ToTypedMessage(&InboundConfig{NativeType: in.ProxySettings.Type, NativeValue: in.ProxySettings.Value, Tag: in.Tag, Reality: reality})
 		}
+		pbmap[in.Tag] = in
 	}
 	without := protocol.Clone(root)
 	delete(without, "inbounds")

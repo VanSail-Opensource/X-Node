@@ -167,13 +167,16 @@ type Forward struct {
 	Network    string `json:"network"`
 }
 type FirewallPolicy struct {
-	Enabled       bool      `json:"enabled"`
-	Protect       bool      `json:"protect"`
-	TCPPorts      []int     `json:"tcp_ports,omitempty"`
-	UDPPorts      []int     `json:"udp_ports,omitempty"`
-	SSHPorts      []int     `json:"ssh_ports,omitempty"`
-	AllowPrefixes []string  `json:"allow_prefixes,omitempty"`
-	Forward       []Forward `json:"forward,omitempty"`
+	MasterControlled bool                    `json:"master_controlled,omitempty"`
+	Rules            map[string]FirewallRule `json:"rules,omitempty"`
+	BanSeconds       int                     `json:"ban_seconds,omitempty"`
+	Enabled          bool                    `json:"enabled"`
+	Protect          bool                    `json:"protect"`
+	TCPPorts         []int                   `json:"tcp_ports,omitempty"`
+	UDPPorts         []int                   `json:"udp_ports,omitempty"`
+	SSHPorts         []int                   `json:"ssh_ports,omitempty"`
+	AllowPrefixes    []string                `json:"allow_prefixes,omitempty"`
+	Forward          []Forward               `json:"forward,omitempty"`
 }
 type UpdatePolicy struct {
 	Enabled bool   `json:"enabled"`
@@ -299,6 +302,9 @@ func ValidName(s string) bool {
 }
 
 func (c Config) Validate() error {
+	if err := c.Firewall.ValidateDetection(); err != nil {
+		return err
+	}
 	if err := validateAuxiliaryUsers(c); err != nil {
 		return err
 	}

@@ -10,35 +10,21 @@ import (
 func dynamic(v6, subnet bool, name string, operation uint32, ttl time.Duration, nested ...expr.Any) expressions {
 	return cat(source(v6, subnet), expressions{&expr.Dynset{SrcRegKey: 1, SetName: name, Operation: operation, Timeout: ttl, Exprs: nested}})
 }
-func (b *policyPlan) protection(enabled bool) {
-	b.add("log_ban", "log", expressions{
-		&expr.Limit{Type: expr.LimitTypePkts, Rate: 3, Unit: expr.LimitTimeMinute, Burst: 5},
-		&expr.Log{Level: expr.LogLevelWarning, Key: (1 << unix.NFTA_LOG_PREFIX) | (1 << unix.NFTA_LOG_LEVEL), Data: []byte("x-node-ban72h: ")},
-	}, verdict(expr.VerdictReturn, ""))
-	b.add("ban_v6", "lan-exempt", sourceSet(true, "lan_v6", false, false), drop())
-	b.add("ban_v6", "ban", dynamic(true, true, "banned_v6_64", unix.NFT_DYNSET_OP_UPDATE, 72*time.Hour), counter("ban_events"), jump("log_ban"))
-	b.add("ban_v6", "drop", drop())
+func (b *policyPlan) protection(_ bool) {
+	b.add("ban_v6", "report", b.event("syn_flood"), drop())
 	for _, v6 := range []bool{false, true} {
-		chain, lan, hits, ban, refresh := "blocked_v4", "lan_v4", "hits_v4", "banned_v4", "refresh_v4"
+		chain, lan, refresh := "blocked_v4", "lan_v4", "refresh_v4"
 		if v6 {
-			chain, lan, hits, ban, refresh = "blocked_v6", "lan_v6", "hits_v6", "banned_v6_64", "refresh_v6"
+			chain, lan, refresh = "blocked_v6", "lan_v6", "refresh_v6"
 		}
 		b.add(chain, "not-new", ctState(expr.CtStateBitNEW, true), drop())
 		b.add(chain, "not-original", direction(false, true), drop())
 		b.add(chain, "lan-exempt", sourceSet(v6, lan, false, false), drop())
 		b.add(chain, "blocked-count", counter("blocked_requests"))
-		if enabled {
-			rate := &expr.Limit{Type: expr.LimitTypePkts, Rate: 1, Unit: expr.LimitTimeDay, Burst: 2, Over: true}
-			hit := dynamic(v6, false, hits, unix.NFT_DYNSET_OP_ADD, 0, rate)
-			if v6 {
-				b.add(chain, "probe-ban", hit, goTo("ban_v6"))
-			} else {
-				b.add(chain, "probe-ban", hit, dynamic(false, false, ban, unix.NFT_DYNSET_OP_UPDATE, 72*time.Hour), counter("ban_events"), jump("log_ban"))
-			}
-		}
+		b.add(chain, "report", b.event("closed_port"))
 		b.add(chain, "drop", drop())
 		b.add("blocked", fmt.Sprintf("family-%t", v6), family(v6), goTo(chain))
-		b.add(refresh, "refresh", dynamic(v6, v6, ban, unix.NFT_DYNSET_OP_UPDATE, 72*time.Hour))
+		b.add(refresh, "report", b.event("blacklist"))
 		b.add(refresh, "drop", counter("blacklist_drops"), drop())
 	}
 	b.add("blocked", "drop", drop())
@@ -66,9 +52,9 @@ func (b *policyPlan) networkEssentials(protected bool) {
 	for _, kind := range []byte{1, 2, 3, 4} {
 		b.add("input", fmt.Sprintf("icmpv6-error-%d", kind), icmp(true, kind), accept())
 	}
-	b.add("input", "icmp-block", family(false), l4(unix.IPPROTO_ICMP), goTo("blocked_v4"))
-	b.add("input", "icmpv6-block", family(true), l4(unix.IPPROTO_ICMPV6), goTo("blocked_v6"))
-	b.add("input", "new-not-syn", ctState(expr.CtStateBitNEW, false), flags(0x17, 2, true), drop())
+	b.add("input", "icmp-block", family(false), l4(unix.IPPROTO_ICMP), b.event("icmp_probe"), drop())
+	b.add("input", "icmpv6-block", family(true), l4(unix.IPPROTO_ICMPV6), b.event("icmp_probe"), drop())
+	b.add("input", "new-not-syn", ctState(expr.CtStateBitNEW, false), flags(0x17, 2, true), b.event("invalid_packet"), drop())
 	b.add("input", "dhcpv4", family(false), port(unix.IPPROTO_UDP, 67, false), port(unix.IPPROTO_UDP, 68, true), accept())
 	b.add("input", "dhcpv6", family(true), port(unix.IPPROTO_UDP, 547, false), port(unix.IPPROTO_UDP, 546, true), accept())
 	b.add("input", "tcp-closed", portSet(unix.IPPROTO_TCP, "tcp_ports", true), goTo("blocked"))
@@ -80,7 +66,7 @@ func (b *policyPlan) networkEssentials(protected bool) {
 		b.add("input", fmt.Sprintf("lan-tcp-%t", v6), sourceSet(v6, lan, false, false), portSet(unix.IPPROTO_TCP, "tcp_ports", false), ctState(expr.CtStateBitNEW, false), accept())
 	}
 	b.add("input", "udp-closed", portSet(unix.IPPROTO_UDP, "udp_ports", true), goTo("blocked"))
-	if protected {
+	if _, enabled := b.policy.Rule("syn_flood"); protected && enabled {
 		for _, v6 := range []bool{false, true} {
 			name := "syn_v4"
 			if v6 {
@@ -88,7 +74,7 @@ func (b *policyPlan) networkEssentials(protected bool) {
 			}
 			match := cat(family(v6), ctState(expr.CtStateBitNEW, false), portSet(unix.IPPROTO_TCP, "tcp_ports", false))
 			limit := &expr.Limit{Type: expr.LimitTypePkts, Rate: 50, Unit: expr.LimitTimeSecond, Burst: 50, Over: true}
-			action := drop()
+			action := cat(b.event("syn_flood"), drop())
 			if v6 {
 				action = goTo("ban_v6")
 			}

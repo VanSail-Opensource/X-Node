@@ -26,7 +26,7 @@ func main() {
 	runner := fixtureRunner{}
 	if len(os.Args) > 1 && os.Args[1] == "--abandon" {
 		m := &firewall.Manager{Dir: "/var/lib/x-node/firewall", ConfigPath: "/etc/nftables.conf", Executable: "/usr/local/bin/xnodectl", Runner: runner}
-		tx, err := m.Apply(ctx, "fixture-real-watchdog", protocol.FirewallPolicy{Enabled: true, Protect: true, TCPPorts: []int{22, 443, 9443, 60001}, UDPPorts: []int{443, 9443}, Forward: forwardingPolicy()}, false)
+		tx, err := m.Apply(ctx, "fixture-real-watchdog", protocol.FirewallPolicy{Enabled: true, Protect: true, MasterControlled: true, TCPPorts: []int{22, 443, 9443, 60001}, UDPPorts: []int{443, 9443}, Forward: forwardingPolicy()}, false)
 		if err != nil {
 			fail(err)
 		}
@@ -49,7 +49,7 @@ func main() {
 		fail(e)
 	}
 	m := &firewall.Manager{Dir: "/var/lib/x-node/firewall", ConfigPath: "/etc/nftables.conf", Executable: "/usr/local/bin/xnodectl", Runner: runner}
-	policy := protocol.FirewallPolicy{Enabled: true, Protect: true, TCPPorts: []int{443, 9443}, UDPPorts: []int{443, 9443}, SSHPorts: []int{22}, Forward: forwardingPolicy()}
+	policy := protocol.FirewallPolicy{Enabled: true, Protect: true, MasterControlled: true, TCPPorts: []int{443, 9443}, UDPPorts: []int{443, 9443}, SSHPorts: []int{22}, Forward: forwardingPolicy()}
 	pending, e := m.Apply(ctx, "fixture-rollback", policy, false)
 	if e != nil {
 		fail(e)
@@ -77,6 +77,9 @@ func main() {
 		fail(e)
 	}
 	if e = liveStateChecks(ctx, m, policy); e != nil {
+		fail(e)
+	}
+	if e = firewallControlChecks(ctx, m, policy, runner); e != nil {
 		fail(e)
 	}
 	if e = watchdogCheck(ctx, m, policy, runner); e != nil {

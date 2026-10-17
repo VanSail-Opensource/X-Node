@@ -159,3 +159,25 @@ a trusted enrolled agent build; it is not hardware attestation. Masters can use
 `pkg/releases` to apply the exact update trust policy.
 
 Connection-derived `block_new` controls remain in memory. The agent advertises `volatile_connection_controls_v1`; cached authorization keeps credentials, expiry and accounting periods, but never resurrects a historical global connection decision after restart.
+
+## Firewall control v1
+
+Agents advertise `firewall_control_v1`. A supporting master sets
+`firewall.master_controlled`; older masters receive no new event frames.
+`firewall.events` carries a stable `instance_id`, ordered event IDs, timestamps,
+IP/rule/count evidence and live kernel status. Masters acknowledge committed IDs
+with `firewall.events.ack`. Detection never inserts a blacklist entry.
+
+Commands `firewall.bans.sync`, `firewall.bans.update` and `firewall.bans.get` use
+the existing command executor. Every mutation requires a positive master
+`version` and immutable `snapshot_id`. Snapshot chunks are ordered by `index`
+and remain inactive until `final`. `sources_complete` controls authoritative
+source replacement; `remove_sources` explicitly retires sources during partial
+coverage. A source `reference` requires the existing matching generation.
+
+Bans include prefix, generation, absolute `until` and refresh seconds; new commands
+can reset shorter lifetimes. Retries do not extend the original deadline. IPv4
+uses /32 and IPv6 /64; exemptions use exact addresses. Repeat qualifying hits
+extend locally without another detection report. Expiry events retain their
+generation so obsolete events cannot clear newer bans. A source-expired event
+means its base deadline and all local extensions have expired.

@@ -4,6 +4,9 @@ import "github.com/VanSail-Opensource/X-Node/internal/protocol"
 
 func extensionRequirements(config protocol.Config) map[string]bool {
 	required := map[string]bool{}
+	if config.Firewall.MasterControlled {
+		required["firewall_control_v1"] = true
+	}
 	if config.DNS.Redirect {
 		required["xray_scoped_dns_v1"] = true
 	}

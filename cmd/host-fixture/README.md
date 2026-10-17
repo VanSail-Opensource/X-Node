@@ -23,3 +23,9 @@ Dependencies are the installed agent/CLI binaries, iproute2, nftables, systemd,
 Python 3, and the same Go DNS/nftables libraries as the agent. Extend packet or
 kernel assertions in the corresponding small source files; preserve the VM guard
 and the two-phase reboot contract.
+
+`firewall_control.go` validates real NFLOG reporting without autonomous bans,
+master-authorized nftables restrictions, repeated-hit refresh, exact IPv6
+exemptions and outbound/reply preservation. It leaves an authoritative ban and
+compact source generation for reboot verification. These destructive checks
+remain confined to the marked disposable VM.

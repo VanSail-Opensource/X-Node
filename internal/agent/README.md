@@ -19,3 +19,9 @@ attribution and transient read results. Real stream tests live with the runtime.
 `compatibility.go` compares individual capability requirements before adopting
 new state during an unconfirmed upgrade. `compatibility_test.go` covers adding
 utilities or member guards when accounting extensions are already cached.
+
+The firewall guard owns local kernel observations and compressed ban durability;
+its joined background tasks keep disk/kernel work off the control reader and Xray
+payload paths. New report frames are gated by `master_controlled`, protecting
+rolling upgrades with older masters. Typed firewall snapshot/delta commands use
+the existing utility executor. Read-only firewall status never enters job history.

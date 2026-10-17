@@ -24,12 +24,22 @@ func (m *Manager) requiredCapabilities() ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
+	controlRequired := false
+	if _, e := os.Stat(filepath.Join(filepath.Dir(m.Dir), "firewall", "controlled-v1")); e == nil {
+		controlRequired = true
+	} else if !os.IsNotExist(e) {
+		return nil, e
+	}
 	raw, err := os.ReadFile(filepath.Join(filepath.Dir(m.Dir), "state.json"))
 	if os.IsNotExist(err) {
+		caps := []string{}
 		if nativeFirewall {
-			return []string{"native_firewall_v1"}, nil
+			caps = append(caps, "native_firewall_v1")
 		}
-		return nil, nil
+		if controlRequired {
+			caps = append(caps, "firewall_control_v1")
+		}
+		return caps, nil
 	}
 	if err != nil {
 		return nil, errors.New("cannot inspect private-state compatibility")
@@ -39,6 +49,7 @@ func (m *Manager) requiredCapabilities() ([]string, error) {
 		return nil, errors.New("invalid private-state compatibility data")
 	}
 	required := map[string]bool{}
+	required["firewall_control_v1"] = controlRequired
 	required["native_firewall_v1"] = nativeFirewall
 	if len(data.Users) > 0 {
 		required["volatile_connection_controls_v1"] = true
@@ -67,6 +78,9 @@ func (m *Manager) requiredCapabilities() ([]string, error) {
 		required["member_outbound_guards"] = true
 	}
 	if data.Config != nil {
+		if data.Config.Firewall.MasterControlled {
+			required["firewall_control_v1"] = true
+		}
 		if data.Config.DNS.Redirect {
 			required["xray_scoped_dns_v1"] = true
 		}
@@ -79,7 +93,7 @@ func (m *Manager) requiredCapabilities() ([]string, error) {
 		}
 	}
 	var out []string
-	for _, key := range []string{"traffic_periods_v1", "traffic_period_barriers_v1", "authorization_expiry", "member_outbound_guards", "volatile_connection_controls_v1", "native_auxiliary_inbounds_v1", "native_firewall_v1", "xray_scoped_dns_v1"} {
+	for _, key := range []string{"traffic_periods_v1", "traffic_period_barriers_v1", "authorization_expiry", "member_outbound_guards", "volatile_connection_controls_v1", "native_auxiliary_inbounds_v1", "native_firewall_v1", "xray_scoped_dns_v1", "firewall_control_v1"} {
 		if required[key] {
 			out = append(out, key)
 		}

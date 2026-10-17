@@ -4,6 +4,7 @@ package protocol
 import (
 	"github.com/VanSail-Opensource/X-Node/internal/config"
 	wire "github.com/VanSail-Opensource/X-Node/internal/protocol"
+	"net/netip"
 )
 
 const Version = wire.Version
@@ -23,6 +24,19 @@ type DDNSJob = wire.DDNSJob
 type DNSPolicy = wire.DNSPolicy
 type PortRange = wire.PortRange
 type FirewallPolicy = wire.FirewallPolicy
+type FirewallRule = wire.FirewallRule
+type FirewallBan = wire.FirewallBan
+type FirewallExemption = wire.FirewallExemption
+type FirewallSource = wire.FirewallSource
+type FirewallEvent = wire.FirewallEvent
+type FirewallEvents = wire.FirewallEvents
+type FirewallEventAck = wire.FirewallEventAck
+type FirewallUpdate = wire.FirewallUpdate
+type FirewallState = wire.FirewallState
+
+func FirewallPrefix(raw string) (netip.Prefix, error) { return wire.FirewallPrefix(raw) }
+func FirewallRuleNames() []string                     { return append([]string(nil), wire.FirewallRuleNames...) }
+
 type Forward = wire.Forward
 type UpdatePolicy = wire.UpdatePolicy
 type TelemetryPolicy = wire.TelemetryPolicy

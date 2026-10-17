@@ -2,3 +2,9 @@ syntax = "proto3";
 package xnode.integration;
 option go_package = "github.com/VanSail-Opensource/X-Node/internal/kernel/xray";
 message ManagerConfig {}
+message InboundConfig {
+  string native_type = 1;
+  bytes native_value = 2;
+  string tag = 3;
+  bool reality = 4;
+}

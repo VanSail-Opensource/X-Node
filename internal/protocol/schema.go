@@ -75,7 +75,7 @@ func Schemas() map[string]any {
 	}
 	user["anyOf"] = []any{map[string]any{"required": []string{"uuid"}}, map[string]any{"required": []string{"credentials"}}}
 	root["properties"].(map[string]any)["users"].(map[string]any)["items"] = user
-	types := map[string]any{"state.sync": root, "config.apply": root, "users.sync": Schema(UsersSync{}), "users.delta": Schema(UsersDelta{}), "user.controls": Schema(UserControls{}), "traffic.ack": map[string]any{"type": "object", "required": []string{"id"}, "properties": map[string]any{"id": map[string]any{"type": "string"}}, "additionalProperties": false}, "command": map[string]any{"type": "object", "required": []string{"name"}, "properties": map[string]any{"name": map[string]any{"type": "string", "enum": CommandNames}, "args": map[string]any{"type": "object"}}, "additionalProperties": false}, "command.cancel": map[string]any{"type": "object", "required": []string{"id"}, "properties": map[string]any{"id": map[string]any{"type": "string"}}, "additionalProperties": false}}
+	types := map[string]any{"state.sync": root, "config.apply": root, "users.sync": Schema(UsersSync{}), "users.delta": Schema(UsersDelta{}), "user.controls": Schema(UserControls{}), "firewall.events.ack":Schema(FirewallEventAck{}), "traffic.ack": map[string]any{"type": "object", "required": []string{"id"}, "properties": map[string]any{"id": map[string]any{"type": "string"}}, "additionalProperties": false}, "command": map[string]any{"type": "object", "required": []string{"name"}, "properties": map[string]any{"name": map[string]any{"type": "string", "enum": CommandNames}, "args": map[string]any{"type": "object"}}, "additionalProperties": false}, "command.cancel": map[string]any{"type": "object", "required": []string{"id"}, "properties": map[string]any{"id": map[string]any{"type": "string"}}, "additionalProperties": false}}
 	variants := []any{}
 	for _, name := range MasterMessageTypes {
 		data := types[name]
@@ -91,5 +91,5 @@ func Schemas() map[string]any {
 	return map[string]any{"config": root, "master_message": messages}
 }
 
-var MasterMessageTypes = []string{"state.sync", "config.apply", "users.sync", "users.delta", "user.controls", "traffic.ack", "command", "command.cancel"}
-var CommandNames = []string{"connections.list", "connections.close", "users.active_ips", "ips.control", "metrics.get", "jobs.list", "firewall.status", "firewall.confirm", "firewall.apply", "speedtest", "update.check", "update.install", "update.rollback", "runtime.reload", "geodata.refresh", "ddns.run", "certificates.get", "traffic.flush", "config.validate"}
+var MasterMessageTypes = []string{"firewall.events.ack","state.sync", "config.apply", "users.sync", "users.delta", "user.controls", "traffic.ack", "command", "command.cancel"}
+var CommandNames = []string{"firewall.bans.sync","firewall.bans.update","firewall.bans.get","connections.list", "connections.close", "users.active_ips", "ips.control", "metrics.get", "jobs.list", "firewall.status", "firewall.confirm", "firewall.apply", "speedtest", "update.check", "update.install", "update.rollback", "runtime.reload", "geodata.refresh", "ddns.run", "certificates.get", "traffic.flush", "config.validate"}

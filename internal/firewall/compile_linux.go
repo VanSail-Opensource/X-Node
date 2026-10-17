@@ -11,12 +11,15 @@ import (
 type setSpec struct {
 	set      *nftables.Set
 	elements []nftables.SetElement
+	preserve bool
 }
 type policyPlan struct {
-	table  *nftables.Table
-	chains []*nftables.Chain
-	rules  map[string][]*nftables.Rule
-	sets   []setSpec
+	preserveRules map[string]bool
+	policy        protocol.FirewallPolicy
+	table         *nftables.Table
+	chains        []*nftables.Chain
+	rules         map[string][]*nftables.Rule
+	sets          []setSpec
 }
 
 var counterNames = []string{"blocked_requests", "ban_events", "blacklist_drops", "syn_limited", "outbound_replies", "dns_redirects"}
@@ -25,8 +28,8 @@ func compile(p protocol.FirewallPolicy, redirect bool, ssh []int) (*policyPlan, 
 	if err := validate(p, ssh); err != nil {
 		return nil, err
 	}
-	b := &policyPlan{table: &nftables.Table{Name: "x_node", Family: nftables.TableFamilyINet}, rules: map[string][]*nftables.Rule{}}
-	for _, name := range []string{"log_ban", "ban_v6", "blocked_v4", "blocked_v6", "blocked", "refresh_v4", "refresh_v6"} {
+	b := &policyPlan{policy: p, table: &nftables.Table{Name: "x_node", Family: nftables.TableFamilyINet}, rules: map[string][]*nftables.Rule{}}
+	for _, name := range []string{"ban_v6", "blocked_v4", "blocked_v6", "blocked", "refresh_v4", "refresh_v6"} {
 		b.chain(name, nil, nil, "", false)
 	}
 	b.chain("input", nftables.ChainHookInput, nftables.ChainPriorityFilter, nftables.ChainTypeFilter, true)
@@ -44,7 +47,6 @@ func compile(p protocol.FirewallPolicy, redirect bool, ssh []int) (*policyPlan, 
 		ttl  time.Duration
 	}{
 		{"banned_v4", false, 72 * time.Hour}, {"banned_v6_64", true, 72 * time.Hour},
-		{"hits_v4", false, 24 * time.Hour}, {"hits_v6", true, 24 * time.Hour},
 		{"syn_v4", false, time.Minute}, {"syn_v6", true, time.Minute},
 	} {
 		key := nftables.TypeIPAddr
@@ -53,6 +55,7 @@ func compile(p protocol.FirewallPolicy, redirect bool, ssh []int) (*policyPlan, 
 		}
 		b.sets = append(b.sets, setSpec{set: &nftables.Set{Table: b.table, Name: pair.name, KeyType: key, Dynamic: true, HasTimeout: true, Timeout: pair.ttl, Size: 65535}})
 	}
+	b.banSets()
 	b.protection(p.Protect)
 	b.input()
 	b.networkEssentials(p.Protect)
@@ -88,19 +91,13 @@ func (b *policyPlan) input() {
 	for i, raw := range []string{"::/128", "ff00::/8"} {
 		b.add("input", fmt.Sprintf("spoof-v6-%d", i), address(raw, false, false), drop())
 	}
-	b.add("input", "icmp-redirect", icmp(false, 5), goTo("blocked_v4"))
-	b.add("input", "icmpv6-redirect", icmp(true, 137), goTo("blocked_v6"))
+	b.add("input", "icmp-redirect", icmp(false, 5), b.event("icmp_probe"), drop())
+	b.add("input", "icmpv6-redirect", icmp(true, 137), b.event("icmp_probe"), drop())
 	b.add("input", "outbound-reply", direction(true, false), ctState(6, false), counter("outbound_replies"), accept())
-	b.add("input", "invalid", ctState(expr.CtStateBitINVALID|expr.CtStateBitUNTRACKED, false), drop())
-	for _, v6 := range []bool{false, true} {
-		lan, ban, refresh := "lan_v4", "banned_v4", "refresh_v4"
-		if v6 {
-			lan, ban, refresh = "lan_v6", "banned_v6_64", "refresh_v6"
-		}
-		b.add("input", fmt.Sprintf("blacklist-%t", v6), direction(false, false), sourceSet(v6, lan, true, false), sourceSet(v6, ban, false, v6), goTo(refresh))
-	}
+	b.add("input", "invalid", ctState(expr.CtStateBitINVALID|expr.CtStateBitUNTRACKED, false), b.event("invalid_packet"), drop())
+	b.add("input", "blacklists", direction(false, false), jump("blacklist"))
 	for i, bits := range []byte{3, 6, 5} {
-		b.add("input", fmt.Sprintf("invalid-flags-%d", i), flags(bits, bits, false), goTo("blocked"))
+		b.add("input", fmt.Sprintf("invalid-flags-%d", i), flags(bits, bits, false), b.event("invalid_packet"), drop())
 	}
 	b.add("input", "established", ctState(6, false), accept())
 	// Remaining input rules are appended by networkEssentials, after ICMP handling.

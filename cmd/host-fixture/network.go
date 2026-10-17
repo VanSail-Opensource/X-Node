@@ -103,6 +103,7 @@ const echoProbe = `import socket,sys
 family=socket.AF_INET6 if ':' in sys.argv[1] else socket.AF_INET
 kind=socket.SOCK_STREAM if sys.argv[3]=='tcp' else socket.SOCK_DGRAM
 s=socket.socket(family,kind);s.settimeout(2)
+if len(sys.argv)>4: s.bind((sys.argv[4],0))
 s.connect((sys.argv[1],int(sys.argv[2])));s.sendall(b'x-node-fixture')
 assert s.recv(128)==b'x-node-fixture'
 `

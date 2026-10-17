@@ -18,6 +18,7 @@ func (b *policyPlan) nat(forwards []protocol.Forward, redirect bool) {
 	if len(forwards) == 0 {
 		return
 	}
+	b.add("forward", "inbound-blacklist", direction(false, false), dnat(), jump("blacklist"))
 	b.add("forward", "established", ctState(6, false), accept())
 	b.add("forward", "invalid", ctState(expr.CtStateBitINVALID, false), drop())
 	seen := map[string]bool{}

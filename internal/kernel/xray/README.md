@@ -25,3 +25,10 @@ identity. Internal queries use their own freedom outbound with explicit local
 resolver access. No DNS listener is opened and no host packet is redirected.
 `dns_test.go` exercises real VLESS TCP/UDP queries against a controlled resolver,
 including one-query loop prevention. These regressions run in hosted Quality.
+
+`inbound_config.go` and `inbound_observer.go` wrap public native proxy interfaces,
+retaining public user-management methods and existing listener update behavior.
+They classify unauthenticated probes, malformed input and rejected credentials;
+REALITY and authenticated shutdowns are excluded. No mux-facing reader or private
+registry is inspected. `inbound_observer_test.go` exercises classification and a
+real managed TCP probe in hosted Quality.

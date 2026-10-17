@@ -48,6 +48,7 @@ type banEvent struct {
 	Until time.Time
 }
 type Agent struct {
+	Guard              *firewall.Guard
 	Dir                string
 	Version            string
 	BootID             string
@@ -100,6 +101,11 @@ func New(dir, version string, client *transport.Client, logs *nlog.Stream) (*Age
 	registry := sessions.New()
 	a := &Agent{Dir: dir, Version: version, BootID: state.ID(), Store: store, Registry: registry, Runtime: xray.New(registry), Client: client, Logs: logs, Sampler: monitor.New(), Certificates: cert.NewPool(filepath.Join(dir, "certs")), Runner: runner, apply: make(chan applyJob, 1), applied: make(chan applied, 1), bans: make(chan banEvent, 128), previous: state.Traffic{}, lastDDNS: map[string]time.Time{}, notify: make(chan string, 1)}
 	a.Firewall = &firewall.Manager{Dir: filepath.Join(dir, "firewall"), ConfigPath: "/etc/nftables.conf", Executable: "/usr/local/bin/xnodectl", Runner: runner}
+	a.Guard, e = firewall.OpenGuard(filepath.Join(dir, "firewall"), a.Firewall)
+	if e != nil {
+		return nil, e
+	}
+	a.Runtime.SetInboundObserver(func(event xray.InboundObservation) { a.Guard.Observe(event.IP, event.Rule) })
 	a.previousAccounting = map[string][2]uint64{}
 	a.accountingRequests = make(chan accountingRequest, 16)
 	a.Updater = updatepkg.New(filepath.Join(dir, "updates"), version, runner)
@@ -129,7 +135,7 @@ func New(dir, version string, client *transport.Client, logs *nlog.Stream) (*Age
 	return a, nil
 }
 
-var Capabilities = []string{"native_firewall_v1", "native_xray", "multi_inbound", "tcp_udp_limits", "session_revocation", "traffic_ack", "certificates", "ddns", "xray_scoped_dns_v1", "geodata", "nftables", "port_forward", "metrics", "logs", "peer_speedtest", "torrent_ban", "signed_updates", "traffic_periods_v1", "measured_user_rates", "authorization_expiry", "member_outbound_guards", "traffic_period_barriers_v1", "config_validation_v1", "volatile_connection_controls_v1", "native_auxiliary_inbounds_v1"}
+var Capabilities = []string{"native_firewall_v1", "firewall_control_v1", "native_xray", "multi_inbound", "tcp_udp_limits", "session_revocation", "traffic_ack", "certificates", "ddns", "xray_scoped_dns_v1", "geodata", "nftables", "port_forward", "metrics", "logs", "peer_speedtest", "torrent_ban", "signed_updates", "traffic_periods_v1", "measured_user_rates", "authorization_expiry", "member_outbound_guards", "traffic_period_barriers_v1", "config_validation_v1", "volatile_connection_controls_v1", "native_auxiliary_inbounds_v1"}
 
 func (a *Agent) Run(ctx context.Context) error {
 	if err := a.Firewall.RestoreFile(ctx); err != nil {
@@ -143,6 +149,7 @@ func (a *Agent) Run(ctx context.Context) error {
 		a.desired = protocol.Clone(*d.Config)
 		a.desired.Users = d.Users
 		a.hasDesired = true
+		a.Guard.Configure(a.desired.Firewall)
 		a.registerSecrets(a.desired)
 		a.Registry.SetPorts(a.desired.BlockedPorts)
 		a.Registry.SetReportIPs(a.desired.Telemetry.IncludeActiveIPs)
@@ -158,6 +165,10 @@ func (a *Agent) Run(ctx context.Context) error {
 	go a.Client.Run(child)
 	go a.Sampler.Run(child)
 	go a.applyLoop(child)
+	guardDone, kernelDone := make(chan struct{}), make(chan struct{})
+	go func() { defer close(guardDone); a.Guard.Run(child, a.Client.Send) }()
+	go func() { defer close(kernelDone); a.Guard.RunKernel(child) }()
+	defer func() { cancel(); <-guardDone; <-kernelDone }()
 	defer a.Certificates.Stop()
 	defer a.Runtime.Stop()
 	tick := time.NewTicker(time.Second)
@@ -381,6 +392,11 @@ func (a *Agent) activate(lifetime context.Context, job applyJob) error {
 	if e = a.Updater.Confirm(job.Context); e != nil {
 		return e
 	}
+	if !c.Firewall.Enabled {
+		if e = a.Firewall.RestoreOriginal(job.Context); e != nil {
+			return e
+		}
+	}
 	if c.Firewall.Enabled && !job.Cached {
 		pending, e := a.Firewall.Apply(job.Context, fmt.Sprintf("revision-%d", job.Revision), c.Firewall, c.DNS.Redirect)
 		if e != nil {
@@ -388,7 +404,7 @@ func (a *Agent) activate(lifetime context.Context, job applyJob) error {
 		}
 		a.Client.Send(protocol.New("firewall.pending", job.ID, job.Revision, pending), true)
 	}
-	if job.Cached {
+	if job.Cached && c.Firewall.Enabled {
 		if e = a.Firewall.Migrate(job.Context, c.DNS.Redirect); e != nil {
 			return e
 		}
@@ -396,6 +412,7 @@ func (a *Agent) activate(lifetime context.Context, job applyJob) error {
 			return e
 		}
 	}
+	a.Guard.Configure(c.Firewall)
 	a.Registry.Pause(false)
 	a.systemdReady()
 	return nil
@@ -520,6 +537,13 @@ func (a *Agent) handle(ctx context.Context, m protocol.Message) {
 		a.retryDelay = 0
 		a.queue(ctx, applyJob{ID: m.ID, Revision: m.Revision, Config: c})
 		a.Client.Send(protocol.New("state.accepted", m.ID, m.Revision, map[string]uint64{"authorization_revision": m.Revision}), true)
+	case "firewall.events.ack":
+		var ack protocol.FirewallEventAck
+		if e := protocol.Decode(m.Data, &ack); e != nil || len(ack.IDs) > 512 {
+			fail(errors.New("invalid firewall event acknowledgment"))
+		} else {
+			a.Guard.Acknowledge(ack.IDs)
+		}
 	case "traffic.ack":
 		var p struct {
 			ID string `json:"id"`
@@ -721,6 +745,23 @@ func (a *Agent) command(ctx context.Context, m protocol.Message) error {
 			return nil, errors.New("unknown DDNS job")
 		case "jobs.list":
 			return a.Jobs.Snapshot(), nil
+		case "firewall.bans.sync", "firewall.bans.update":
+			var update protocol.FirewallUpdate
+			if e := protocol.Decode(args, &update); e != nil {
+				return nil, e
+			}
+			if request.Name == "firewall.bans.sync" {
+				if e := a.Guard.Sync(ctx, update); e != nil {
+					return nil, e
+				}
+			} else {
+				if e := a.Guard.Update(ctx, update); e != nil {
+					return nil, e
+				}
+			}
+			return map[string]bool{"applied": true}, nil
+		case "firewall.bans.get":
+			return a.Guard.Status(), nil
 		case "firewall.status":
 			return a.Firewall.Status(), nil
 		case "firewall.confirm":

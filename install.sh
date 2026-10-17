@@ -105,6 +105,7 @@ ConditionPathExists=/var/lib/x-node/firewall/policy.json
 [Service]
 Type=oneshot
 ExecStart=/usr/local/bin/xnodectl firewall-restore
+TimeoutStartSec=0
 UMask=0077
 [Install]
 WantedBy=multi-user.target

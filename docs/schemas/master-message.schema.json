@@ -9,6 +9,49 @@
           "type": "integer"
         },
         "data": {
+          "additionalProperties": false,
+          "properties": {
+            "ids": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "ids"
+          ],
+          "type": "object"
+        },
+        "id": {
+          "type": "string"
+        },
+        "revision": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "type": {
+          "const": "firewall.events.ack"
+        },
+        "v": {
+          "const": 1
+        }
+      },
+      "required": [
+        "v",
+        "type",
+        "data"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "base_revision": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "data": {
           "$id": "https://github.com/VanSail-Opensource/X-Node/config.schema.json",
           "$schema": "https://json-schema.org/draft/2020-12/schema",
           "additionalProperties": false,
@@ -184,6 +227,9 @@
                   },
                   "type": "array"
                 },
+                "ban_seconds": {
+                  "type": "integer"
+                },
                 "enabled": {
                   "type": "boolean"
                 },
@@ -217,8 +263,34 @@
                   },
                   "type": "array"
                 },
+                "master_controlled": {
+                  "type": "boolean"
+                },
                 "protect": {
                   "type": "boolean"
+                },
+                "rules": {
+                  "additionalProperties": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "enabled": {
+                        "type": "boolean"
+                      },
+                      "threshold": {
+                        "type": "integer"
+                      },
+                      "window_seconds": {
+                        "type": "integer"
+                      }
+                    },
+                    "required": [
+                      "enabled",
+                      "threshold",
+                      "window_seconds"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "object"
                 },
                 "ssh_ports": {
                   "items": {
@@ -620,6 +692,9 @@
                   },
                   "type": "array"
                 },
+                "ban_seconds": {
+                  "type": "integer"
+                },
                 "enabled": {
                   "type": "boolean"
                 },
@@ -653,8 +728,34 @@
                   },
                   "type": "array"
                 },
+                "master_controlled": {
+                  "type": "boolean"
+                },
                 "protect": {
                   "type": "boolean"
+                },
+                "rules": {
+                  "additionalProperties": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "enabled": {
+                        "type": "boolean"
+                      },
+                      "threshold": {
+                        "type": "integer"
+                      },
+                      "window_seconds": {
+                        "type": "integer"
+                      }
+                    },
+                    "required": [
+                      "enabled",
+                      "threshold",
+                      "window_seconds"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "object"
                 },
                 "ssh_ports": {
                   "items": {
@@ -1180,6 +1281,9 @@
             },
             "name": {
               "enum": [
+                "firewall.bans.sync",
+                "firewall.bans.update",
+                "firewall.bans.get",
                 "connections.list",
                 "connections.close",
                 "users.active_ips",

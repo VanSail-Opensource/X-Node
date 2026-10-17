@@ -27,11 +27,13 @@ type Pending struct {
 	ForwardConfigExisted bool                    `json:"forward_config_existed"`
 }
 type Manager struct {
-	mu         sync.Mutex
-	Dir        string
-	ConfigPath string
-	Executable string
-	Runner     host.Runner
-	Backend    Backend
-	UnitPath   string
+	banVersion    uint64
+	sourceVersion uint64
+	mu            sync.Mutex
+	Dir           string
+	ConfigPath    string
+	Executable    string
+	Runner        host.Runner
+	Backend       Backend
+	UnitPath      string
 }

@@ -41,14 +41,20 @@ func (*ManagerConfig) Descriptor() ([]byte, []int) {
 }
 
 var FileIntegration protoreflect.FileDescriptor
-var integrationMessages = make([]protoimpl.MessageInfo, 1)
+var integrationMessages = make([]protoimpl.MessageInfo, 2)
 var integrationOnce sync.Once
 var integrationRaw []byte
 
 func init() {
 	name, pkg, syntax, message, option := "integration.proto", "xnode.integration", "proto3", "ManagerConfig", "github.com/VanSail-Opensource/X-Node/internal/kernel/xray"
-	integrationRaw, _ = proto.Marshal(&descriptorpb.FileDescriptorProto{Name: &name, Package: &pkg, Syntax: &syntax, Options: &descriptorpb.FileOptions{GoPackage: &option}, MessageType: []*descriptorpb.DescriptorProto{{Name: &message}}})
+	inbound := &descriptorpb.DescriptorProto{Name: proto.String("InboundConfig"), Field: []*descriptorpb.FieldDescriptorProto{
+		{Name: proto.String("native_type"), Number: proto.Int32(1), Label: descriptorpb.FieldDescriptorProto_LABEL_OPTIONAL.Enum(), Type: descriptorpb.FieldDescriptorProto_TYPE_STRING.Enum()},
+		{Name: proto.String("native_value"), Number: proto.Int32(2), Label: descriptorpb.FieldDescriptorProto_LABEL_OPTIONAL.Enum(), Type: descriptorpb.FieldDescriptorProto_TYPE_BYTES.Enum()},
+		{Name: proto.String("tag"), Number: proto.Int32(3), Label: descriptorpb.FieldDescriptorProto_LABEL_OPTIONAL.Enum(), Type: descriptorpb.FieldDescriptorProto_TYPE_STRING.Enum()},
+		{Name: proto.String("reality"), Number: proto.Int32(4), Label: descriptorpb.FieldDescriptorProto_LABEL_OPTIONAL.Enum(), Type: descriptorpb.FieldDescriptorProto_TYPE_BOOL.Enum()},
+	}}
+	integrationRaw, _ = proto.Marshal(&descriptorpb.FileDescriptorProto{Name: &name, Package: &pkg, Syntax: &syntax, Options: &descriptorpb.FileOptions{GoPackage: &option}, MessageType: []*descriptorpb.DescriptorProto{{Name: &message}, inbound}})
 	type marker struct{}
-	out := protoimpl.TypeBuilder{File: protoimpl.DescBuilder{GoPackagePath: reflect.TypeOf(marker{}).PkgPath(), RawDescriptor: integrationRaw, NumMessages: 1}, GoTypes: []any{(*ManagerConfig)(nil)}, MessageInfos: integrationMessages}.Build()
+	out := protoimpl.TypeBuilder{File: protoimpl.DescBuilder{GoPackagePath: reflect.TypeOf(marker{}).PkgPath(), RawDescriptor: integrationRaw, NumMessages: 2}, GoTypes: []any{(*ManagerConfig)(nil), (*InboundConfig)(nil)}, MessageInfos: integrationMessages}.Build()
 	FileIntegration = out.File
 }

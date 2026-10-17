@@ -28,7 +28,7 @@ func (b *policyPlan) reconcileSets(c *nftables.Conn, exists bool) error {
 		if old.KeyType.Name != spec.set.KeyType.Name || old.Interval != spec.set.Interval || old.Dynamic != spec.set.Dynamic || old.HasTimeout != spec.set.HasTimeout || old.Timeout != spec.set.Timeout {
 			return fmt.Errorf("incompatible existing set %s; refusing to discard live state", old.Name)
 		}
-		if old.Dynamic {
+		if old.Dynamic || spec.preserve {
 			continue
 		}
 		current, err := c.GetSetElements(old)
@@ -90,6 +90,10 @@ func (b *policyPlan) reconcileChains(c *nftables.Conn, exists bool) error {
 		}
 	}
 	for _, chain := range b.chains {
+		if b.preserveRules[chain.Name] && existing[chain.Name] != nil {
+			delete(existing, chain.Name)
+			continue
+		}
 		var current []*nftables.Rule
 		if existing[chain.Name] != nil {
 			var err error

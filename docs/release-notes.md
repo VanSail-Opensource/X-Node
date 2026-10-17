@@ -1,3 +1,14 @@
+# X-Node v2.0.5
+
+Separates firewall detection from durable, master-authorized nftables bans.
+Adds configurable report thresholds, public Xray inbound observations excluding
+REALITY, NFLOG reporting, compact proxy-source snapshots, exact-IP exemptions,
+local repeat-hit refresh and acknowledged expiry events. Only inbound/original
+traffic is restricted; outbound traffic and reply packets are preserved.
+Compressed ban state and replay cursors survive reboot. Large source sets stage
+without blocking immediate ban/unban updates. New masters negotiate the
+`firewall_control_v1` capability before enabling report frames.
+
 # X-Node v2.0.4
 
 DNS interception now applies inside Xray only to managed authenticated traffic.

@@ -8,6 +8,7 @@ import (
 	"github.com/VanSail-Opensource/X-Node/internal/host"
 	"github.com/VanSail-Opensource/X-Node/internal/protocol"
 	"github.com/google/nftables"
+	"net/netip"
 	"os"
 	"os/exec"
 	"reflect"
@@ -186,6 +187,9 @@ func afterReboot(ctx context.Context, r host.Runner) error {
 	}
 	if len(rules) != 0 {
 		return fmt.Errorf("boot enabled DNS before resolver readiness")
+	}
+	if banRemaining("banned_v4", netip.MustParseAddr("203.0.113.90")) <= 0 {
+		return fmt.Errorf("reboot lost a durable firewall ban")
 	}
 	if _, err = r.Run(ctx, "xnodectl", "uninstall"); err != nil {
 		return err

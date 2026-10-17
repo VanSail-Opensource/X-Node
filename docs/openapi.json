@@ -48,6 +48,7 @@
         "x-websocket-messages": {
           "agentToMaster": [
             "agent.hello",
+            "firewall.events",
             "state.request",
             "state.accepted",
             "state.applied",

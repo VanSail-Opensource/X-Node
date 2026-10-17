@@ -23,6 +23,7 @@ import (
 )
 
 type Runtime struct {
+	observe  func(InboundObservation)
 	mu       sync.Mutex
 	instance *core.Instance
 	current  *Prepared
@@ -93,7 +94,7 @@ func (r *Runtime) Apply(ctx context.Context, c wire.Config) error {
 }
 func (r *Runtime) start(ctx context.Context, p *Prepared, c wire.Config) error {
 	r.registry.SetInboundEpochs(p.Epochs)
-	bridge := &integration{Registry: r.registry}
+	bridge := &integration{Registry: r.registry, Observe: r.observe}
 	bridge.setAuxiliary(p.Auxiliary)
 	bridge.BanNanos.Store(int64(c.BanDuration()))
 	child := context.WithValue(ctx, bridgeKey{}, bridge)
@@ -196,6 +197,12 @@ func memoryUsers(cfg *core.InboundHandlerConfig) ([]*protocol.MemoryUser, error)
 	msg, err := cfg.ProxySettings.GetInstance()
 	if err != nil {
 		return nil, err
+	}
+	if wrapped, ok := msg.(*InboundConfig); ok {
+		msg, err = wrapped.native().GetInstance()
+		if err != nil {
+			return nil, err
+		}
 	}
 	var out []*protocol.MemoryUser
 	var failure error

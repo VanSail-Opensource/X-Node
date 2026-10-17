@@ -11,3 +11,9 @@ transmitting new fields.
 `AuxiliaryInboundTags` identifies native `dokodemo-door` / `tunnel` utility
 listeners for capability negotiation. They accept no managed user bindings or
 account lists and require `native_auxiliary_inbounds_v1` on the receiving agent.
+
+Public firewall aliases include rules, bans, exact exemptions, source generations,
+status and acknowledged event batches. IPv4 learned bans are exact; IPv6 learned
+bans use /64. Event sequence suffixes are fixed-width decimal values inside a
+stable namespace. Source references reuse node generations without retransmitting
+unchanged inventories.

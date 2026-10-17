@@ -18,6 +18,10 @@ func UserEmail(user User, tag string) string { return wire.UserEmail(user, tag) 
 func TransitEmail(userID int, binding TransitCredential) string {
 	return wire.TransitEmail(userID, binding)
 }
+
+func SourceGeoIPListeners(raw json.RawMessage) ([]SourceGeoIPListener, error) {
+	return wire.SourceGeoIPListeners(raw)
+}
 func ValidName(value string) bool            { return wire.ValidName(value) }
 func PublicProxyAddress(address string) bool { return wire.PublicProxyAddress(address) }
 func ValidateMemberOutbounds(raw json.RawMessage, tags []string) error {

@@ -66,7 +66,7 @@ func (b *policyPlan) geoipDrops() {
 			var dest expressions
 			if listener.ListenIP != "" {
 				ip, err := netip.ParseAddr(listener.ListenIP)
-				if err != nil || ip.Is6() != v6 {
+				if err != nil || !ip.IsUnspecified() && ip.Is6() != v6 || ip.IsUnspecified() && ip.Is4() && v6 {
 					continue
 				}
 				if !ip.IsUnspecified() {

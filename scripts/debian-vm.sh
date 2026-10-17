@@ -39,8 +39,6 @@ write_files:
     content: disposable
 package_update: true
 packages: [nftables, openssh-server, minisign, ca-certificates, iproute2, python3]
-runcmd:
-  - true
 USER
 cloud-localds "$run_dir/seed.img" "$run_dir/user-data" "$run_dir/meta-data"
 qemu-img create -q -f qcow2 -F qcow2 -b "$image" "$run_dir/root.qcow2" 8G

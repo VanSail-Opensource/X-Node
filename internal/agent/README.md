@@ -25,3 +25,4 @@ its joined background tasks keep disk/kernel work off the control reader and Xra
 payload paths. New report frames are gated by `master_controlled`, protecting
 rolling upgrades with older masters. Typed firewall snapshot/delta commands use
 the existing utility executor. Read-only firewall status never enters job history.
+`geodata_schedule.go` owns completion-based hour intervals and bounded refresh retries; related hosted fixtures cover superseded configuration and successful/failure completion. GeoIP remains master-only.

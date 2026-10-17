@@ -61,13 +61,11 @@ func (a *Agent) scheduleUtilities(ctx context.Context, now time.Time) {
 			return dns.DDNS(child, job, provider, nil)
 		})
 	}
-	if next := a.geoNext.Load(); next > 0 && now.UnixNano() >= next {
+	if next := a.geoNext.Load(); next > 0 && now.UnixNano() >= next && !a.geoRunning.Load() {
 		p, e := geodata.FromNative(c.Xray)
 		if e == nil {
-			nextTime := geodata.Next(p, now)
-			a.geoNext.Store(nextTime.UnixNano())
-			_ = a.Jobs.Start(ctx, "internal-geo-"+fmt.Sprint(now.UnixNano()), "geodata.refresh", func(ctx context.Context, progress func(any)) (any, error) {
-				if e := a.ensureAssets(ctx, c, p, true); e != nil {
+			err := a.Jobs.Start(ctx, "internal-geo-"+fmt.Sprint(now.UnixNano()), "geodata.refresh", func(ctx context.Context, progress func(any)) (any, error) {
+				if e := a.refreshGeodata(ctx, c, p); e != nil {
 					return nil, e
 				}
 				select {
@@ -77,6 +75,9 @@ func (a *Agent) scheduleUtilities(ctx context.Context, now time.Time) {
 				}
 				return map[string]bool{"refreshed": true}, nil
 			})
+			if err != nil {
+				a.finishGeodata(p, err)
+			}
 		}
 	}
 	if now.Sub(a.lastUpdate) >= 24*time.Hour {

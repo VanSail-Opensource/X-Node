@@ -22,6 +22,7 @@ type accountingResult struct {
 }
 
 func (a *Agent) captureTraffic() error {
+	a.Registry.SampleActivity()
 	now := time.Now()
 	from := a.lastCapture
 	if from.IsZero() {

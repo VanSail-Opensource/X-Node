@@ -15,8 +15,18 @@ type Backend interface {
 }
 
 func validate(p protocol.FirewallPolicy, ssh []int) error {
-	if err := (protocol.Config{Xray: []byte(`{"inbounds":[]}`), Users: []protocol.User{}, Firewall: p}).Validate(); err != nil {
+	base := p
+	base.SourceGeoIP = nil // Listener ownership is checked against real Xray state before activation.
+	if err := (protocol.Config{Xray: []byte(`{"inbounds":[]}`), Users: []protocol.User{}, Firewall: base}).Validate(); err != nil {
 		return err
+	}
+	if p.SourceGeoIP != nil {
+		if !p.Enabled {
+			return errors.New("source GeoIP requires an enabled firewall")
+		}
+		if err := p.SourceGeoIP.Validate(); err != nil {
+			return err
+		}
 	}
 	if len(ssh) == 0 && len(p.SSHPorts) == 0 {
 		return errors.New("SSH listening ports must be known")

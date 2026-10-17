@@ -9,6 +9,12 @@
       },
       "type": "object"
     },
+    "blocked_domains": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
     "blocked_ports": {
       "items": {
         "additionalProperties": false,
@@ -239,6 +245,48 @@
           },
           "type": "object"
         },
+        "source_geoip": {
+          "additionalProperties": false,
+          "properties": {
+            "generation": {
+              "type": "string"
+            },
+            "listeners": {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "listen_ip": {
+                    "type": "string"
+                  },
+                  "network": {
+                    "type": "string"
+                  },
+                  "port": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "port",
+                  "network"
+                ],
+                "type": "object"
+              },
+              "type": "array"
+            },
+            "prefixes": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "generation",
+            "prefixes",
+            "listeners"
+          ],
+          "type": "object"
+        },
         "ssh_ports": {
           "items": {
             "type": "integer"
@@ -407,6 +455,33 @@
           "speed_limit_reset_seconds": {
             "minimum": 0,
             "type": "integer"
+          },
+          "transit_credentials": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "credential": {
+                  "type": "object"
+                },
+                "generation": {
+                  "type": "string"
+                },
+                "inbound_tag": {
+                  "type": "string"
+                },
+                "source_node_id": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "source_node_id",
+                "inbound_tag",
+                "generation",
+                "credential"
+              ],
+              "type": "object"
+            },
+            "type": "array"
           },
           "uuid": {
             "type": "string"

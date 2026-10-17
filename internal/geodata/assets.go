@@ -28,9 +28,10 @@ type Asset struct {
 	File string `json:"file"`
 }
 type Policy struct {
-	Cron     string  `json:"cron,omitempty"`
-	Outbound string  `json:"outbound,omitempty"`
-	Assets   []Asset `json:"assets"`
+	IntervalHours *int    `json:"interval_hours,omitempty"`
+	Cron          string  `json:"cron,omitempty"`
+	Outbound      string  `json:"outbound,omitempty"`
+	Assets        []Asset `json:"assets"`
 }
 
 func FromNative(raw json.RawMessage) (Policy, error) {
@@ -47,6 +48,12 @@ func FromNative(raw json.RawMessage) (Policy, error) {
 	if len(p.Assets) > 32 {
 		return p, errors.New("too many geodata assets")
 	}
+	if p.IntervalHours != nil && (*p.IntervalHours < 0 || *p.IntervalHours > 8760) {
+		return p, errors.New("invalid geodata hour interval")
+	}
+	if p.IntervalHours != nil && p.Cron != "" {
+		return p, errors.New("geodata interval and legacy cron are mutually exclusive")
+	}
 	if p.Cron != "" {
 		if _, e := cron.ParseStandard(p.Cron); e != nil {
 			return p, errors.New("invalid geodata cron")
@@ -55,7 +62,7 @@ func FromNative(raw json.RawMessage) (Policy, error) {
 	seen := map[string]bool{}
 	for _, a := range p.Assets {
 		u, e := url.Parse(a.URL)
-		if e != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || !assetName(a.File) || seen[a.File] {
+		if e != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || a.File != "geosite.dat" || seen[a.File] {
 			return p, errors.New("invalid geodata asset")
 		}
 		seen[a.File] = true
@@ -66,6 +73,12 @@ func assetName(name string) bool {
 	return name != "" && name != "." && name != ".." && filepath.Base(name) == name && !strings.ContainsAny(name, "/\\\x00")
 }
 func Next(p Policy, now time.Time) time.Time {
+	if p.IntervalHours != nil {
+		if *p.IntervalHours <= 0 {
+			return time.Time{}
+		}
+		return now.Add(time.Duration(*p.IntervalHours) * time.Hour)
+	}
 	if p.Cron == "" {
 		return time.Time{}
 	}
@@ -115,7 +128,7 @@ func Ensure(ctx context.Context, dir string, p Policy, hashes map[string]string,
 	actual := map[string]string{}
 	var total int64
 	for _, a := range p.Assets {
-		if !assetName(a.File) {
+		if !assetName(a.File) || a.File != "geosite.dat" {
 			return errors.New("invalid asset filename")
 		}
 		expected := strings.ToLower(hashes[a.File])

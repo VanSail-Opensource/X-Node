@@ -41,7 +41,7 @@ func TestConcurrentAdmissionAndRelease(t *testing.T) {
 		}(i)
 	}
 	wg.Wait()
-	if accepted.Load() > 5 || len(r.Summary().ActiveIPs[1]) > 2 {
+	if accepted.Load() > 200 || len(r.users[1].ips) > 2 || r.Summary().Connections[1] != 0 {
 		t.Fatal("admission exceeded limits")
 	}
 	for _, l := range leases {
@@ -88,6 +88,8 @@ func TestControlsPortsAndBans(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
+	l.Account(true, 1)
+	r.SampleActivity()
 	u.BlockNew = true
 	r.SetUsers([]protocol.User{u})
 	if r.Summary().Connections[1] != 1 {

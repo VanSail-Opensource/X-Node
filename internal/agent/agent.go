@@ -78,6 +78,9 @@ type Agent struct {
 	lastDDNS           map[string]time.Time
 	lastUpdate         time.Time
 	geoNext            atomic.Int64
+	geoFailures        int
+	geoPolicy          string
+	geoRunning         atomic.Bool
 	notify             chan string
 	generation         uint64
 	geoMu              sync.Mutex
@@ -135,7 +138,7 @@ func New(dir, version string, client *transport.Client, logs *nlog.Stream) (*Age
 	return a, nil
 }
 
-var Capabilities = []string{"native_firewall_v1", "firewall_control_v1", "native_xray", "multi_inbound", "tcp_udp_limits", "session_revocation", "traffic_ack", "certificates", "ddns", "xray_scoped_dns_v1", "geodata", "nftables", "port_forward", "metrics", "logs", "peer_speedtest", "torrent_ban", "signed_updates", "traffic_periods_v1", "measured_user_rates", "authorization_expiry", "member_outbound_guards", "traffic_period_barriers_v1", "config_validation_v1", "volatile_connection_controls_v1", "native_auxiliary_inbounds_v1"}
+var Capabilities = []string{"sampled_activity_v1", "transit_credentials_v1", "source_geoip_firewall_v1", "shared_domain_blocks_v1", "geodata_interval_v1", "native_firewall_v1", "firewall_control_v1", "native_xray", "multi_inbound", "tcp_udp_limits", "session_revocation", "traffic_ack", "certificates", "ddns", "xray_scoped_dns_v1", "geodata", "nftables", "port_forward", "metrics", "logs", "peer_speedtest", "torrent_ban", "signed_updates", "traffic_periods_v1", "measured_user_rates", "authorization_expiry", "member_outbound_guards", "traffic_period_barriers_v1", "config_validation_v1", "volatile_connection_controls_v1", "native_auxiliary_inbounds_v1"}
 
 func (a *Agent) Run(ctx context.Context) error {
 	if err := a.Firewall.RestoreFile(ctx); err != nil {
@@ -383,12 +386,7 @@ func (a *Agent) activate(lifetime context.Context, job applyJob) error {
 	}
 	a.Certificates.Commit(c)
 	a.Sampler.Interval(c.SampleInterval())
-	nextGeo := geodata.Next(p, time.Now())
-	if nextGeo.IsZero() {
-		a.geoNext.Store(0)
-	} else {
-		a.geoNext.Store(nextGeo.UnixNano())
-	}
+	a.scheduleGeodata(p)
 	if e = a.Updater.Confirm(job.Context); e != nil {
 		return e
 	}
@@ -715,7 +713,7 @@ func (a *Agent) command(ctx context.Context, m protocol.Message) error {
 			if e != nil {
 				return nil, e
 			}
-			if e = a.ensureAssets(ctx, configuration, p, true); e != nil {
+			if e = a.refreshGeodata(ctx, configuration, p); e != nil {
 				return nil, e
 			}
 			select {
@@ -779,6 +777,11 @@ func (a *Agent) command(ctx context.Context, m protocol.Message) error {
 			}
 			if e := protocol.Decode(args, &p); e != nil {
 				return nil, e
+			}
+			candidate := protocol.Clone(configuration)
+			candidate.Firewall = p.Policy
+			if err := protocol.ValidateNativePolicies(candidate); err != nil {
+				return nil, err
 			}
 			return a.Firewall.Apply(ctx, m.ID, p.Policy, p.DNSRedirect)
 		case "speedtest":

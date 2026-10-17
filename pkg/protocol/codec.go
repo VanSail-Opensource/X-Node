@@ -14,6 +14,10 @@ func Decode(raw []byte, target any) error    { return wire.Decode(raw, target) }
 func ParseConfig(raw []byte) (Config, error) { return wire.ParseConfig(raw) }
 func ValidateUsers(users []User) error       { return wire.ValidateUsers(users) }
 func UserEmail(user User, tag string) string { return wire.UserEmail(user, tag) }
+
+func TransitEmail(userID int, binding TransitCredential) string {
+	return wire.TransitEmail(userID, binding)
+}
 func ValidName(value string) bool            { return wire.ValidName(value) }
 func PublicProxyAddress(address string) bool { return wire.PublicProxyAddress(address) }
 func ValidateMemberOutbounds(raw json.RawMessage, tags []string) error {

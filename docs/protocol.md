@@ -185,3 +185,9 @@ means its base deadline and all local extensions have expired.
 Source inventories use `sources_only` snapshots and a separate source version.
 Dynamic bans and exemptions continue to accept newer deltas while an older source
 generation stages; source commits never overwrite a newer paid exemption.
+
+## Sampled activity and master policies
+
+`sampled_activity_v1` reports only live flows with increasing payload counters in the latest interval. Idle/open/native completion resources and traffic accounting are independent. `transit_credentials_v1` adds bounded peer credentials to each owner, scoped by source node, inbound and generation; peer hops remain metered but are absent from client connection/IP counts.
+
+`source_geoip_firewall_v1` accepts only master-resolved prefix generations and non-REALITY listener bindings. Agents reject GeoIP downloads and routing/DNS selectors. `shared_domain_blocks_v1` adds a front-of-routing domain block policy. `geodata_interval_v1` permits completion-based `geodata.interval_hours` (0 disables, 1..8760 enables); legacy cron is retained when interval is absent.

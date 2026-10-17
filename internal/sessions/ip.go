@@ -87,11 +87,11 @@ func (r *Registry) ActiveIPs(user int) []ActiveIP {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	out := []ActiveIP{}
-	for id, u := range r.users {
+	for id := range r.users {
 		if user > 0 && id != user {
 			continue
 		}
-		for ip, count := range u.ips {
+		for ip, count := range r.activeIPs(id) {
 			out = append(out, ActiveIP{UserID: id, SourceIP: ip, Connections: count})
 		}
 	}

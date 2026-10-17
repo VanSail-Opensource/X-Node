@@ -17,3 +17,5 @@ transient. Hosted cases cover quota races, expiry, counters and quiescence.
 
 `period_barrier.go` finishes revoked period handlers without closing renewed streams.
 `period_barrier_test.go` covers late old bytes, active-period rejection and renewal continuity in hosted CI.
+
+`activity.go` samples per-lease payload counters without an idle grace period. Summaries, active IPs, lists and local connection limits share that snapshot; close invalidations remove closed flows immediately. Hard capacity remains reserved until both logical close and native completion. `transit.go` authenticates master-only peer credentials: transit skips connection/IP admission counts and volatile global blocks while retaining expiry, restrictions, speed policies and exact owner-period accounting. Hosted regressions live in `activity_test.go`.

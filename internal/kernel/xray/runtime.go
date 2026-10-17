@@ -187,6 +187,13 @@ func compatibleUsers(users []wire.User, inbounds map[string]*core.InboundHandler
 			}
 		}
 		u.InboundTags = tags
+		transit := u.TransitCredentials[:0]
+		for _, binding := range u.TransitCredentials {
+			if _, exists := inbounds[binding.InboundTag]; exists {
+				transit = append(transit, binding)
+			}
+		}
+		u.TransitCredentials = transit
 		if len(tags) > 0 {
 			out = append(out, u)
 		}

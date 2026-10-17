@@ -63,6 +63,9 @@ func validateTLSMaterial(settings *serial.TypedMessage) error {
 }
 
 func Prepare(c protocol.Config) (*Prepared, error) {
+	if err := protocol.ValidateNativePolicies(c); err != nil {
+		return nil, err
+	}
 	tags, err := protocol.AuxiliaryInboundTags(c.Xray)
 	if err != nil {
 		return nil, err
@@ -204,6 +207,11 @@ func Prepare(c protocol.Config) (*Prepared, error) {
 				account["user"] = account["email"]
 			}
 			clients = append(clients, account)
+			transit, err := transitAccounts(proto, tag, settings, u, epochs[tag])
+			if err != nil {
+				return nil, err
+			}
+			clients = append(clients, transit...)
 		}
 		if proto == "socks" || proto == "mixed" || proto == "http" {
 			settings["accounts"] = clients
@@ -276,6 +284,9 @@ func Prepare(c protocol.Config) (*Prepared, error) {
 	levels["0"] = zero
 	policy["levels"] = levels
 	root["policy"] = policy
+	if err := applyDomainBlocks(root, c.BlockedDomains); err != nil {
+		return nil, err
+	}
 	b, err := json.Marshal(root)
 	if err != nil {
 		return nil, err

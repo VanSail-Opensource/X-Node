@@ -68,6 +68,7 @@ type User struct {
 	UUID string `json:"uuid,omitempty"`
 	// Native client/account properties, keyed by inbound tag. Email and level are managed.
 	Credentials            map[string]json.RawMessage `json:"credentials,omitempty"`
+	TransitCredentials     []TransitCredential        `json:"transit_credentials,omitempty"`
 	InboundTags            []string                   `json:"inbound_tags"`
 	ActiveIPLimit          int                        `json:"active_ip_limit,omitempty"`
 	ConnectionLimit        int                        `json:"connection_limit,omitempty"`
@@ -167,6 +168,7 @@ type Forward struct {
 	Network    string `json:"network"`
 }
 type FirewallPolicy struct {
+	SourceGeoIP      *SourceGeoIPPolicy      `json:"source_geoip,omitempty"`
 	MasterControlled bool                    `json:"master_controlled,omitempty"`
 	Rules            map[string]FirewallRule `json:"rules,omitempty"`
 	BanSeconds       int                     `json:"ban_seconds,omitempty"`
@@ -205,6 +207,7 @@ type TorrentPolicy struct {
 }
 
 type Config struct {
+	BlockedDomains      []string               `json:"blocked_domains,omitempty"`
 	Xray                json.RawMessage        `json:"xray"`
 	Users               []User                 `json:"users"`
 	Providers           map[string]Provider    `json:"providers,omitempty"`
@@ -247,6 +250,9 @@ func ValidateUsers(users []User) error {
 	ids := make(map[int]bool, len(users))
 	accounts := make(map[string]bool)
 	for _, u := range users {
+		if err := validateTransit(u); err != nil {
+			return err
+		}
 		if u.AccountingPeriod != "" && !ValidName(u.AccountingPeriod) || u.ValidUntil != nil && u.ValidUntil.IsZero() {
 			return errors.New("invalid user accounting period or expiration")
 		}
@@ -285,8 +291,23 @@ func ValidateUsers(users []User) error {
 				return errors.New("credentials reference an ineligible inbound")
 			}
 		}
+		for _, binding := range u.TransitCredentials {
+			var account map[string]any
+			if err := json.Unmarshal(binding.Credential, &account); err != nil {
+				return err
+			}
+			if id, ok := account["id"].(string); ok && strings.EqualFold(id, u.UUID) {
+				return errors.New("transit credentials must be distinct")
+			}
+			canonical, _ := json.Marshal(account)
+			key := binding.InboundTag + ":" + string(canonical)
+			if accounts[key] {
+				return errors.New("duplicate transit credentials")
+			}
+			accounts[key] = true
+		}
 	}
-	return nil
+	return validateDistinctTransitAccounts(users)
 }
 
 func ValidName(s string) bool {
@@ -302,6 +323,9 @@ func ValidName(s string) bool {
 }
 
 func (c Config) Validate() error {
+	if err := ValidateNativePolicies(c); err != nil {
+		return err
+	}
 	if err := c.Firewall.ValidateDetection(); err != nil {
 		return err
 	}

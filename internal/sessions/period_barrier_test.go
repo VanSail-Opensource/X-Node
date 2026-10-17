@@ -43,6 +43,8 @@ func TestOldPeriodBarrierDoesNotCloseRenewedStreams(t *testing.T) {
 	if err = <-done; err != nil {
 		t.Fatal(err)
 	}
+	current.Account(true, 1)
+	registry.SampleActivity()
 	if registry.Summary().Connections[user.ID] != 1 {
 		t.Fatal("new term was interrupted")
 	}

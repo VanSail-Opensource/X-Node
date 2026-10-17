@@ -41,6 +41,9 @@ func compile(p protocol.FirewallPolicy, redirect bool, ssh []int) (*policyPlan, 
 	if err := b.staticSets(p, ssh); err != nil {
 		return nil, err
 	}
+	if err := b.geoipSets(); err != nil {
+		return nil, err
+	}
 	for _, pair := range []struct {
 		name string
 		v6   bool
@@ -93,6 +96,7 @@ func (b *policyPlan) input() {
 	}
 	b.add("input", "icmp-redirect", icmp(false, 5), b.eventDrop("icmp_probe"))
 	b.add("input", "icmpv6-redirect", icmp(true, 137), b.eventDrop("icmp_probe"))
+	b.geoipDrops()
 	b.add("input", "outbound-reply", direction(true, false), ctState(6, false), counter("outbound_replies"), accept())
 	b.add("input", "invalid", ctState(expr.CtStateBitINVALID|expr.CtStateBitUNTRACKED, false), b.eventDrop("invalid_packet"))
 	b.add("input", "blacklists", direction(false, false), jump("blacklist"))

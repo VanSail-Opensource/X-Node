@@ -36,43 +36,52 @@ type userState struct {
 	upload, download atomic.Uint64
 }
 type Registry struct {
-	mu           sync.RWMutex
-	prefix       string
-	sequence     uint64
-	users        map[int]*userState
-	connections  map[string]*Lease
-	bans         map[int]time.Time
-	ports        []protocol.PortRange
-	rejects      map[string]uint64
-	paused       bool
-	epochs       map[string]string
-	OnBan        func(int, time.Time)
-	OnReject     func(AdmissionEvent)
-	ipBlocks     map[string]protocol.IPBlock
-	reportIPs    bool
-	accounting   map[accountingKey]*accountingCounters
-	inflight     map[string]*Lease
-	rates        map[int]protocol.UserRate
-	fences       map[int]int
-	periodFences map[accountingKey]int
+	mu             sync.RWMutex
+	prefix         string
+	sequence       uint64
+	users          map[int]*userState
+	connections    map[string]*Lease
+	bans           map[int]time.Time
+	ports          []protocol.PortRange
+	rejects        map[string]uint64
+	paused         bool
+	epochs         map[string]string
+	OnBan          func(int, time.Time)
+	OnReject       func(AdmissionEvent)
+	ipBlocks       map[string]protocol.IPBlock
+	reportIPs      bool
+	accounting     map[accountingKey]*accountingCounters
+	inflight       map[string]*Lease
+	rates          map[int]protocol.UserRate
+	fences         map[int]int
+	periodFences   map[accountingKey]int
+	activity       activitySnapshot
+	closedActivity map[int]map[string]int
+	resources      int
 }
 type Lease struct {
-	Info             Connection
-	once             sync.Once
-	registry         *Registry
-	user             *userState
-	cancel           func()
-	accounting       *accountingCounters
-	accountingPeriod string
-	tracked          bool
-	finished         chan struct{}
-	finishOnce       sync.Once
+	Info                                     Connection
+	once                                     sync.Once
+	registry                                 *Registry
+	user                                     *userState
+	cancel                                   func()
+	accounting                               *accountingCounters
+	accountingPeriod                         string
+	tracked                                  bool
+	finished                                 chan struct{}
+	finishOnce                               sync.Once
+	identity                                 string
+	transit                                  bool
+	bytes                                    atomic.Uint64
+	sampledBytes                             uint64
+	closed, nativeFinished, resourceReleased bool
 }
 
 func New() *Registry {
 	return &Registry{prefix: state.ID(), users: map[int]*userState{}, connections: map[string]*Lease{}, bans: map[int]time.Time{}, rejects: map[string]uint64{}, epochs: map[string]string{}, ipBlocks: map[string]protocol.IPBlock{}}
 }
 func sameIdentity(a, b protocol.User) bool {
+	a.TransitCredentials, b.TransitCredentials = nil, nil
 	a.ValidUntil = nil
 	b.ValidUntil = nil
 	a.ActiveIPLimit = 0
@@ -121,7 +130,7 @@ func (r *Registry) SetUsers(users []protocol.User) {
 	var close []*Lease
 	for _, l := range r.connections {
 		p, ok := policies[l.Info.UserID]
-		if !ok || !sameIdentity(l.user.policy, p) || !eligible(p, l.Info.InboundTag) {
+		if !ok || !sameIdentity(l.user.policy, p) || !eligible(p, l.Info.InboundTag) || !r.validIdentity(p, l.identity, l.Info.InboundTag) {
 			close = append(close, l)
 		}
 	}
@@ -232,19 +241,20 @@ func (r *Registry) acquire(ctx context.Context, id int, identity, tag, ip, desti
 		}
 	}()
 	u := r.users[id]
+	transit := u != nil && r.isTransit(u.policy, identity, tag)
 	reason := ""
 	switch {
 	case r.paused:
 		reason = "storage_backpressure"
-	case len(r.connections) >= 100000:
+	case r.resources >= 100000:
 		reason = "agent_capacity"
-	case u == nil || u.identities[tag] == "" || identity != u.identities[tag]:
+	case u == nil || !r.validIdentity(u.policy, identity, tag):
 		reason = "ineligible"
 	case u.policy.ValidUntil != nil && !u.policy.ValidUntil.After(time.Now()):
 		reason = "expired"
 	case r.fences[id] > 0 || r.fences[0] > 0 || r.periodFences[accountingKey{id, u.policy.AccountingPeriod}] > 0:
 		reason = "block_new"
-	case u.policy.BlockNew:
+	case u.policy.BlockNew && !transit:
 		reason = "block_new"
 	case r.bans[id].After(time.Now()):
 		reason = "torrent_ban"
@@ -252,9 +262,9 @@ func (r *Registry) acquire(ctx context.Context, id int, identity, tag, ip, desti
 		reason = "ip_temp_block"
 	case r.blocked(port, network):
 		reason = "blocked_port"
-	case u.policy.ConnectionLimit > 0 && u.count >= u.policy.ConnectionLimit:
+	case !transit && u.policy.ConnectionLimit > 0 && r.activeCount(id) >= u.policy.ConnectionLimit:
 		reason = "connection_limit"
-	case u.policy.ActiveIPLimit > 0 && u.ips[ip] == 0 && len(u.ips) >= u.policy.ActiveIPLimit:
+	case !transit && u.policy.ActiveIPLimit > 0 && u.ips[ip] == 0 && len(u.ips) >= u.policy.ActiveIPLimit:
 		reason = "active_ip_limit"
 	}
 	if reason != "" {
@@ -272,10 +282,13 @@ func (r *Registry) acquire(ctx context.Context, id int, identity, tag, ip, desti
 		return nil, errors.New(reason)
 	}
 	r.sequence++
-	l := &Lease{Info: Connection{ID: fmt.Sprintf("%s:%d", r.prefix, r.sequence), UserID: id, InboundTag: tag, SourceIP: ip, Destination: destination, DestinationPort: port, Network: network, Started: time.Now().UTC()}, registry: r, user: u, cancel: cancel}
+	l := &Lease{Info: Connection{ID: fmt.Sprintf("%s:%d", r.prefix, r.sequence), UserID: id, InboundTag: tag, SourceIP: ip, Destination: destination, DestinationPort: port, Network: network, Started: time.Now().UTC()}, registry: r, user: u, cancel: cancel, identity: identity, transit: transit}
 	r.initializeAccounting(l, tracked)
+	r.resources++
 	u.count++
-	u.ips[ip]++
+	if !transit {
+		u.ips[ip]++
+	}
 	r.connections[l.Info.ID] = l
 	return l, nil
 }
@@ -284,10 +297,15 @@ func (l *Lease) Close() {
 		r := l.registry
 		r.mu.Lock()
 		delete(r.connections, l.Info.ID)
+		l.closed = true
+		r.invalidateActivity(l)
+		l.releaseResource()
 		l.user.count--
-		l.user.ips[l.Info.SourceIP]--
-		if l.user.ips[l.Info.SourceIP] <= 0 {
-			delete(l.user.ips, l.Info.SourceIP)
+		if !l.transit {
+			l.user.ips[l.Info.SourceIP]--
+			if l.user.ips[l.Info.SourceIP] <= 0 {
+				delete(l.user.ips, l.Info.SourceIP)
+			}
 		}
 		r.mu.Unlock()
 		if l.cancel != nil {
@@ -299,6 +317,7 @@ func (l *Lease) Close() {
 	})
 }
 func (l *Lease) Account(upload bool, n uint64) {
+	l.bytes.Add(n)
 	if upload {
 		l.user.upload.Add(n)
 		if l.accounting != nil {
@@ -416,7 +435,7 @@ func (r *Registry) Summary() Summary {
 		case r.paused:
 			status.Limited = true
 			status.Reason = "storage_backpressure"
-		case len(r.connections) >= 100000:
+		case r.resources >= 100000:
 			status.Limited = true
 			status.Reason = "agent_capacity"
 		case len(u.policy.InboundTags) == 0:
@@ -434,7 +453,7 @@ func (r *Registry) Summary() Summary {
 		case r.bans[id].After(time.Now()):
 			status.Limited = true
 			status.Reason = "torrent_ban"
-		case u.policy.ConnectionLimit > 0 && u.count >= u.policy.ConnectionLimit:
+		case u.policy.ConnectionLimit > 0 && r.activeCount(id) >= u.policy.ConnectionLimit:
 			status.Limited = true
 			status.Reason = "connection_limit"
 		case u.policy.ActiveIPLimit > 0 && len(u.ips) >= u.policy.ActiveIPLimit:
@@ -446,10 +465,10 @@ func (r *Registry) Summary() Summary {
 			status.Scope = "new_connection"
 		}
 		s.Status[id] = status
-		if u.count > 0 {
-			s.Connections[id] = u.count
+		if count := r.activeCount(id); count > 0 {
+			s.Connections[id] = count
 			if r.reportIPs {
-				for ip := range u.ips {
+				for ip := range r.activeIPs(id) {
 					s.ActiveIPs[id] = append(s.ActiveIPs[id], ip)
 				}
 				sort.Strings(s.ActiveIPs[id])
@@ -466,7 +485,7 @@ func (r *Registry) List(after string, limit int) []Connection {
 	defer r.mu.RUnlock()
 	var out []Connection
 	for id, l := range r.connections {
-		if id > after {
+		if id > after && r.activity.connections[id] {
 			out = append(out, l.Info)
 		}
 	}

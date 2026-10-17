@@ -15,6 +15,8 @@ func TestIPReportingOptInAndScopedBlock(t *testing.T) {
 		t.Fatal(e)
 	}
 	defer l.Close()
+	l.Account(true, 1)
+	r.SampleActivity()
 	if r.Summary().ActiveIPs != nil {
 		t.Fatal("IP leaked without request")
 	}
@@ -59,6 +61,8 @@ func TestLimitedStatusReasonAndScope(t *testing.T) {
 		t.Fatal(e)
 	}
 	defer l.Close()
+	l.Account(true, 1)
+	r.SampleActivity()
 	status := r.Summary().Status[1]
 	if !status.Limited || status.Reason != "active_ip_limit" || status.Scope != "new_ip" {
 		t.Fatal("IP threshold status wrong")

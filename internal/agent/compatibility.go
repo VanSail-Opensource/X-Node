@@ -1,9 +1,21 @@
 package agent
 
-import "github.com/VanSail-Opensource/X-Node/internal/protocol"
+import (
+	"github.com/VanSail-Opensource/X-Node/internal/geodata"
+	"github.com/VanSail-Opensource/X-Node/internal/protocol"
+)
 
 func extensionRequirements(config protocol.Config) map[string]bool {
 	required := map[string]bool{}
+	if config.Firewall.SourceGeoIP != nil {
+		required["source_geoip_firewall_v1"] = true
+	}
+	if len(config.BlockedDomains) > 0 {
+		required["shared_domain_blocks_v1"] = true
+	}
+	if policy, err := geodata.FromNative(config.Xray); err == nil && policy.IntervalHours != nil {
+		required["geodata_interval_v1"] = true
+	}
 	if config.Firewall.MasterControlled {
 		required["firewall_control_v1"] = true
 	}
@@ -17,6 +29,9 @@ func extensionRequirements(config protocol.Config) map[string]bool {
 		required["member_outbound_guards"] = true
 	}
 	for _, user := range config.Users {
+		if len(user.TransitCredentials) > 0 {
+			required["transit_credentials_v1"] = true
+		}
 		if user.AccountingPeriod != "" {
 			required["traffic_periods_v1"] = true
 		}

@@ -32,3 +32,5 @@ They classify unauthenticated probes, malformed input and rejected credentials;
 REALITY and authenticated shutdowns are excluded. No mux-facing reader or private
 registry is inspected. `inbound_observer_test.go` exercises classification and a
 real managed TCP probe in hosted Quality.
+
+`transit.go` expands owner-scoped peer accounts with separate credential generations and managed authentication labels. `domain_blocks.go` inserts the master domain block rule before all native/system rules with a reserved block outbound. Agent validation refuses unresolved IP geodata and mixed REALITY/source-filter sockets before listener activation.

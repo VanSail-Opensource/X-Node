@@ -97,6 +97,7 @@ func TestRealUDPAndXUDPAccountingAndExpiry(t *testing.T) {
 				t.Fatalf("UDP reply: %q %v", b[:n], e)
 			}
 			awaitMeteredTraffic(t, registry, 1, 8, 8)
+			registry.SampleActivity()
 			if registry.Summary().Connections[1] != 1 {
 				t.Fatal("UDP association did not reserve exactly one slot")
 			}

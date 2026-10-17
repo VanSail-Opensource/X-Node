@@ -88,6 +88,7 @@ type FirewallEventAck struct {
 // Snapshot chunks stage outside the active ruleset until the final chunk is
 // durable. A repeated generation preserves locally extended expiration times.
 type FirewallUpdate struct {
+	SourcesOnly      bool                `json:"sources_only,omitempty"`
 	Version          uint64              `json:"version"`
 	SourcesComplete  bool                `json:"sources_complete,omitempty"`
 	RemoveSources    []string            `json:"remove_sources,omitempty"`

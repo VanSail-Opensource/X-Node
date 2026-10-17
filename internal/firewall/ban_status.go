@@ -16,7 +16,7 @@ func (g *Guard) Status() GuardStatus {
 	return g.statusLocked()
 }
 func (g *Guard) statusLocked() GuardStatus {
-	result := GuardStatus{MasterVersion: g.state.MasterVersion, InstanceID: g.state.EventNamespace, SnapshotID: g.state.SnapshotID, SourceGenerations: map[string]string{}, ErrorCode: g.kernelError, KernelReady: g.kernelReady.Load(), PendingReports: len(g.state.Events), Dropped: strconv.FormatUint(g.dropped.Load(), 10)}
+	result := GuardStatus{SourceVersion: g.state.SourceMasterVersion, MasterVersion: g.state.MasterVersion, InstanceID: g.state.EventNamespace, SnapshotID: g.state.SnapshotID, SourceGenerations: map[string]string{}, ErrorCode: g.kernelError, KernelReady: g.kernelReady.Load(), PendingReports: len(g.state.Events), Dropped: strconv.FormatUint(g.dropped.Load(), 10)}
 	if policy := g.policy.Load(); policy != nil {
 		result.Enabled = policy.Enabled
 		result.DetectionEnabled = policy.Enabled && policy.Protect && policy.MasterControlled

@@ -11,7 +11,7 @@ func dynamic(v6, subnet bool, name string, operation uint32, ttl time.Duration, 
 	return cat(source(v6, subnet), expressions{&expr.Dynset{SrcRegKey: 1, SetName: name, Operation: operation, Timeout: ttl, Exprs: nested}})
 }
 func (b *policyPlan) protection(_ bool) {
-	b.add("ban_v6", "report", b.event("syn_flood"), drop())
+	b.add("ban_v6", "report", b.eventDrop("syn_flood"))
 	for _, v6 := range []bool{false, true} {
 		chain, lan, refresh := "blocked_v4", "lan_v4", "refresh_v4"
 		if v6 {
@@ -52,9 +52,9 @@ func (b *policyPlan) networkEssentials(protected bool) {
 	for _, kind := range []byte{1, 2, 3, 4} {
 		b.add("input", fmt.Sprintf("icmpv6-error-%d", kind), icmp(true, kind), accept())
 	}
-	b.add("input", "icmp-block", family(false), l4(unix.IPPROTO_ICMP), b.event("icmp_probe"), drop())
-	b.add("input", "icmpv6-block", family(true), l4(unix.IPPROTO_ICMPV6), b.event("icmp_probe"), drop())
-	b.add("input", "new-not-syn", ctState(expr.CtStateBitNEW, false), flags(0x17, 2, true), b.event("invalid_packet"), drop())
+	b.add("input", "icmp-block", family(false), l4(unix.IPPROTO_ICMP), b.eventDrop("icmp_probe"))
+	b.add("input", "icmpv6-block", family(true), l4(unix.IPPROTO_ICMPV6), b.eventDrop("icmp_probe"))
+	b.add("input", "new-not-syn", ctState(expr.CtStateBitNEW, false), flags(0x17, 2, true), b.eventDrop("invalid_packet"))
 	b.add("input", "dhcpv4", family(false), port(unix.IPPROTO_UDP, 67, false), port(unix.IPPROTO_UDP, 68, true), accept())
 	b.add("input", "dhcpv6", family(true), port(unix.IPPROTO_UDP, 547, false), port(unix.IPPROTO_UDP, 546, true), accept())
 	b.add("input", "tcp-closed", portSet(unix.IPPROTO_TCP, "tcp_ports", true), goTo("blocked"))
@@ -74,7 +74,7 @@ func (b *policyPlan) networkEssentials(protected bool) {
 			}
 			match := cat(family(v6), ctState(expr.CtStateBitNEW, false), portSet(unix.IPPROTO_TCP, "tcp_ports", false))
 			limit := &expr.Limit{Type: expr.LimitTypePkts, Rate: 50, Unit: expr.LimitTimeSecond, Burst: 50, Over: true}
-			action := cat(b.event("syn_flood"), drop())
+			action := cat(b.eventDrop("syn_flood"))
 			if v6 {
 				action = goTo("ban_v6")
 			}

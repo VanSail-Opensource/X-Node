@@ -181,3 +181,7 @@ uses /32 and IPv6 /64; exemptions use exact addresses. Repeat qualifying hits
 extend locally without another detection report. Expiry events retain their
 generation so obsolete events cannot clear newer bans. A source-expired event
 means its base deadline and all local extensions have expired.
+
+Source inventories use `sources_only` snapshots and a separate source version.
+Dynamic bans and exemptions continue to accept newer deltas while an older source
+generation stages; source commits never overwrite a newer paid exemption.

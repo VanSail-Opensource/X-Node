@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-func (g *Guard) commitSnapshot(id string, version uint64) error {
+func (g *Guard) commitSnapshot(id string, version uint64, sourcesOnly bool) error {
 	file, err := os.Open(g.file("sync.json.gz"))
 	if err != nil {
 		return err
@@ -24,12 +24,28 @@ func (g *Guard) commitSnapshot(id string, version uint64) error {
 	defer reader.Close()
 	next := emptyBans()
 	next.MasterVersion = version
-	next.SourceRevision = g.state.SourceRevision + 1
+	next.SourceMasterVersion = g.state.SourceMasterVersion
+	if sourcesOnly {
+		next.MasterVersion = g.state.MasterVersion
+		next.SourceMasterVersion = version
+		next.Bans = make(map[string]protocol.FirewallBan, len(g.state.Bans))
+		for key, value := range g.state.Bans {
+			next.Bans[key] = value
+		}
+		next.Exemptions = g.state.Exemptions
+	}
+	next.SourceRevision = g.state.SourceRevision
+	if sourcesOnly {
+		next.SourceRevision++
+	}
 	sourcesComplete := false
 	removeSources := map[string]bool{}
 	next.Revision = g.state.Revision + 1
 	next.EventNamespace, next.NextEvent = g.state.EventNamespace, g.state.NextEvent
 	next.SnapshotID = id
+	if sourcesOnly {
+		next.SnapshotID = g.state.SnapshotID
+	}
 	next.Events = g.state.Events
 	seen := map[int]bool{}
 	decoder := json.NewDecoder(io.LimitReader(reader, maxBanStateBytes+1))
@@ -40,7 +56,7 @@ func (g *Guard) commitSnapshot(id string, version uint64) error {
 		} else if err != nil {
 			return err
 		}
-		if chunk.SnapshotID != id || chunk.Version != version {
+		if chunk.SnapshotID != id || chunk.Version != version || chunk.SourcesOnly != sourcesOnly {
 			return errors.New("firewall staged generation differs")
 		}
 		if seen[chunk.Index] {
@@ -97,6 +113,16 @@ func (g *Guard) commitSnapshot(id string, version uint64) error {
 	for sourceID := range removeSources {
 		delete(next.Sources, sourceID)
 	}
+	if sourcesOnly {
+		for prefix, ban := range next.Bans {
+			if ban.Source != "" {
+				source, ok := next.Sources[ban.Source]
+				if !ok || source.Generation != ban.Generation {
+					delete(next.Bans, prefix)
+				}
+			}
+		}
+	}
 	for prefix, ban := range g.state.Bans {
 		if source, ok := next.Sources[ban.Source]; ok && ban.Generation == source.Generation && ban.Until.After(time.Now()) {
 			if _, exists := next.Bans[prefix]; !exists {
@@ -117,13 +143,17 @@ func (g *Guard) commitSnapshot(id string, version uint64) error {
 	}
 	previous, indexes := g.state, g.indexes
 	g.state = next
-	if err = g.buildIndexes(); err != nil {
-		g.state = previous
-		g.indexes = indexes
-		return err
+	if sourcesOnly {
+		if err = g.buildIndexes(); err != nil {
+			g.state = previous
+			g.indexes = indexes
+			return err
+		}
 	}
 	g.dirty = true
-	g.sourcesDirty = true
+	if sourcesOnly {
+		g.sourcesDirty = true
+	}
 	if err = g.compact(); err != nil {
 		if g.state.JournalEpoch == next.JournalEpoch {
 			g.state = previous

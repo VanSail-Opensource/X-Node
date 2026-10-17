@@ -91,13 +91,13 @@ func (b *policyPlan) input() {
 	for i, raw := range []string{"::/128", "ff00::/8"} {
 		b.add("input", fmt.Sprintf("spoof-v6-%d", i), address(raw, false, false), drop())
 	}
-	b.add("input", "icmp-redirect", icmp(false, 5), b.event("icmp_probe"), drop())
-	b.add("input", "icmpv6-redirect", icmp(true, 137), b.event("icmp_probe"), drop())
+	b.add("input", "icmp-redirect", icmp(false, 5), b.eventDrop("icmp_probe"))
+	b.add("input", "icmpv6-redirect", icmp(true, 137), b.eventDrop("icmp_probe"))
 	b.add("input", "outbound-reply", direction(true, false), ctState(6, false), counter("outbound_replies"), accept())
-	b.add("input", "invalid", ctState(expr.CtStateBitINVALID|expr.CtStateBitUNTRACKED, false), b.event("invalid_packet"), drop())
+	b.add("input", "invalid", ctState(expr.CtStateBitINVALID|expr.CtStateBitUNTRACKED, false), b.eventDrop("invalid_packet"))
 	b.add("input", "blacklists", direction(false, false), jump("blacklist"))
 	for i, bits := range []byte{3, 6, 5} {
-		b.add("input", fmt.Sprintf("invalid-flags-%d", i), flags(bits, bits, false), b.event("invalid_packet"), drop())
+		b.add("input", fmt.Sprintf("invalid-flags-%d", i), flags(bits, bits, false), b.eventDrop("invalid_packet"))
 	}
 	b.add("input", "established", ctState(6, false), accept())
 	// Remaining input rules are appended by networkEssentials, after ICMP handling.

@@ -11,9 +11,10 @@ import (
 )
 
 type stagedBans struct {
-	Version uint64 `json:"version"`
-	ID      string `json:"id"`
-	Next    int    `json:"next"`
+	SourcesOnly bool   `json:"sources_only"`
+	Version     uint64 `json:"version"`
+	ID          string `json:"id"`
+	Next        int    `json:"next"`
 }
 
 // Sync stages ordered gzip members and publishes a complete snapshot only when
@@ -27,10 +28,14 @@ func (g *Guard) Sync(ctx context.Context, update protocol.FirewallUpdate) error 
 	}
 	g.mu.Lock()
 	defer g.mu.Unlock()
-	if update.Version < g.state.MasterVersion {
+	currentVersion := g.state.MasterVersion
+	if update.SourcesOnly {
+		currentVersion = g.state.SourceMasterVersion
+	}
+	if update.Version < currentVersion {
 		return nil
 	}
-	if update.Version == g.state.MasterVersion && update.SnapshotID == g.state.SnapshotID {
+	if !update.SourcesOnly && update.Version == g.state.MasterVersion && update.SnapshotID == g.state.SnapshotID {
 		if g.dirty {
 			return g.enforce(ctx)
 		}
@@ -68,9 +73,9 @@ func (g *Guard) Sync(ctx context.Context, update protocol.FirewallUpdate) error 
 		if err = file.Close(); err != nil {
 			return err
 		}
-		staging = stagedBans{ID: update.SnapshotID, Version: update.Version}
+		staging = stagedBans{ID: update.SnapshotID, Version: update.Version, SourcesOnly: update.SourcesOnly}
 	}
-	if staging.Version != update.Version {
+	if staging.Version != update.Version || staging.SourcesOnly != update.SourcesOnly {
 		return errors.New("firewall snapshot version differs")
 	}
 	if update.Index > staging.Next {
@@ -101,8 +106,8 @@ func (g *Guard) Sync(ctx context.Context, update protocol.FirewallUpdate) error 
 	if !update.Final {
 		return nil
 	}
-	if err := g.commitSnapshot(update.SnapshotID, update.Version); err != nil {
+	if err := g.commitSnapshot(update.SnapshotID, update.Version, update.SourcesOnly); err != nil {
 		return err
 	}
-	return g.enforce(ctx)
+	return g.enforceMode(ctx, update.SourcesOnly)
 }

@@ -112,7 +112,10 @@ func firewallControlChecks(ctx context.Context, manager *firewall.Manager, polic
 	}
 	persisted := protocol.FirewallBan{Prefix: "203.0.113.90", Generation: "vm-persist", Until: now.Add(time.Hour), RefreshSeconds: 3600}
 	source := protocol.FirewallSource{ID: "vm-source", Generation: "vm-source", Until: now.Add(time.Hour), RefreshSeconds: 3600, Prefixes: []string{"8.0.0.0/8", "2001:4860::/32"}}
-	if err = guard.Sync(ctx, protocol.FirewallUpdate{Version: 3, SnapshotID: "vm-persist", Final: true, SourcesComplete: true, Bans: []protocol.FirewallBan{persisted}, Sources: []protocol.FirewallSource{source}}); err != nil {
+	if err = guard.Update(ctx, protocol.FirewallUpdate{Version: 3, SnapshotID: "vm-persist", Bans: []protocol.FirewallBan{persisted}, Remove: []string{"198.18.0.2", "2001:db8:1::/64"}, RemoveExemptions: []string{"2001:db8:1::2"}}); err != nil {
+		return err
+	}
+	if err = guard.Sync(ctx, protocol.FirewallUpdate{Version: 3, SourcesOnly: true, SnapshotID: "vm-source-persist", Final: true, SourcesComplete: true, Sources: []protocol.FirewallSource{source}}); err != nil {
 		return err
 	}
 	if banRemaining("banned_v4", netip.MustParseAddr("203.0.113.90")) <= 0 {

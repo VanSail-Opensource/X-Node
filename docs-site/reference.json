@@ -403,6 +403,18 @@
       "direction": "Agent → master",
       "description": "Report expiry of a durable temporary torrent ban.",
       "body": "## Ban expiry\nThe torrent restriction has expired for the reported user. Other restrictions such as master `block_new`, IP bans and quotas still apply. Read the current admission status before treating a user as unrestricted."
+    },
+    {
+      "name": "firewall.events",
+      "direction": "Agent → master",
+      "description": "Durable report-only detections and ban lifecycle events.",
+      "body": "Threshold reports contain stable event IDs, detection time, IP, rule and count. Persist before acknowledging. Detection never authorizes a new ban. Expiry events identify the authoritative generation; wait for all participating nodes before global removal."
+    },
+    {
+      "name": "firewall.events.ack",
+      "direction": "Master → agent",
+      "description": "Acknowledge durably processed firewall events.",
+      "body": "Send event IDs only after committing their effects. The agent replays unacknowledged events after reconnect. Acknowledging an obsolete generation cannot remove a newer ban."
     }
   ],
   "commands": [
@@ -755,6 +767,21 @@
         },
         "users": []
       }
+    },
+    {
+      "name": "firewall.bans.get",
+      "description": "Read live firewall enforcement metadata.",
+      "body": "Returns versions, source generations and bounded pending-report counts. This live result is excluded from retained command history."
+    },
+    {
+      "name": "firewall.bans.sync",
+      "description": "Stage an authoritative bounded snapshot.",
+      "body": "Ordered chunks publish only on the final chunk. SourcesOnly snapshots have an independent version bank and never replace dynamic bans or exact exemptions. Source references reuse a cached matching generation without transmitting CIDRs again."
+    },
+    {
+      "name": "firewall.bans.update",
+      "description": "Apply an authoritative ban or exact exemption delta.",
+      "body": "Absolute deadlines replace prior durations, including shortening. Stable generation and version make retries idempotent. Remove and RemoveExemptions apply immediate unban/revocation without restarting Xray."
     }
   ]
 }

@@ -1,6 +1,7 @@
 package protocol
 
 type FirewallState struct {
+	SourceVersion     uint64            `json:"source_version,string"`
 	Enabled           bool              `json:"enabled"`
 	DetectionEnabled  bool              `json:"detection_enabled"`
 	MasterVersion     uint64            `json:"master_version,string"`

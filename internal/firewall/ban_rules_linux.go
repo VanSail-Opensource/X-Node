@@ -9,6 +9,22 @@ import (
 
 const nfLogGroup = 100
 
+// nft's text parser treats jump/goto as terminal statements. Keep the eventual
+// drop in its own rule so complete ruleset snapshots remain replayable.
+func (b *policyPlan) eventDrop(rule string) expressions {
+	event := b.event(rule)
+	if len(event) == 0 {
+		return drop()
+	}
+	name := "drop_event_" + rule
+	if _, exists := b.rules[name]; !exists {
+		b.chain(name, nil, nil, "", false)
+		b.add(name, "log", event)
+		b.add(name, "drop", drop())
+	}
+	return goTo(name)
+}
+
 func (b *policyPlan) event(rule string) expressions {
 	if rule != "blacklist" && !b.policy.MasterControlled {
 		return nil

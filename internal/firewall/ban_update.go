@@ -11,7 +11,7 @@ import (
 // Update commits an immediate master command. Absolute deadlines make retries
 // independent of execution delay; a new command may deliberately shorten a ban.
 func (g *Guard) Update(ctx context.Context, update protocol.FirewallUpdate) error {
-	if len(update.Sources) > 0 {
+	if update.SourcesOnly || len(update.Sources) > 0 {
 		return errors.New("source inventories require staged synchronization")
 	}
 	if err := validateUpdate(update); err != nil {

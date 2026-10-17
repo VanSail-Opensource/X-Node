@@ -7,6 +7,12 @@ import (
 )
 
 func validateUpdate(update protocol.FirewallUpdate) error {
+	if !update.SourcesOnly && (len(update.Sources) > 0 || len(update.RemoveSources) > 0 || update.SourcesComplete) {
+		return errors.New("source inventories require a source-only snapshot")
+	}
+	if update.SourcesOnly && (len(update.Bans) > 0 || len(update.Exemptions) > 0 || len(update.Remove) > 0 || len(update.RemoveExemptions) > 0) {
+		return errors.New("source snapshots cannot change dynamic restrictions")
+	}
 	if update.Version == 0 || !protocol.ValidName(update.SnapshotID) {
 		return errors.New("firewall updates require a master version and snapshot identity")
 	}

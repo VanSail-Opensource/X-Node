@@ -20,17 +20,18 @@ type sourceState struct {
 	BaseExpired bool `json:"base_expired,omitempty"`
 }
 type banState struct {
-	SourceRevision uint64                                `json:"source_revision"`
-	MasterVersion  uint64                                `json:"master_version"`
-	EventNamespace string                                `json:"event_namespace"`
-	NextEvent      uint64                                `json:"next_event"`
-	Revision       uint64                                `json:"revision"`
-	Bans           map[string]protocol.FirewallBan       `json:"bans"`
-	Exemptions     map[string]protocol.FirewallExemption `json:"exemptions"`
-	Sources        map[string]sourceState                `json:"sources"`
-	Events         map[string]protocol.FirewallEvent     `json:"events"`
-	SnapshotID     string                                `json:"snapshot_id"`
-	JournalEpoch   string                                `json:"journal_epoch"`
+	SourceMasterVersion uint64                                `json:"source_master_version"`
+	SourceRevision      uint64                                `json:"source_revision"`
+	MasterVersion       uint64                                `json:"master_version"`
+	EventNamespace      string                                `json:"event_namespace"`
+	NextEvent           uint64                                `json:"next_event"`
+	Revision            uint64                                `json:"revision"`
+	Bans                map[string]protocol.FirewallBan       `json:"bans"`
+	Exemptions          map[string]protocol.FirewallExemption `json:"exemptions"`
+	Sources             map[string]sourceState                `json:"sources"`
+	Events              map[string]protocol.FirewallEvent     `json:"events"`
+	SnapshotID          string                                `json:"snapshot_id"`
+	JournalEpoch        string                                `json:"journal_epoch"`
 }
 type observedHit struct {
 	ip   netip.Addr

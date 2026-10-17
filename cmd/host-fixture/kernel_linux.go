@@ -130,6 +130,9 @@ func watchdogCheck(ctx context.Context, m *firewall.Manager, p protocol.Firewall
 	if err = json.Unmarshal(raw, &tx); err != nil {
 		return err
 	}
+	if _, err = runner.Run(ctx, "nft", "--check", "--file", tx.Backup); err != nil {
+		return fmt.Errorf("watchdog snapshot is not replayable: %w", err)
+	}
 	// Apply records its confirmation deadline before systemd-run arms the
 	// independent timer. Start the fixture's 45-second timer window when the
 	// applying process exits, then allow 15 seconds for scheduler delay.
@@ -154,6 +157,7 @@ func watchdogCheck(ctx context.Context, m *firewall.Manager, p protocol.Firewall
 
 func watchdogDiagnostics(ctx context.Context, runner host.Runner, tx firewall.Pending) string {
 	checks := [][]string{
+		{"nft", "--check", "--file", tx.Backup},
 		{"systemctl", "show", tx.Unit + ".timer", "--property=ActiveState,SubState,Result"},
 		{"systemctl", "show", tx.Unit + ".service", "--property=ActiveState,SubState,Result,ExecMainStatus"},
 		{"journalctl", "-u", tx.Unit + ".service", "--no-pager", "-n", "30"},

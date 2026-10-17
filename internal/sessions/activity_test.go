@@ -50,7 +50,7 @@ func TestSampledActivityWithoutGrace(t *testing.T) {
 func TestAuthenticatedTransitAccountingAndRevocation(t *testing.T) {
 	r, u := New(), testUser()
 	u.AccountingPeriod = "paid-period"
-	binding := protocol.TransitCredential{SourceNodeID: "source-node", InboundTag: "in", Generation: "revision-1", Credential: json.RawMessage(`{"id":"550e8400-e29b-41d4-a716-446655440011","encryption":"none"}`)}
+	binding := protocol.TransitCredential{SourceNodeID: "source-node", InboundTag: "in", Generation: "revision-1", Credential: json.RawMessage(`{"id":"550e8400-e29b-41d4-a716-446655440011"}`)}
 	u.TransitCredentials = []protocol.TransitCredential{binding}
 	u.BlockNew = true
 	r.SetUsers([]protocol.User{u})

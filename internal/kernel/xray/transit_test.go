@@ -20,7 +20,7 @@ func TestRealTransitRetainsAccountingAndCannotSurviveRevocation(t *testing.T) {
 	peerUUID := "550e8400-e29b-41d4-a716-446655440021"
 	config.Users[0].BlockNew = true
 	config.Users[0].AccountingPeriod = "paid-period"
-	config.Users[0].TransitCredentials = []protocol.TransitCredential{{SourceNodeID: "source-node", InboundTag: "in", Generation: "generation-1", Credential: json.RawMessage(`{"id":"550e8400-e29b-41d4-a716-446655440021","encryption":"none"}`)}}
+	config.Users[0].TransitCredentials = []protocol.TransitCredential{{SourceNodeID: "source-node", InboundTag: "in", Generation: "generation-1", Credential: json.RawMessage(`{"id":"550e8400-e29b-41d4-a716-446655440021"}`)}}
 	registry.SetUsers(config.Users)
 	if err := runtime.Apply(context.Background(), config); err != nil {
 		t.Fatal(err)

@@ -23,7 +23,7 @@ func TestDomainBlocksPrecedeSuppliedAndSystemRules(t *testing.T) {
 }
 
 func TestPreparedTransitHasIndependentNativeAuthentication(t *testing.T) {
-	u := protocol.User{ID: 1, UUID: testUUID, InboundTags: []string{"in"}, TransitCredentials: []protocol.TransitCredential{{SourceNodeID: "source", InboundTag: "in", Generation: "v1", Credential: json.RawMessage(`{"id":"550e8400-e29b-41d4-a716-446655440012","encryption":"none"}`)}}}
+	u := protocol.User{ID: 1, UUID: testUUID, InboundTags: []string{"in"}, TransitCredentials: []protocol.TransitCredential{{SourceNodeID: "source", InboundTag: "in", Generation: "v1", Credential: json.RawMessage(`{"id":"550e8400-e29b-41d4-a716-446655440012"}`)}}}
 	c := protocol.Config{Xray: json.RawMessage(`{"inbounds":[{"tag":"in","listen":"127.0.0.1","port":12345,"protocol":"vless","settings":{"decryption":"none"}}],"outbounds":[{"tag":"direct","protocol":"freedom"}]}`), Users: []protocol.User{u}}
 	prepared, err := Prepare(c)
 	if err != nil {

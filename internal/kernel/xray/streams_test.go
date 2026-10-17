@@ -96,9 +96,7 @@ func TestRealUDPAndXUDPAccountingAndExpiry(t *testing.T) {
 			if e != nil || string(b[:n]) != "datagram" {
 				t.Fatalf("UDP reply: %q %v", b[:n], e)
 			}
-			if registry.Counters()[1][0] < 8 || registry.Counters()[1][1] < 8 {
-				t.Fatal("UDP payload not accounted")
-			}
+			awaitMeteredTraffic(t, registry, 1, 8, 8)
 			if registry.Summary().Connections[1] != 1 {
 				t.Fatal("UDP association did not reserve exactly one slot")
 			}

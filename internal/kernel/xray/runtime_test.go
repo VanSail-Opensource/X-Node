@@ -51,6 +51,27 @@ func requestOK(client *http.Client, url string) bool {
 	b, e := io.ReadAll(response.Body)
 	return e == nil && response.StatusCode == 200 && string(b) == "works"
 }
+
+// Payload delivery can wake the client before the successful writer publishes
+// its counters. Wait for that publication rather than billing before writes.
+func awaitMeteredTraffic(t *testing.T, registry *sessions.Registry, id int, upload, download uint64) {
+	t.Helper()
+	ticker := time.NewTicker(time.Millisecond)
+	defer ticker.Stop()
+	timeout := time.NewTimer(2 * time.Second)
+	defer timeout.Stop()
+	for {
+		counts := registry.Counters()[id]
+		if counts[0] >= upload && counts[1] >= download {
+			return
+		}
+		select {
+		case <-ticker.C:
+		case <-timeout.C:
+			t.Fatalf("traffic not accounted: %v", counts)
+		}
+	}
+}
 func TestRealVLESSRotationEmptySnapshotAndAccounting(t *testing.T) {
 	for _, mux := range []bool{false, true} {
 		t.Run(fmt.Sprintf("mux=%t", mux), func(t *testing.T) {
@@ -72,9 +93,7 @@ func TestRealVLESSRotationEmptySnapshotAndAccounting(t *testing.T) {
 				t.Logf("summary=%+v counters=%+v logs=%+v", registry.Summary(), registry.Counters(), entries)
 				t.Fatal("fresh user cannot connect")
 			}
-			if registry.Counters()[1][0] == 0 || registry.Counters()[1][1] == 0 {
-				t.Fatal("traffic not accounted")
-			}
+			awaitMeteredTraffic(t, registry, 1, 1, 1)
 			oldInstance := runtime.instance
 			c.Users[0].UUID = "550e8400-e29b-41d4-a716-446655440001"
 			registry.SetUsers(c.Users)

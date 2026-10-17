@@ -14,7 +14,7 @@ The renderer keeps native root objects and validates them with the pinned Xray l
 | `policy`, `stats` | Native settings preserved with required per-user accounting enabled |
 | `observatory`, `burstObservatory` | Native connection observations preserved |
 | `fakeDns`, `reverse`, `version` | Native objects preserved |
-| `geodata` | Native asset/cron/outbound shape drives verified agent-owned download generations |
+| `geodata` | Verified geosite.dat domain generations; completion-based hour intervals or retained legacy cron; GeoIP is master-resolved |
 | `env` | Native Xray environment options; asset location is managed by the agent |
 | `api`, `metrics` | Native core objects; node-to-master operations remain WSS frames |
 | `transport` | Upstream-deprecated global transport configuration is rejected by the selected core |

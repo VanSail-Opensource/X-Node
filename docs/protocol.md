@@ -151,7 +151,7 @@ Speedtests use a separate outbound-only Xray client and transfer HTTPS payloads 
 
 The configuration schema describes provider credentials, certificate profiles, inbound certificate references, DDNS jobs, resolver policy, firewall policy, outbound port ranges, asset hashes, telemetry, torrent policy and update policy. Operational defaults are one-second sampling, five-second reporting, five-minute DDNS refresh, ten-minute torrent bans and disabled automatic binary installation.
 
-The agent owns Geodata downloads and suppresses the core's duplicate downloader. Native `geodata.assets` filenames stay inside the managed asset directory; cron and download outbound selection are honored. SHA-256 hashes are supplied through `asset_hashes[file]`.
+The agent owns verified geosite.dat domain downloads and suppresses the core's duplicate downloader. GeoIP data and source-prefix resolution belong to the master. Native domain assets stay inside the managed directory; completion-based hour intervals, retained legacy cron and download outbound selection are honored. SHA-256 hashes are supplied through `asset_hashes[file]`.
 
 Signed handover checks compare authenticated hello `binary_sha256` and `platform`
 with the official version-bound minisign manifest. This measurement identifies

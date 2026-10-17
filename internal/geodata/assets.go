@@ -89,7 +89,7 @@ func Next(p Policy, now time.Time) time.Time {
 	return s.Next(now)
 }
 
-// Resolve returns one immutable generation so a runtime never sees a mixed GeoIP/GeoSite pair.
+// Resolve returns one immutable verified domain-asset generation.
 func Resolve(dir string) string {
 	b, e := os.ReadFile(filepath.Join(dir, "active.json"))
 	if e != nil {

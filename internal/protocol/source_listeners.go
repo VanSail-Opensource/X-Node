@@ -3,6 +3,7 @@ package protocol
 import (
 	"encoding/json"
 	"errors"
+	"net/netip"
 	"strconv"
 	"strings"
 )
@@ -81,10 +82,11 @@ func SourceGeoIPListeners(raw json.RawMessage) ([]SourceGeoIPListener, error) {
 		if in.Stream.Security == "reality" || in.Protocol == "dokodemo-door" || in.Protocol == "tunnel" {
 			continue
 		}
-		for port := 1; port <= 65535; port++ {
-			if !portContains(in.Port, port) {
-				continue
-			}
+		ports, err := sourcePorts(in.Port)
+		if err != nil {
+			return nil, err
+		}
+		for _, port := range ports {
 			for _, network := range []string{"tcp", "udp"} {
 				if !inboundNetwork(in, network) {
 					continue
@@ -110,7 +112,17 @@ func SourceGeoIPListeners(raw json.RawMessage) ([]SourceGeoIPListener, error) {
 	return result, nil
 }
 func wildcardListen(value string) bool { return value == "" || value == "0.0.0.0" || value == "::" }
-func listenOverlap(a, b string) bool   { return a == b || wildcardListen(a) || wildcardListen(b) }
+func listenOverlap(a, b string) bool {
+	if a == b || a == "" || b == "" || a == "::" || b == "::" {
+		return true
+	}
+	left, errA := netip.ParseAddr(a)
+	right, errB := netip.ParseAddr(b)
+	if errA != nil || errB != nil {
+		return false
+	}
+	return left.Unmap().Is4() == right.Unmap().Is4() && (left.IsUnspecified() || right.IsUnspecified())
+}
 func portContains(value any, port int) bool {
 	if number, ok := value.(float64); ok {
 		return number == float64(port)
@@ -134,4 +146,36 @@ func portContains(value any, port int) bool {
 		}
 	}
 	return false
+}
+
+func sourcePorts(value any) ([]int, error) {
+	if number, ok := value.(float64); ok {
+		if number >= 1 && number <= 65535 && number == float64(int(number)) {
+			return []int{int(number)}, nil
+		}
+		return nil, errors.New("source filtering requires fixed listener ports")
+	}
+	text, ok := value.(string)
+	if !ok {
+		return nil, errors.New("source filtering requires fixed listener ports")
+	}
+	var ports []int
+	for _, part := range strings.Split(text, ",") {
+		low, high, span := strings.Cut(part, "-")
+		from, err := strconv.Atoi(low)
+		if err != nil {
+			return nil, errors.New("invalid source-filter port range")
+		}
+		to := from
+		if span {
+			to, err = strconv.Atoi(high)
+		}
+		if err != nil || from < 1 || to > 65535 || to < from || to-from+1 > 256-len(ports) {
+			return nil, errors.New("source-filter port range exceeds bounds")
+		}
+		for port := from; port <= to; port++ {
+			ports = append(ports, port)
+		}
+	}
+	return ports, nil
 }

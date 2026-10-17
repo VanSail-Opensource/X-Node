@@ -14,7 +14,7 @@ func validateDistinctTransitAccounts(users []User) error {
 		var object map[string]any
 		_ = json.Unmarshal(raw, &object)
 		var result []string
-		for _, field := range []string{"id", "password", "auth"} {
+		for _, field := range []string{"id", "password", "auth", "pass"} {
 			if value, ok := object[field].(string); ok && value != "" {
 				if field == "id" {
 					value = strings.ToLower(value)
@@ -23,7 +23,7 @@ func validateDistinctTransitAccounts(users []User) error {
 			}
 		}
 		if len(result) == 0 && fallback != "" {
-			for _, field := range []string{"id", "password", "auth"} {
+			for _, field := range []string{"id", "password", "auth", "pass"} {
 				result = append(result, tag+"\x00"+field+"\x00"+strings.ToLower(fallback))
 			}
 		}

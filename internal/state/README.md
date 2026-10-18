@@ -2,6 +2,9 @@
 
 `store.go` atomically persists authorization, accepted configuration, bans, and
 bounded private state. `traffic.go` exposes ordered immutable replay/acknowledgment.
+`desired.go` stages validated activation targets before listener binding, using
+the existing authorization revision. Acceptance clears the target; newer
+authorization supersedes it. `desired_test.go` covers restart and control privacy.
 `accounting.go` commits raw totals and period-tagged samples together and seals
 barrier batches behind an outstanding report instead of replacing it.
 

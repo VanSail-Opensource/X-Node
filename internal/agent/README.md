@@ -4,6 +4,12 @@
 two bounded workers; they submit traffic captures back to the actor instead of
 mutating sampling baselines concurrently.
 
+Validated desired configuration is staged before binding listeners. Startup
+retries that target after a previous bind failure, retaining the last applied
+revision until the whole activation completes. Backoff also covers failures
+after Xray starts, including firewall activation. `listener_recovery_test.go`
+exercises a real occupied TCP port across restart and subsequent recovery.
+
 `accounting.go` samples logical payload counters every second, retains separate
 authorization accounting periods, publishes measured byte rates, and seals
 durable flush barriers. Quiescing requires fenced admission and waits for native

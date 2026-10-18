@@ -64,6 +64,7 @@ type Agent struct {
 	Runner             host.Runner
 	Jobs               *Jobs
 	desired            protocol.Config
+	desiredCached      bool
 	hasDesired         bool
 	apply              chan applyJob
 	applied            chan applied
@@ -148,15 +149,20 @@ func (a *Agent) Run(ctx context.Context) error {
 	a.Registry.SetUsers(d.Users)
 	a.Registry.RestoreBans(d.Bans)
 	a.Registry.RestoreIPBlocks(d.IPBlocks)
-	if d.Config != nil {
-		a.desired = protocol.Clone(*d.Config)
+	startup := d.Config
+	if d.DesiredConfig != nil {
+		startup = d.DesiredConfig
+	}
+	if startup != nil {
+		a.desired = protocol.Clone(*startup)
 		a.desired.Users = d.Users
 		a.hasDesired = true
 		a.Guard.Configure(a.desired.Firewall)
 		a.registerSecrets(a.desired)
 		a.Registry.SetPorts(a.desired.BlockedPorts)
 		a.Registry.SetReportIPs(a.desired.Telemetry.IncludeActiveIPs)
-		a.queue(ctx, applyJob{Revision: d.Revision, Config: a.desired, Cached: true})
+		a.desiredCached = d.DesiredConfig == nil
+		a.queue(ctx, applyJob{Revision: d.Revision, Config: a.desired, Cached: a.desiredCached})
 	}
 	child, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -167,21 +173,28 @@ func (a *Agent) Run(ctx context.Context) error {
 	}()
 	go a.Client.Run(child)
 	go a.Sampler.Run(child)
-	go a.applyLoop(child)
+	applyDone := make(chan struct{})
+	go func() { defer close(applyDone); a.applyLoop(child) }()
 	guardDone, kernelDone := make(chan struct{}), make(chan struct{})
 	go func() { defer close(guardDone); a.Guard.Run(child, a.Client.Send) }()
 	go func() { defer close(kernelDone); a.Guard.RunKernel(child) }()
 	defer func() { cancel(); <-guardDone; <-kernelDone }()
 	defer a.Certificates.Stop()
 	defer a.Runtime.Stop()
+	stopApply := func() {
+		cancel()
+		if a.cancelApply != nil {
+			a.cancelApply()
+		}
+		<-applyDone
+	}
+	defer stopApply()
 	tick := time.NewTicker(time.Second)
 	defer tick.Stop()
 	for {
 		select {
 		case <-ctx.Done():
-			if a.cancelApply != nil {
-				a.cancelApply()
-			}
+			stopApply()
 			a.Runtime.Stop()
 			if e := a.captureTraffic(); e != nil {
 				return e
@@ -211,6 +224,7 @@ func (a *Agent) Run(ctx context.Context) error {
 				} else {
 					a.retryDelay = 0
 					a.retryAt = time.Time{}
+					a.desiredCached = true
 				}
 			}
 			if done.Error != nil {
@@ -223,7 +237,7 @@ func (a *Agent) Run(ctx context.Context) error {
 			if a.hasDesired {
 				a.Runtime.Stop()
 				d := a.Store.Snapshot()
-				a.queue(child, applyJob{ID: id, Revision: d.Revision, Config: a.desired, Cached: true})
+				a.queue(child, applyJob{ID: id, Revision: d.Revision, Config: a.desired, Cached: a.desiredCached})
 			}
 		case <-tick.C:
 			a.Registry.ExpireUsers(time.Now())
@@ -357,6 +371,11 @@ func (a *Agent) activate(lifetime context.Context, job applyJob) error {
 	if _, e = xray.Prepare(resolved); e != nil {
 		return e
 	}
+	if !job.Cached {
+		if e = a.Store.Stage(c, job.Revision); e != nil {
+			return e
+		}
+	}
 	// Remove the previous redirect before changing resolver ownership.
 	if e = a.Firewall.EnableConfirmedDNS(job.Context, false); e != nil {
 		return e
@@ -380,9 +399,6 @@ func (a *Agent) activate(lifetime context.Context, job applyJob) error {
 	}
 	if job.Context.Err() != nil {
 		return job.Context.Err()
-	}
-	if e = a.Store.Accept(c, job.Revision); e != nil {
-		return e
 	}
 	a.Certificates.Commit(c)
 	a.Sampler.Interval(c.SampleInterval())
@@ -411,6 +427,9 @@ func (a *Agent) activate(lifetime context.Context, job applyJob) error {
 		}
 	}
 	a.Guard.Configure(c.Firewall)
+	if e = a.Store.Accept(c, job.Revision); e != nil {
+		return e
+	}
 	a.Registry.Pause(false)
 	a.systemdReady()
 	return nil
@@ -526,6 +545,7 @@ func (a *Agent) handle(ctx context.Context, m protocol.Message) {
 		a.Registry.SetReportIPs(c.Telemetry.IncludeActiveIPs)
 		a.desired = c
 		a.hasDesired = true
+		a.desiredCached = false
 		if a.utilityCancel != nil {
 			a.utilityCancel()
 		}
@@ -595,13 +615,13 @@ func (a *Agent) periodic(ctx context.Context) {
 			a.Client.Send(protocol.New("logs.report", "", 0, map[string]any{"entries": entries, "dropped": dropped}), false)
 		}
 	}
-	if !a.Runtime.Ready() && !a.applying.Load() && !now.Before(a.retryAt) {
+	if (!a.Runtime.Ready() || !a.retryAt.IsZero()) && !a.applying.Load() && !now.Before(a.retryAt) {
 		d := a.Store.Snapshot()
-		a.queue(ctx, applyJob{Revision: d.Revision, Config: a.desired, Cached: true})
+		a.queue(ctx, applyJob{Revision: d.Revision, Config: a.desired, Cached: a.desiredCached})
 	}
 	if !a.applying.Load() && a.Certificates.Renewed() {
 		d := a.Store.Snapshot()
-		a.queue(ctx, applyJob{Revision: d.Revision, Config: a.desired, Cached: true})
+		a.queue(ctx, applyJob{Revision: d.Revision, Config: a.desired, Cached: a.desiredCached})
 	}
 	a.scheduleUtilities(ctx, now)
 }

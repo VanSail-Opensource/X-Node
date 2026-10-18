@@ -26,5 +26,10 @@ func withoutConnectionControls(data Data) (Data, bool) {
 		copy.Users = cleanUsers(copy.Users)
 		data.Config = &copy
 	}
+	if data.DesiredConfig != nil {
+		copy := *data.DesiredConfig
+		copy.Users = cleanUsers(copy.Users)
+		data.DesiredConfig = &copy
+	}
 	return data, changed
 }

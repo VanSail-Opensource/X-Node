@@ -23,6 +23,7 @@ type Data struct {
 	Revision       uint64                            `json:"revision"`
 	ConfigRevision uint64                            `json:"config_revision"`
 	Config         *protocol.Config                  `json:"config,omitempty"`
+	DesiredConfig  *protocol.Config                  `json:"desired_config,omitempty"`
 	Users          []protocol.User                   `json:"users"`
 	Bans           map[int]time.Time                 `json:"bans,omitempty"`
 	IPBlocks       map[string]protocol.IPBlock       `json:"ip_blocks,omitempty"`
@@ -116,6 +117,7 @@ func (s *Store) Authorize(users []protocol.User, revision uint64) error {
 			d.Users = []protocol.User{}
 		}
 		d.Revision = revision
+		d.DesiredConfig = nil
 		return nil
 	})
 }
@@ -127,6 +129,7 @@ func (s *Store) Accept(c protocol.Config, revision uint64) error {
 		c.Users = protocol.Clone(d.Users)
 		d.Config = &c
 		d.ConfigRevision = revision
+		d.DesiredConfig = nil
 		return nil
 	})
 }

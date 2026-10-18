@@ -13,6 +13,13 @@ restore original enforcement and service state. Hosted disposable Debian and
 Ubuntu cases cover already-on/disabled nftables, enabled UFW, packet handling,
 reboot, rollback and uninstall. Production checks remain Linux/capability based.
 
+Snapshots now separate tables owned by iptables-nft, which nft cannot replay,
+and capture each one with its own iptables front end. Rollback and uninstall
+restore those tables after the native ruleset, so UFW rules survive recovery
+instead of leaving the transaction pending. Hosts whose original snapshot
+contains such tables require `xtables_compat_snapshot_v1` to block unsafe
+downgrades.
+
 Includes v2.0.6 sampled byte-activity counts, authenticated uncounted transit legs,
 master-resolved silent source GeoIP drops, managed domain blocks, and completion
 based geosite refresh intervals. Signed-upgrade compatibility now retains those

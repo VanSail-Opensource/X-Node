@@ -6,7 +6,10 @@ timer before changing either executable. Mutation uses the process mutex and
 host file lock. `compatibility.go` and `firewall_compatibility.go` reject binaries
 that cannot retain current accounting, authorization or firewall state.
 Host firewall service takeover additionally requires `host_firewall_ownership_v1`
-when its original-service recovery journal is present.
+when its original-service recovery journal is present. Snapshotted iptables-nft
+tables additionally require `xtables_compat_snapshot_v1` whenever the original
+compatibility record exists, because older binaries would flush them without
+restoring the rules nft cannot express.
 
 Transaction observers read the atomically replaced journal without joining the
 installer. Self-restarts use `systemctl --no-block`: waiting for the service job

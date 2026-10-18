@@ -17,6 +17,7 @@ type fakeRunner struct {
 	calls            []string
 	fail             string
 	block            string
+	ruleset          string
 	canceledRecovery bool
 }
 
@@ -40,7 +41,18 @@ func (f *fakeRunner) Run(ctx context.Context, name string, args ...string) ([]by
 		return []byte("port 2222\n"), nil
 	}
 	if name == "nft" && len(args) > 0 && args[0] == "list" {
+		if f.ruleset != "" {
+			return []byte(f.ruleset), nil
+		}
 		return []byte("table inet old { }\n"), nil
+	}
+	if strings.HasSuffix(name, "-save") || strings.HasSuffix(name, "-restore") {
+		if len(args) == 1 && args[0] == "--version" {
+			return []byte("iptables-save v1.8.10 (nf_tables)\n"), nil
+		}
+		if strings.HasSuffix(name, "-save") {
+			return []byte("*filter\nCOMMIT\n"), nil
+		}
 	}
 	if name == "sysctl" {
 		return []byte("0\n"), nil

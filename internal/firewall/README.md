@@ -31,7 +31,14 @@ Every operation takes the manager mutex and a cross-process filesystem lock.
 Lock acquisition and Netlink I/O observe cancellation and bounded deadlines.
 Before changing sysctls or live policy, apply saves a complete `nft list ruleset`
 snapshot, previous boot files and policy, forwarding state, and a private pending
-record. An independent 45-second systemd timer runs `xnodectl firewall-rollback`;
+record. Tables owned by iptables-nft cannot be expressed in that snapshot,
+because nft rejects every `xt match`/`xt target` statement; `compat.go` removes
+them from the native file and captures each one with `iptables-nft-save -t`.
+Recovery replays the native snapshot first and then restores those tables with
+the matching iptables front end, so UFW rules survive rollback and uninstall.
+Unsupported ownership families fail the transaction before any mutation instead
+of producing a snapshot that cannot be replayed. An independent 45-second
+systemd timer runs `xnodectl firewall-rollback`;
 its service retries failed recovery. The master confirms the transaction ID after
 checking connectivity. Reusing the current ID with different inputs fails.
 
@@ -68,8 +75,9 @@ An independent rollback restores service/config state before replaying the full
 kernel snapshot, so a service start/stop cannot overwrite recovered rules.
 Original ownership remains available for uninstall; repeated unmanaged restores
 are inert. `host_firewall_ownership_v1` prevents downgrades that lose this recovery
-contract. Portable hosted coverage lives in `ownership_test.go` with its runner
-in `ownership_fixtures_test.go`.
+contract, and `xtables_compat_snapshot_v1` covers hosts whose original snapshot
+needed iptables-owned tables. Portable hosted coverage lives in `ownership_test.go`
+with its runner in `ownership_fixtures_test.go`.
 
 Boot restoration and agent startup recover unconfirmed transactions and reconcile
 the confirmed policy through Go, with DNS redirection disabled. Legacy DNS output chains are reconciled empty, even for cached redirect intent.

@@ -72,6 +72,9 @@ func (m *Manager) recover(parent context.Context, p *record, kernel bool) error 
 		if _, err := m.Runner.Run(ctx, "nft", "-f", p.Backup); err != nil {
 			failures = append(failures, err)
 		}
+		if err := m.restoreCompat(ctx, p.Compat); err != nil {
+			failures = append(failures, err)
+		}
 	}
 	if len(failures) > 0 {
 		return errors.Join(failures...)

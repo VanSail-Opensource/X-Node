@@ -150,6 +150,12 @@ on rollback or uninstall. A stored takeover journal prevents unsafe binary
 downgrades. The privileged CI fixture covers enabled/disabled nftables and Ubuntu
 24.04 UFW in marked disposable VMs.
 
+`xtables_compat_snapshot_v1` identifies binaries that can snapshot and replay the
+tables iptables-nft owns. nft cannot express their `xt match`/`xt target` rules,
+so they are captured per table with the iptables front end and restored after the
+native snapshot. A stored original snapshot prevents downgrades that would flush
+host rules they cannot recreate.
+
 Speedtests use a separate outbound-only Xray client and transfer HTTPS payloads through the peer. They default to three request-latency samples, at most 32 MiB download, 8 MiB upload and 60 seconds total. The transfer bound can reach 64 MiB and timeout 120 seconds. Test credentials and HTTP endpoints are supplied and managed by the master.
 
 `torrent.detected` reports `user_id` and ban deadline. `torrent.expired` reports expiry. `block_new` controls and per-machine connection reports implement approximate global totals; no per-admission master reservation is performed.

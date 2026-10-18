@@ -108,6 +108,9 @@ func (m *Manager) RestoreOriginal(ctx context.Context) error {
 	if _, err = m.Runner.Run(ctx, "nft", "-f", path); err != nil {
 		return err
 	}
+	if err = m.restoreOriginalCompat(ctx); err != nil {
+		return err
+	}
 	tx.Status = "unmanaged"
 	if err = writeRecord(m.path(), tx); err != nil {
 		return err

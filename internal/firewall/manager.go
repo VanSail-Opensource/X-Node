@@ -1,10 +1,11 @@
 package firewall
 
 import (
-	"github.com/VanSail-Opensource/X-Node/internal/host"
-	"github.com/VanSail-Opensource/X-Node/internal/protocol"
 	"sync"
 	"time"
+
+	"github.com/VanSail-Opensource/X-Node/internal/host"
+	"github.com/VanSail-Opensource/X-Node/internal/protocol"
 )
 
 type Pending struct {

@@ -22,10 +22,11 @@ type fileBackup struct {
 // implementation details through firewall.pending or firewall.status.
 type record struct {
 	Pending
-	Engine    int            `json:"engine,omitempty"`
-	Files     []fileBackup   `json:"files,omitempty"`
-	Services  []serviceState `json:"services,omitempty"`
-	Ownership bool           `json:"ownership,omitempty"`
+	Engine    int              `json:"engine,omitempty"`
+	Files     []fileBackup     `json:"files,omitempty"`
+	Services  []serviceState   `json:"services,omitempty"`
+	Compat    []compatSnapshot `json:"compat,omitempty"`
+	Ownership bool             `json:"ownership,omitempty"`
 }
 
 func (m *Manager) path() string { return filepath.Join(m.Dir, "pending.json") }

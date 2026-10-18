@@ -26,8 +26,14 @@ func (m *Manager) requiredCapabilities() ([]string, error) {
 	}
 	controlRequired := false
 	ownershipRequired := false
+	compatRequired := false
 	if _, e := os.Stat(filepath.Join(filepath.Dir(m.Dir), "firewall", "original-services.json")); e == nil {
 		ownershipRequired = true
+	} else if !os.IsNotExist(e) {
+		return nil, e
+	}
+	if _, e := os.Stat(filepath.Join(filepath.Dir(m.Dir), "firewall", "original-compat.json")); e == nil {
+		compatRequired = true
 	} else if !os.IsNotExist(e) {
 		return nil, e
 	}
@@ -48,6 +54,9 @@ func (m *Manager) requiredCapabilities() ([]string, error) {
 		if ownershipRequired {
 			caps = append(caps, "host_firewall_ownership_v1")
 		}
+		if compatRequired {
+			caps = append(caps, "xtables_compat_snapshot_v1")
+		}
 		return caps, nil
 	}
 	if err != nil {
@@ -61,6 +70,7 @@ func (m *Manager) requiredCapabilities() ([]string, error) {
 	required["firewall_control_v1"] = controlRequired
 	required["native_firewall_v1"] = nativeFirewall
 	required["host_firewall_ownership_v1"] = ownershipRequired
+	required["xtables_compat_snapshot_v1"] = compatRequired
 	if len(data.Users) > 0 {
 		required["volatile_connection_controls_v1"] = true
 	}
@@ -123,7 +133,7 @@ func (m *Manager) requiredCapabilities() ([]string, error) {
 		}
 	}
 	var out []string
-	for _, key := range []string{"traffic_periods_v1", "traffic_period_barriers_v1", "authorization_expiry", "member_outbound_guards", "volatile_connection_controls_v1", "native_auxiliary_inbounds_v1", "native_firewall_v1", "xray_scoped_dns_v1", "firewall_control_v1", "host_firewall_ownership_v1", "transit_credentials_v1", "source_geoip_firewall_v1", "shared_domain_blocks_v1", "geodata_interval_v1"} {
+	for _, key := range []string{"traffic_periods_v1", "traffic_period_barriers_v1", "authorization_expiry", "member_outbound_guards", "volatile_connection_controls_v1", "native_auxiliary_inbounds_v1", "native_firewall_v1", "xray_scoped_dns_v1", "firewall_control_v1", "host_firewall_ownership_v1", "xtables_compat_snapshot_v1", "transit_credentials_v1", "source_geoip_firewall_v1", "shared_domain_blocks_v1", "geodata_interval_v1"} {
 		if required[key] {
 			out = append(out, key)
 		}

@@ -31,4 +31,13 @@ func TestNativeFirewallPreventsUnsafeBinaryDowngrade(t *testing.T) {
 	if err := m.checkCapabilities([]byte(`{"capabilities":["native_firewall_v1","host_firewall_ownership_v1"]}`)); err != nil {
 		t.Fatal(err)
 	}
+	if err := os.WriteFile(filepath.Join(fw, "original-compat.json"), []byte(`[{"family":"ip","table":"filter","backup":"/var/lib/x-node/firewall/original-ip-filter.rules","restore":"iptables-nft-restore"}]`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.checkCapabilities([]byte(`{"capabilities":["native_firewall_v1","host_firewall_ownership_v1"]}`)); err == nil {
+		t.Fatal("downgrade lost xtables compatibility recovery")
+	}
+	if err := m.checkCapabilities([]byte(`{"capabilities":["native_firewall_v1","host_firewall_ownership_v1","xtables_compat_snapshot_v1"]}`)); err != nil {
+		t.Fatal(err)
+	}
 }

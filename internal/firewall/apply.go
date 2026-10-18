@@ -118,18 +118,18 @@ func (m *Manager) prepare(ctx context.Context, id string, p protocol.FirewallPol
 		}
 		tx.Files = append(tx.Files, f)
 	}
-	candidate, err := json.Marshal(tx)
-	if err != nil {
-		return tx, err
-	}
-	if err = state.AtomicWrite(tx.Candidate, candidate, 0600); err != nil {
-		return tx, err
-	}
 	previous, err := m.Runner.Run(ctx, "nft", "list", "ruleset")
 	if err != nil {
 		return tx, err
 	}
-	snapshot := append([]byte("flush ruleset\n"), previous...)
+	native, compat, err := splitCompatTables(previous)
+	if err != nil {
+		return tx, err
+	}
+	if tx.Compat, err = m.saveCompat(ctx, compat, "rollback"); err != nil {
+		return tx, err
+	}
+	snapshot := append([]byte("flush ruleset\n"), native...)
 	if err = state.AtomicWrite(tx.Backup, snapshot, 0600); err != nil {
 		return tx, err
 	}
@@ -137,7 +137,23 @@ func (m *Manager) prepare(ctx context.Context, id string, p protocol.FirewallPol
 		if err = state.AtomicWrite(filepath.Join(m.Dir, "original.nft"), snapshot, 0600); err != nil {
 			return tx, err
 		}
+		originals, saveErr := m.saveCompat(ctx, compat, "original")
+		if saveErr != nil {
+			return tx, saveErr
+		}
+		if len(originals) > 0 {
+			if err = writeOriginalCompat(m.Dir, originals); err != nil {
+				return tx, err
+			}
+		}
 	} else if err != nil {
+		return tx, err
+	}
+	candidate, err := json.Marshal(tx)
+	if err != nil {
+		return tx, err
+	}
+	if err = state.AtomicWrite(tx.Candidate, candidate, 0600); err != nil {
 		return tx, err
 	}
 	if err = m.prepareForwarding(ctx, &tx.Pending); err != nil {

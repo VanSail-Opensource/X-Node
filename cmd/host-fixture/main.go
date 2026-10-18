@@ -5,11 +5,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/VanSail-Opensource/X-Node/internal/firewall"
-	"github.com/VanSail-Opensource/X-Node/internal/protocol"
 	"os"
 	"os/exec"
 	"time"
+
+	"github.com/VanSail-Opensource/X-Node/internal/firewall"
+	"github.com/VanSail-Opensource/X-Node/internal/protocol"
 )
 
 // Software-emulated guests can spend well over the production 30-second

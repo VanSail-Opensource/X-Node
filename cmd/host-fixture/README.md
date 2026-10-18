@@ -46,3 +46,5 @@ master-authorized nftables restrictions, repeated-hit refresh, exact IPv6
 exemptions and outbound/reply preservation. It leaves an authoritative ban and
 compact source generation for reboot verification. These destructive checks
 remain confined to the marked disposable VM.
+
+The VM harness bounds reboot SSH channels and probes independently of connection setup. OpenSSH keepalives detect a rebooted guest that cannot close its old forwarded TCP stream. A four-minute reboot deadline reports the guest serial log instead of consuming the workflow timeout.

@@ -60,7 +60,7 @@ accelerator=(-accel tcg -cpu max)
 if [[ -r /dev/kvm && -w /dev/kvm ]]; then accelerator=(-accel kvm -cpu host); fi
 qemu-system-x86_64 "${accelerator[@]}" -m 1536 -smp 2 -drive "file=$run_dir/root.qcow2,format=qcow2,if=virtio" -drive "file=$run_dir/seed.img,format=raw,if=virtio" -netdev user,id=network,hostfwd=tcp:127.0.0.1:10022-:22 -device virtio-net-pci,netdev=network -display none -serial "file:$run_dir/console.log" &
 qemu_pid=$!
-ssh_args=(-i "$run_dir/ssh-key" -p 10022 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=2 -o BatchMode=yes)
+ssh_args=(-i "$run_dir/ssh-key" -p 10022 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=2 -o ServerAliveInterval=5 -o ServerAliveCountMax=3 -o BatchMode=yes)
 ready=false
 for attempt in $(seq 1 90); do
     if ssh "${ssh_args[@]}" fixture@127.0.0.1 'cloud-init status --wait >/dev/null'; then ready=true; break; fi
@@ -73,12 +73,15 @@ ssh "${ssh_args[@]}" fixture@127.0.0.1 "sudo /usr/local/libexec/x-node-host-fixt
 
 # A real reboot verifies restore ordering and that a fresh SSH connection works.
 initial_boot=$(ssh "${ssh_args[@]}" fixture@127.0.0.1 'cat /proc/sys/kernel/random/boot_id')
-ssh "${ssh_args[@]}" fixture@127.0.0.1 'sudo systemctl enable x-node.service && sudo systemctl reboot' || true
+echo 'Requesting disposable host reboot'
+timeout 30s ssh "${ssh_args[@]}" fixture@127.0.0.1 'sudo systemctl enable x-node.service && sudo systemctl reboot --no-block' || true
 rebooted=false
+reboot_deadline=$((SECONDS + 240))
 for attempt in $(seq 1 90); do
-    current_boot=$(ssh "${ssh_args[@]}" fixture@127.0.0.1 'cat /proc/sys/kernel/random/boot_id' 2>/dev/null || true)
+    current_boot=$(timeout 8s ssh "${ssh_args[@]}" fixture@127.0.0.1 'cat /proc/sys/kernel/random/boot_id' 2>/dev/null || true)
+    if (( SECONDS >= reboot_deadline )); then break; fi
     if [[ -n "$current_boot" && "$current_boot" != "$initial_boot" ]]; then rebooted=true; break; fi
     sleep 2
 done
-if ! "$rebooted"; then cat "$run_dir/console.log"; exit 1; fi
+if ! "$rebooted"; then echo 'Host did not return with a new boot identity within four minutes.' >&2; cat "$run_dir/console.log"; exit 1; fi
 ssh "${ssh_args[@]}" fixture@127.0.0.1 'sudo /usr/local/libexec/x-node-host-fixture --after-reboot'

@@ -20,6 +20,9 @@ type stagedBans struct {
 // Sync stages ordered gzip members and publishes a complete snapshot only when
 // its final chunk is durable. The fixed staging paths cannot accumulate files.
 func (g *Guard) Sync(ctx context.Context, update protocol.FirewallUpdate) error {
+	if update.SourcesOnly {
+		return g.syncSources(ctx, update)
+	}
 	if err := validateUpdate(update); err != nil {
 		return err
 	}
@@ -106,7 +109,7 @@ func (g *Guard) Sync(ctx context.Context, update protocol.FirewallUpdate) error 
 	if !update.Final {
 		return nil
 	}
-	if err := g.commitSnapshot(update.SnapshotID, update.Version, update.SourcesOnly); err != nil {
+	if err := g.commitSnapshot(update.SnapshotID, update.Version); err != nil {
 		return err
 	}
 	return g.enforceMode(ctx, update.SourcesOnly)

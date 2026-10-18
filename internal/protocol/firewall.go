@@ -150,8 +150,9 @@ func (b FirewallBan) Validate() error {
 	return nil
 }
 func (e FirewallExemption) Validate() error {
-	ip, err := netip.ParseAddr(e.IP)
-	if err != nil || ip.Zone() != "" || !ip.IsGlobalUnicast() || ip.IsPrivate() || ip.IsLoopback() || !ValidName(e.Generation) || e.Until.IsZero() {
+	prefix, err := ExemptionPrefix(e.IP)
+	ip := prefix.Addr()
+	if err != nil || !ip.IsGlobalUnicast() || ip.IsPrivate() || ip.IsLoopback() || !ValidName(e.Generation) || e.Until.IsZero() {
 		return errors.New("invalid firewall exemption")
 	}
 	return nil

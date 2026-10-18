@@ -7,11 +7,12 @@ import (
 	"github.com/VanSail-Opensource/X-Node/internal/protocol"
 	"github.com/google/nftables"
 	"github.com/mdlayher/netlink"
+	"log/slog"
 	"syscall"
 	"time"
 )
 
-type nativeBackend struct{}
+type nativeBackend struct{ dir string }
 
 // Each operation has a private socket. Cancellation interrupts I/O, including
 // Flush; the durable watchdog handles the ambiguous committed-without-ACK case.
@@ -38,8 +39,19 @@ func connection(ctx context.Context) (*nftables.Conn, func(), error) {
 	stop := context.AfterFunc(ctx, func() { _ = c.CloseLasting() })
 	return c, func() { stop(); _ = c.CloseLasting() }, nil
 }
-func (nativeBackend) Reconcile(ctx context.Context, p protocol.FirewallPolicy, redirect bool, ssh []int) error {
-	return reconcileNative(ctx, p, redirect, ssh)
+func (b nativeBackend) Reconcile(ctx context.Context, p protocol.FirewallPolicy, redirect bool, ssh []int) error {
+	if err := prepareCountrySets(ctx, b.dir, p.SourceGeoIP); err != nil {
+		return err
+	}
+	if err := reconcileNative(ctx, p, redirect, ssh); err != nil {
+		return err
+	}
+	if keep, err := activeCountrySets(ctx); err == nil {
+		if err = cleanupCountrySets(ctx, keep); err != nil {
+			slog.Warn("country set cleanup pending", "error_code", "FIREWALL_CLEANUP_PENDING")
+		}
+	}
+	return nil
 }
 func reconcileNative(ctx context.Context, p protocol.FirewallPolicy, redirect bool, ssh []int) (result error) {
 	flushed := false

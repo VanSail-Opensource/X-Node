@@ -11,6 +11,16 @@ import (
 )
 
 func (b *policyPlan) geoipSets() error {
+	if p := b.policy.SourceGeoIP; p != nil && p.Reference {
+		for _, v6 := range []bool{false, true} {
+			key := nftables.TypeIPAddr
+			if v6 {
+				key = nftables.TypeIP6Addr
+			}
+			b.sets = append(b.sets, setSpec{set: &nftables.Set{Table: b.table, Name: countrySetName(p.Generation, v6), KeyType: key, Interval: true, AutoMerge: true}, preserve: true})
+		}
+		return nil
+	}
 	for _, v6 := range []bool{false, true} {
 		var builder netipx.IPSetBuilder
 		if policy := b.policy.SourceGeoIP; policy != nil {
@@ -62,6 +72,9 @@ func (b *policyPlan) geoipDrops() {
 			name := "source_geoip_v4"
 			if v6 {
 				name = "source_geoip_v6"
+			}
+			if b.policy.SourceGeoIP.Reference {
+				name = countrySetName(b.policy.SourceGeoIP.Generation, v6)
 			}
 			var dest expressions
 			if listener.ListenIP != "" {

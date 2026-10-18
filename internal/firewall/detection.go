@@ -9,12 +9,36 @@ import (
 )
 
 func (g *Guard) exempt(ip netip.Addr, now time.Time) bool {
-	return g.state.Exemptions[ip.String()].Until.After(now)
+	if g.state.Exemptions[ip.String()].Until.After(now) {
+		return true
+	}
+	for mask := range g.exemptionMasks {
+		bits := mask
+		if ip.Is6() {
+			if mask < 256 {
+				continue
+			}
+			bits -= 256
+		} else if mask >= 256 {
+			continue
+		}
+		if g.state.Exemptions[netip.PrefixFrom(ip, bits).Masked().String()].Until.After(now) {
+			return true
+		}
+	}
+	return false
 }
 func (g *Guard) sourceBan(ip netip.Addr, now time.Time) (protocol.FirewallBan, bool) {
-	for id, index := range g.indexes {
-		source := g.state.Sources[id]
-		if source.Until.After(now) && index.Contains(ip) {
+	for id, source := range g.state.Sources {
+		if !source.Until.After(now) || source.Expired {
+			continue
+		}
+		contained, err := rangeContains(sourcePath(g.dir, id, source.Generation), ip)
+		if err != nil {
+			g.kernelError = "FIREWALL_SOURCE_UNAVAILABLE"
+			continue
+		}
+		if contained {
 			prefix, _ := protocol.FirewallPrefix(ip.String())
 			return protocol.FirewallBan{Prefix: prefix.String(), Generation: source.Generation, Until: source.Until, RefreshSeconds: source.RefreshSeconds, Source: id}, true
 		}

@@ -120,6 +120,9 @@ func Prepare(ctx context.Context, dir string, p Policy, hashes map[string]string
 	} else if e != nil {
 		return "", e
 	}
+	if e = prunePrepared(dir, target); e != nil {
+		return "", e
+	}
 	return target, nil
 }
 func fileDigest(file *os.File) (string, error) {

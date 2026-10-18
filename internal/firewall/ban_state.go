@@ -1,6 +1,8 @@
 package firewall
 
 import (
+	"context"
+	"encoding/json"
 	"net/netip"
 	"path/filepath"
 	"reflect"
@@ -11,13 +13,14 @@ import (
 
 	"github.com/VanSail-Opensource/X-Node/internal/protocol"
 	"github.com/VanSail-Opensource/X-Node/internal/state"
-	"go4.org/netipx"
 )
 
 type sourceState struct {
 	protocol.FirewallSource
-	Expired     bool `json:"expired,omitempty"`
-	BaseExpired bool `json:"base_expired,omitempty"`
+	PrefixCount        int    `json:"prefix_count,omitempty"`
+	PreviousGeneration string `json:"previous_generation,omitempty"`
+	Expired            bool   `json:"expired,omitempty"`
+	BaseExpired        bool   `json:"base_expired,omitempty"`
 }
 type banState struct {
 	SourceMasterVersion uint64                                `json:"source_master_version"`
@@ -50,6 +53,7 @@ type hitWindow struct {
 // Hot inbound paths only enqueue bounded observations; all filesystem/kernel
 // work runs outside Xray payload handling and the control socket reader.
 type Guard struct {
+	sourceMu       sync.Mutex
 	mu             sync.Mutex
 	dir            string
 	state          banState
@@ -59,14 +63,16 @@ type Guard struct {
 	acks           chan []string
 	kernelReady    atomic.Bool
 	dropped        atomic.Uint64
+	exemptionMasks map[int]bool
 	resetAt        map[string]time.Time
 	eventOrder     []string
 	eventStart     int
 	windows        map[string]hitWindow
-	indexes        map[string]*netipx.IPSet
 	dirty          bool
 	sourcesDirty   bool
 	pendingJournal *journalRecord
+	legacySources  bool
+	retainBulk     bool
 	haveSnapshot   bool
 	journalBytes   int64
 	applying       bool
@@ -78,7 +84,17 @@ func emptyBans() banState {
 	return banState{Bans: map[string]protocol.FirewallBan{}, Exemptions: map[string]protocol.FirewallExemption{}, Sources: map[string]sourceState{}, Events: map[string]protocol.FirewallEvent{}, JournalEpoch: state.ID(), EventNamespace: state.ID()}
 }
 func OpenGuard(dir string, manager *Manager) (*Guard, error) {
-	g := &Guard{dir: dir, manager: manager, state: emptyBans(), hits: make(chan observedHit, 4096), acks: make(chan []string, 32), resetAt: map[string]time.Time{}, windows: map[string]hitWindow{}, indexes: map[string]*netipx.IPSet{}, dirty: true, sourcesDirty: true, compacted: time.Now()}
+	g := &Guard{dir: dir, manager: manager, state: emptyBans(), hits: make(chan observedHit, 4096), acks: make(chan []string, 32), resetAt: map[string]time.Time{}, windows: map[string]hitWindow{}, dirty: true, sourcesDirty: true, compacted: time.Now()}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	release, err := g.lockBulk(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
+	if err = g.cleanupBulkScratch(); err != nil {
+		return nil, err
+	}
 	if err := g.load(); err != nil {
 		return nil, err
 	}
@@ -87,14 +103,28 @@ func OpenGuard(dir string, manager *Manager) (*Guard, error) {
 		g.eventOrder = append(g.eventOrder, id)
 	}
 	sort.Strings(g.eventOrder)
-	if err := g.buildIndexes(); err != nil {
+	if err := g.prepareStoredSources(); err != nil {
 		return nil, err
+	}
+	g.rebuildExemptionMasks()
+	if g.legacySources && !g.sourceUpgradePending() {
+		if err := g.compact(); err != nil {
+			return nil, err
+		}
 	}
 	return g, nil
 }
 func (g *Guard) Configure(policy protocol.FirewallPolicy) {
 	if old := g.policy.Load(); old != nil && reflect.DeepEqual(*old, policy) {
 		return
+	}
+	if old := g.policy.Load(); old != nil && old.SourceGeoIP != nil && (policy.SourceGeoIP == nil || old.SourceGeoIP.Generation != policy.SourceGeoIP.Generation) {
+		raw, _ := json.Marshal(map[string]string{"generation": old.SourceGeoIP.Generation})
+		if err := state.AtomicWrite(g.file("geoip-previous.json"), raw, 0600); err != nil {
+			g.mu.Lock()
+			g.retainBulk = true
+			g.mu.Unlock()
+		}
 	}
 	copy := protocol.Clone(policy)
 	g.policy.Store(&copy)
@@ -134,25 +164,15 @@ func (g *Guard) Acknowledge(ids []string) {
 		g.dropped.Add(1)
 	}
 }
-func (g *Guard) buildIndexes() error {
-	g.indexes = map[string]*netipx.IPSet{}
+func (g *Guard) prepareStoredSources() error {
 	for id, source := range g.state.Sources {
 		if source.Expired {
 			continue
 		}
-		var builder netipx.IPSetBuilder
-		for _, raw := range source.Prefixes {
-			prefix, err := protocol.FirewallPrefix(raw)
-			if err != nil {
-				return err
-			}
-			builder.AddPrefix(prefix)
-		}
-		index, err := builder.IPSet()
-		if err != nil {
+		if err := g.migrateSource(&source); err != nil {
 			return err
 		}
-		g.indexes[id] = index
+		g.state.Sources[id] = source
 	}
 	return nil
 }

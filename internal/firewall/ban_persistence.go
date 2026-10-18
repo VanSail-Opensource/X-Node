@@ -38,7 +38,7 @@ func (g *Guard) load() error {
 			return e
 		}
 		decoder := json.NewDecoder(io.LimitReader(reader, maxBanStateBytes+1))
-		e = decoder.Decode(&g.state)
+		e = g.decodeBanState(decoder)
 		if e == nil {
 			_, e = io.Copy(io.Discard, reader)
 		}
@@ -136,6 +136,9 @@ func (g *Guard) compact() error {
 	if err := g.flushPending(); err != nil {
 		return err
 	}
+	if g.legacySources && g.sourceUpgradePending() {
+		return errors.New("source migration awaits update confirmation")
+	}
 	release, err := g.diskLock()
 	if err != nil {
 		return err
@@ -143,6 +146,11 @@ func (g *Guard) compact() error {
 	defer release()
 	next := g.state
 	next.JournalEpoch = state.ID()
+	if len(next.Sources) > 0 {
+		if err = state.AtomicWrite(g.file("disk-sources-v1"), []byte("v1\n"), 0600); err != nil {
+			return err
+		}
+	}
 	if err = g.writeSnapshot(next); err != nil {
 		return err
 	}
@@ -152,5 +160,6 @@ func (g *Guard) compact() error {
 	}
 	g.journalBytes = 0
 	g.compacted = time.Now()
+	g.legacySources = false
 	return nil
 }

@@ -27,7 +27,7 @@ func TestSnapshotStagingReferencesAndStaleVersions(t *testing.T) {
 	if err := g.Sync(context.Background(), chunk); err != nil {
 		t.Fatal(err)
 	}
-	if len(g.state.Sources["feed"].Prefixes) != 2 {
+	if g.state.Sources["feed"].PrefixCount != 2 || len(g.state.Sources["feed"].Prefixes) != 0 {
 		t.Fatal("CIDRs were expanded or omitted")
 	}
 	processHits(t, g, "8.8.8.8", "blacklist", 1, now.Add(time.Second))
@@ -39,7 +39,7 @@ func TestSnapshotStagingReferencesAndStaleVersions(t *testing.T) {
 	if err := g.Sync(context.Background(), protocol.FirewallUpdate{Version: 2, SourcesOnly: true, SnapshotID: "snapshot-two", Final: true, SourcesComplete: true, Sources: []protocol.FirewallSource{source}}); err != nil {
 		t.Fatal(err)
 	}
-	if len(g.state.Sources["feed"].Prefixes) != 2 || len(g.state.Bans) != 1 || g.state.EventNamespace != namespace {
+	if g.state.Sources["feed"].PrefixCount != 2 || len(g.state.Sources["feed"].Prefixes) != 0 || len(g.state.Bans) != 1 || g.state.EventNamespace != namespace {
 		t.Fatal("source reference discarded state")
 	}
 	if err := g.Sync(context.Background(), protocol.FirewallUpdate{Version: 1, SourcesOnly: true, SnapshotID: "snapshot-one", Final: true, SourcesComplete: true}); err != nil {

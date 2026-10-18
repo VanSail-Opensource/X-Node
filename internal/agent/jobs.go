@@ -26,12 +26,13 @@ type Jobs struct {
 	running map[string]context.CancelFunc
 	history []JobResult
 	slots   chan struct{}
+	urgent  chan struct{}
 	send    func(protocol.Message, bool) bool
 	redact  func(string) string
 }
 
 func NewJobs(dir string, send func(protocol.Message, bool) bool) (*Jobs, error) {
-	j := &Jobs{path: filepath.Join(dir, "jobs.json"), running: map[string]context.CancelFunc{}, slots: make(chan struct{}, 2), send: send}
+	j := &Jobs{path: filepath.Join(dir, "jobs.json"), running: map[string]context.CancelFunc{}, slots: make(chan struct{}, 2), urgent: make(chan struct{}, 1), send: send}
 	if b, e := os.ReadFile(j.path); e == nil {
 		if len(b) >= 2<<20 || json.Unmarshal(b, &j.history) != nil {
 			return nil, errors.New("invalid persisted job history")
@@ -50,6 +51,14 @@ func NewJobs(dir string, send func(protocol.Message, bool) bool) (*Jobs, error) 
 	return j, nil
 }
 func (j *Jobs) Start(ctx context.Context, id, command string, fn func(context.Context, func(any)) (any, error)) error {
+	return j.start(ctx, id, command, false, fn)
+}
+
+// StartControl reserves one existing executor slot for urgent control work.
+func (j *Jobs) StartControl(ctx context.Context, id, command string, fn func(context.Context, func(any)) (any, error)) error {
+	return j.start(ctx, id, command, true, fn)
+}
+func (j *Jobs) start(ctx context.Context, id, command string, urgent bool, fn func(context.Context, func(any)) (any, error)) error {
 	if id == "" {
 		return errors.New("utility commands require an ID")
 	}
@@ -70,8 +79,15 @@ func (j *Jobs) Start(ctx context.Context, id, command string, fn func(context.Co
 		j.send(protocol.New("command.accepted", id, 0, map[string]string{"command": command}), true)
 		return nil
 	}
+	slots := j.slots
+	if urgent {
+		if j.urgent == nil {
+			j.urgent = make(chan struct{}, 1)
+		}
+		slots = j.urgent
+	}
 	select {
-	case j.slots <- struct{}{}:
+	case slots <- struct{}{}:
 	default:
 		j.mu.Unlock()
 		return errors.New("utility workers are busy")
@@ -81,7 +97,7 @@ func (j *Jobs) Start(ctx context.Context, id, command string, fn func(context.Co
 	j.mu.Unlock()
 	j.send(protocol.New("command.accepted", id, 0, map[string]string{"command": command}), true)
 	go func() {
-		defer func() { <-j.slots; cancel() }()
+		defer func() { <-slots; cancel() }()
 		progress := func(data any) { j.send(protocol.New("command.progress", id, 0, data), false) }
 		data, e := fn(child, progress)
 		result := JobResult{ID: id, Command: command, Status: "completed", Data: data, Finished: time.Now().UTC()}

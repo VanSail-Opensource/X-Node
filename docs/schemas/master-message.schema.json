@@ -330,11 +330,13 @@
                         "type": "string"
                       },
                       "type": "array"
+                    },
+                    "reference": {
+                      "type": "boolean"
                     }
                   },
                   "required": [
                     "generation",
-                    "prefixes",
                     "listeners"
                   ],
                   "type": "object"
@@ -869,11 +871,13 @@
                         "type": "string"
                       },
                       "type": "array"
+                    },
+                    "reference": {
+                      "type": "boolean"
                     }
                   },
                   "required": [
                     "generation",
-                    "prefixes",
                     "listeners"
                   ],
                   "type": "object"
@@ -1483,6 +1487,7 @@
             },
             "name": {
               "enum": [
+                "firewall.geoip.sync",
                 "firewall.bans.sync",
                 "firewall.bans.update",
                 "firewall.bans.get",

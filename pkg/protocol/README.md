@@ -17,3 +17,5 @@ status and acknowledged event batches. IPv4 learned bans are exact; IPv6 learned
 bans use /64. Event sequence suffixes are fixed-width decimal values inside a
 stable namespace. Source references reuse node generations without retransmitting
 unchanged inventories.
+
+`GeoIPChunk` and optional SourceGeoIPPolicy.reference support capability-gated country uploads outside configuration frames. ExemptionPrefix/ExemptionKey canonicalize IP/CIDR grants while retaining exact IPv6 /128 semantics separately from /64 ban granularity.

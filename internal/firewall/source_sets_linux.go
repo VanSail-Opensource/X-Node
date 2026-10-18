@@ -6,17 +6,18 @@ import (
 	"encoding/hex"
 	"errors"
 	"strings"
-	"time"
 
 	"github.com/VanSail-Opensource/X-Node/internal/protocol"
 	"github.com/google/nftables"
 	"github.com/google/nftables/expr"
-	"go4.org/netipx"
 )
 
 // Large inventories are populated in unreferenced generation sets through
 // bounded transactions. Only the final selector swap changes packet behavior.
 func prepareSources(ctx context.Context, sources []protocol.FirewallSource) (map[string]string, error) {
+	return prepareSourcesFrom(ctx, "", sources)
+}
+func prepareSourcesFrom(ctx context.Context, dir string, sources []protocol.FirewallSource) (map[string]string, error) {
 	targets := map[string]string{}
 	active, err := activeSourceSets(ctx)
 	if err != nil {
@@ -30,18 +31,16 @@ func prepareSources(ctx context.Context, sources []protocol.FirewallSource) (map
 		if v6 {
 			suffix, key = "v6", nftables.TypeIP6Addr
 		}
-		ranges, err := sourceRanges(sources, v6)
+		hash := sha256.New()
+		count := 0
+		var last diskRange
+		err = walkSourceRecords(ctx, dir, sources, v6, func(record diskRange) error { _, err := hash.Write(record[:]); count++; last = record; return err })
 		if err != nil {
 			return nil, err
 		}
-		if len(ranges) == 0 {
+		if count == 0 {
 			targets[suffix] = ""
 			continue
-		}
-		hash := sha256.New()
-		for _, r := range ranges {
-			_, _ = hash.Write(r.From().AsSlice())
-			_, _ = hash.Write(r.To().AsSlice())
 		}
 		name := "xnode_src_" + suffix + "_" + hex.EncodeToString(hash.Sum(nil))[:16]
 		targets[suffix] = name
@@ -49,62 +48,12 @@ func prepareSources(ctx context.Context, sources []protocol.FirewallSource) (map
 			continue
 		}
 		set := &nftables.Set{Table: &nftables.Table{Name: "x_node", Family: nftables.TableFamilyINet}, Name: name, KeyType: key, Interval: true, AutoMerge: true}
-		c, close, err := connection(ctx)
-		if err != nil {
+		if err = populateRangeSet(ctx, set, last, count, func(visit func(diskRange) error) error { return walkSourceRecords(ctx, dir, sources, v6, visit) }); err != nil {
 			return nil, err
-		}
-		if err = c.AddSet(set, nil); err == nil {
-			err = c.Flush()
-		}
-		close()
-		if err != nil {
-			return nil, err
-		}
-		set.ID = 0
-		var elements []nftables.SetElement
-		if last := ranges[len(ranges)-1]; !last.To().Next().IsValid() {
-			elements = append(elements, nftables.SetElement{Key: make([]byte, key.Bytes), IntervalEnd: true}, nftables.SetElement{Key: last.From().AsSlice()})
-			ranges = ranges[:len(ranges)-1]
-		}
-		for _, r := range ranges {
-			elements = append(elements, nftables.SetElement{Key: r.From().AsSlice()}, nftables.SetElement{Key: r.To().Next().AsSlice(), IntervalEnd: true})
-			if len(elements) >= 512 {
-				if err = populateSource(ctx, set, elements); err != nil {
-					return nil, err
-				}
-				elements = nil
-			}
-		}
-		if len(elements) > 0 {
-			if err = populateSource(ctx, set, elements); err != nil {
-				return nil, err
-			}
 		}
 
 	}
 	return targets, nil
-}
-func sourceRanges(sources []protocol.FirewallSource, v6 bool) ([]netipx.IPRange, error) {
-	var builder netipx.IPSetBuilder
-	now := time.Now()
-	for _, source := range sources {
-		if source.Until.After(now) {
-			for _, raw := range source.Prefixes {
-				prefix, err := protocol.FirewallPrefix(raw)
-				if err != nil {
-					return nil, err
-				}
-				if prefix.Addr().Is6() == v6 {
-					builder.AddPrefix(prefix)
-				}
-			}
-		}
-	}
-	index, err := builder.IPSet()
-	if err != nil {
-		return nil, err
-	}
-	return index.Ranges(), nil
 }
 func activeSourceSets(ctx context.Context) (map[string]string, error) {
 	c, close, err := connection(ctx)

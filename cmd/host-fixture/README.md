@@ -48,3 +48,5 @@ compact source generation for reboot verification. These destructive checks
 remain confined to the marked disposable VM.
 
 The VM harness bounds reboot SSH channels and probes independently of connection setup. OpenSSH keepalives detect a rebooted guest that cannot close its old forwarded TCP stream. A four-minute reboot deadline reports the guest serial log instead of consuming the workflow timeout.
+
+`firewall_ranges.go` checks streamed country filtering and CIDR exemptions while preserving exact paid grants. `firewall_memory.go`, enabled by the dedicated VM case's XNODE_LARGE_FIREWALL_CHECK=1, measures /proc process RSS during one-million-prefix ingestion and requires dynamic control to complete within ten seconds during final source staging. It removes its temporary feed/ban before reboot checks.

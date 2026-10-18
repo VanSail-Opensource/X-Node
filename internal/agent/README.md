@@ -32,3 +32,5 @@ payload paths. New report frames are gated by `master_controlled`, protecting
 rolling upgrades with older masters. Typed firewall snapshot/delta commands use
 the existing utility executor. Read-only firewall status never enters job history.
 `geodata_schedule.go` owns completion-based hour intervals and bounded refresh retries; related hosted fixtures cover superseded configuration and successful/failure completion. GeoIP remains master-only.
+
+`native_prepare.go` shares asset injection across activation and command validation. Certificate preflight uses an isolated pool and never issues ACME certificates or changes active certificate status. `Jobs.StartControl` reserves one bounded utility slot for urgent bans, traffic barriers and firewall confirmation; ordinary jobs retain two slots. Session/metrics commands no longer clone configuration and accounting journals unnecessarily.

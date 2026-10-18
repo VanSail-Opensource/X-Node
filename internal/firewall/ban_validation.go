@@ -3,7 +3,6 @@ package firewall
 import (
 	"errors"
 	"github.com/VanSail-Opensource/X-Node/internal/protocol"
-	"net/netip"
 )
 
 func validateUpdate(update protocol.FirewallUpdate) error {
@@ -48,7 +47,7 @@ func validateUpdate(update protocol.FirewallUpdate) error {
 		}
 	}
 	for _, raw := range update.RemoveExemptions {
-		if _, err := netip.ParseAddr(raw); err != nil {
+		if _, err := protocol.ExemptionPrefix(raw); err != nil {
 			return err
 		}
 	}

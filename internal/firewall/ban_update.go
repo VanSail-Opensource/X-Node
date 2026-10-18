@@ -5,7 +5,6 @@ import (
 	"errors"
 	"github.com/VanSail-Opensource/X-Node/internal/protocol"
 	"github.com/VanSail-Opensource/X-Node/internal/state"
-	"net/netip"
 )
 
 // Update commits an immediate master command. Absolute deadlines make retries
@@ -22,7 +21,7 @@ func (g *Guard) Update(ctx context.Context, update protocol.FirewallUpdate) erro
 	if update.Version < g.state.MasterVersion {
 		return nil
 	}
-	if update.Version == g.state.MasterVersion && update.SnapshotID == g.state.SnapshotID {
+	if update.Version == g.state.MasterVersion {
 		if g.dirty {
 			return g.enforceMode(ctx, false)
 		}
@@ -43,12 +42,22 @@ func (g *Guard) Update(ctx context.Context, update protocol.FirewallUpdate) erro
 		record.Bans[i].Prefix = prefix.String()
 	}
 	for i := range record.Exemptions {
-		ip, _ := netip.ParseAddr(record.Exemptions[i].IP)
-		record.Exemptions[i].IP = ip.Unmap().String()
+		key, _ := protocol.ExemptionKey(record.Exemptions[i].IP)
+		record.Exemptions[i].IP = key
 	}
 	for _, raw := range update.Remove {
 		prefix, _ := protocol.FirewallPrefix(raw)
 		record.Remove = append(record.Remove, prefix.String())
+	}
+	for i, raw := range record.RemoveExemptions {
+		key, err := protocol.ExemptionKey(raw)
+		if err != nil {
+			return err
+		}
+		record.RemoveExemptions[i] = key
+	}
+	if err := g.markExemptionFormat(record.Exemptions); err != nil {
+		return err
 	}
 	if err := g.appendJournal(record); err != nil {
 		return err

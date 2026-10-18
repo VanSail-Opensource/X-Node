@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"crypto/x509"
 	"encoding/hex"
-	"encoding/json"
 	"encoding/pem"
 	"errors"
 	"github.com/VanSail-Opensource/X-Node/internal/protocol"
@@ -26,10 +25,14 @@ type profile struct {
 	elapsed int64
 }
 type Pool struct {
-	mu       sync.Mutex
-	dir      string
-	profiles map[string]*profile
-	active   map[string]string
+	mu               sync.Mutex
+	dir              string
+	profiles         map[string]*profile
+	active           map[string]string
+	currentMaterial  map[string]bool
+	currentACME      map[string]bool
+	previousMaterial map[string]bool
+	previousACME     map[string]bool
 }
 
 func NewPool(dir string) *Pool {
@@ -42,20 +45,17 @@ func (p *Pool) Prepare(ctx context.Context, c protocol.Config) (protocol.Config,
 	if len(c.Certificates) > 64 {
 		return out, errors.New("too many certificate profiles")
 	}
+	prepared := map[string]bool{}
 	for id, spec := range c.Certificates {
-		cfg := spec.Config
-		if spec.Provider != "" {
-			provider := c.Providers[spec.Provider]
-			cfg.DNSProvider = provider.Type
-			cfg.DNSEnv = protocol.Clone(provider.Credentials)
-		}
-		keyRaw, _ := json.Marshal(cfg)
-		keyHash := sha256.Sum256(keyRaw)
-		key := hex.EncodeToString(keyHash[:])
+		cfg, key := profileSettings(c, spec)
 		entry := p.profiles[key]
+		fresh := entry == nil
 		if entry == nil {
 			storageHash := sha256.Sum256([]byte(cfg.CertMode + ":" + cfg.Domain + ":" + cfg.Email))
 			cfg.CertDir = filepath.Join(p.dir, "acme", hex.EncodeToString(storageHash[:]))
+			if cfg.CertMode == "file" || cfg.CertMode == "content" {
+				cfg.CertDir = ""
+			}
 			manager := NewManager(cfg)
 			start := time.Now()
 			if err := manager.Start(ctx); err != nil {
@@ -65,6 +65,12 @@ func (p *Pool) Prepare(ctx context.Context, c protocol.Config) (protocol.Config,
 			entry = &profile{manager: manager, elapsed: time.Since(start).Milliseconds()}
 			p.profiles[key] = entry
 		}
+		if cfg.CertMode == "file" && !prepared[key] && !fresh {
+			if err := entry.manager.startFile(); err != nil {
+				return out, err
+			}
+		}
+		prepared[key] = true
 		material := entry.manager.TLSCert()
 		if len(material.CertPEM) == 0 || len(material.KeyPEM) == 0 {
 			return out, errors.New("certificate profile has no TLS material")
@@ -82,7 +88,6 @@ func (p *Pool) Prepare(ctx context.Context, c protocol.Config) (protocol.Config,
 		spec.Config.CertFile = certFile
 		spec.Config.KeyFile = keyFile
 		out.Certificates[id] = spec
-		p.active[id] = key
 	}
 	return out, nil
 }
@@ -90,20 +95,20 @@ func (p *Pool) Commit(c protocol.Config) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	used := map[string]bool{}
-	for id := range c.Certificates {
-		used[p.active[id]] = true
+	active := map[string]string{}
+	for id, spec := range c.Certificates {
+		_, key := profileSettings(c, spec)
+		used[key] = true
+		active[id] = key
 	}
+	p.active = active
 	for key, entry := range p.profiles {
 		if !used[key] {
 			entry.manager.Stop()
 			delete(p.profiles, key)
 		}
 	}
-	for id := range p.active {
-		if _, ok := c.Certificates[id]; !ok {
-			delete(p.active, id)
-		}
-	}
+	p.cleanupMaterial(used)
 }
 func (p *Pool) Renewed() bool {
 	p.mu.Lock()

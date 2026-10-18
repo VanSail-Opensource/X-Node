@@ -140,3 +140,36 @@ compaction, source references, stale generations and exact IPv6 exemptions.
 `guard_runtime.go` keeps observation processing active while native inventories stage. Per-namespace monotonic event IDs and master versions reject replay and stale state; dynamic restrictions and source generations use separate kernel revisions. Existing agent/renderer lifecycle files retain their native-core orchestration; new firewall responsibilities are isolated here.
 
 `geoip_linux.go` compiles master-resolved IPv4/IPv6 prefix intervals into silent source drops scoped to non-REALITY listeners. Drops run before stateful accepts and detector hooks, never use NFLOG, and participate in the same atomic reconciliation, confirmation and rollback as the rest of the policy. Empty sets retire old country restrictions.
+
+## Bounded source storage and delivery
+
+`source_records.go`, `source_merge.go` and `source_walk.go` keep source ranges in
+private fixed-width files. Sorting retains roughly one MiB of records plus
+bounded merge readers; overlaps and adjacent ranges merge without enumerating
+addresses. `source_sync.go`/`source_stage.go` publish metadata only after all
+files are durable. `source_load.go` streams old gzip snapshots into this format.
+The old snapshot stays readable by the rollback binary until upgrade confirmation.
+
+`bulk_lock.go`, `source_cleanup.go` and `source_retention.go` serialize writers and
+remove scratch/unused generations. Bulk storage, including staging/runs, has a
+512 MiB ceiling and a 16 MiB filesystem reserve. `memory_admission_linux.go`
+requires kernel-set staging headroom; admission errors preserve active rules.
+`range_sets_linux.go` populates unreferenced sets in 512-element transactions.
+
+`geoip_sync.go`/`geoip_sets_linux.go` implement `firewall.geoip.sync`: the master
+uploads at most 256 resolved prefixes per chunk, then config carries a verified
+generation reference. This is gated by `source_geoip_stream_v1`. Feed transfer
+requires `disk_firewall_sources_v1`; desired bulk content never enters live
+snapshots or telemetry copies.
+
+Dynamic snapshots use separate staging and reserved utility admission. A retry
+of an already committed desired version cannot shorten locally extended bans.
+`exemption_ranges_linux.go` compiles overlapping CIDR grants into timed disjoint
+intervals without extending a shorter outer grant. Exact member IP grants retain
+their scope. CIDRs require `firewall_cidr_exemptions_v1` and a compatible rollback
+binary. See the [official nftables set contract](https://netfilter.org/projects/nftables/manpage.html).
+
+Hosted portable/race regressions cover million-prefix working memory, recovery,
+references, expiry and retries. The disposable host fixture measures real RSS,
+checks urgent updates during bulk synchronization, and exercises country/CIDR
+sets and independent exemption expiry. These checks do not run on developer hosts.

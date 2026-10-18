@@ -25,6 +25,7 @@ type DDNSJob = wire.DDNSJob
 type DNSPolicy = wire.DNSPolicy
 type PortRange = wire.PortRange
 type FirewallPolicy = wire.FirewallPolicy
+type GeoIPChunk = wire.GeoIPChunk
 type SourceGeoIPPolicy = wire.SourceGeoIPPolicy
 type SourceGeoIPListener = wire.SourceGeoIPListener
 type FirewallRule = wire.FirewallRule
@@ -57,3 +58,6 @@ type UserMetrics = wire.UserMetrics
 type UserLimitStatus = wire.UserLimitStatus
 type UserSpeedStatus = wire.UserSpeedStatus
 type TelemetryReport = wire.TelemetryReport
+
+func ExemptionPrefix(raw string) (netip.Prefix, error) { return wire.ExemptionPrefix(raw) }
+func ExemptionKey(raw string) (string, error)          { return wire.ExemptionKey(raw) }

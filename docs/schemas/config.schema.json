@@ -277,11 +277,13 @@
                 "type": "string"
               },
               "type": "array"
+            },
+            "reference": {
+              "type": "boolean"
             }
           },
           "required": [
             "generation",
-            "prefixes",
             "listeners"
           ],
           "type": "object"

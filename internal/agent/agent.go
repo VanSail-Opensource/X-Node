@@ -107,6 +107,9 @@ func New(dir, version string, client *transport.Client, logs *nlog.Stream) (*Age
 	runner := host.Commands{}
 	registry := sessions.New()
 	a := &Agent{Dir: dir, Version: version, BootID: state.ID(), Store: store, Registry: registry, Runtime: xray.New(registry), Client: client, Logs: logs, Sampler: monitor.New(), Certificates: cert.NewPool(filepath.Join(dir, "certs")), Runner: runner, apply: make(chan applyJob, 1), applied: make(chan applied, 1), bans: make(chan banEvent, 128), previous: state.Traffic{}, lastDDNS: map[string]time.Time{}, notify: make(chan string, 1)}
+	if cached := store.Snapshot(); cached.Config != nil {
+		a.Certificates.RetainStored(*cached.Config)
+	}
 	a.Firewall = &firewall.Manager{Dir: filepath.Join(dir, "firewall"), ConfigPath: "/etc/nftables.conf", Executable: "/usr/local/bin/xnodectl", Runner: runner}
 	a.Guard, e = firewall.OpenGuard(filepath.Join(dir, "firewall"), a.Firewall)
 	if e != nil {
@@ -142,7 +145,7 @@ func New(dir, version string, client *transport.Client, logs *nlog.Stream) (*Age
 	return a, nil
 }
 
-var Capabilities = []string{"node_file_certificates_v1", "xtables_compat_snapshot_v1", "host_firewall_ownership_v1", "sampled_activity_v1", "transit_credentials_v1", "source_geoip_firewall_v1", "shared_domain_blocks_v1", "geodata_interval_v1", "native_firewall_v1", "firewall_control_v1", "native_xray", "multi_inbound", "tcp_udp_limits", "session_revocation", "traffic_ack", "certificates", "ddns", "xray_scoped_dns_v1", "geodata", "nftables", "port_forward", "metrics", "logs", "peer_speedtest", "torrent_ban", "signed_updates", "traffic_periods_v1", "measured_user_rates", "authorization_expiry", "member_outbound_guards", "traffic_period_barriers_v1", "config_validation_v1", "volatile_connection_controls_v1", "native_auxiliary_inbounds_v1"}
+var Capabilities = []string{"firewall_cidr_exemptions_v1", "source_geoip_stream_v1", "disk_firewall_sources_v1", "node_file_certificates_v1", "xtables_compat_snapshot_v1", "host_firewall_ownership_v1", "sampled_activity_v1", "transit_credentials_v1", "source_geoip_firewall_v1", "shared_domain_blocks_v1", "geodata_interval_v1", "native_firewall_v1", "firewall_control_v1", "native_xray", "multi_inbound", "tcp_udp_limits", "session_revocation", "traffic_ack", "certificates", "ddns", "xray_scoped_dns_v1", "geodata", "nftables", "port_forward", "metrics", "logs", "peer_speedtest", "torrent_ban", "signed_updates", "traffic_periods_v1", "measured_user_rates", "authorization_expiry", "member_outbound_guards", "traffic_period_barriers_v1", "config_validation_v1", "volatile_connection_controls_v1", "native_auxiliary_inbounds_v1"}
 
 func (a *Agent) Run(ctx context.Context) error {
 	if err := a.Firewall.RestoreFile(ctx); err != nil {
@@ -386,7 +389,6 @@ func (a *Agent) activate(lifetime context.Context, job applyJob) error {
 	if job.Context.Err() != nil {
 		return job.Context.Err()
 	}
-	a.Certificates.Commit(c)
 	a.Sampler.Interval(c.SampleInterval())
 	a.scheduleGeodata(p)
 	if !c.Firewall.Enabled {
@@ -419,6 +421,7 @@ func (a *Agent) activate(lifetime context.Context, job applyJob) error {
 		}
 	}
 	a.geoCandidate, a.geoCandidateKey = "", ""
+	a.Certificates.Commit(c)
 	if e = a.Updater.Confirm(job.Context); e != nil {
 		return e
 	}
@@ -629,12 +632,24 @@ func (a *Agent) command(ctx context.Context, m protocol.Message) error {
 	if len(args) == 0 {
 		args = []byte("{}")
 	}
-	snapshot := a.Store.Snapshot()
 	var configuration protocol.Config
-	if snapshot.Config != nil {
-		configuration = protocol.Clone(*snapshot.Config)
+	switch request.Name {
+	case "geodata.refresh", "ddns.run", "firewall.apply":
+		configuration, _ = a.Store.Configuration()
 	}
-	return a.Jobs.Start(ctx, m.ID, request.Name, func(ctx context.Context, progress func(any)) (any, error) {
+	start := a.Jobs.Start
+	switch request.Name {
+	case "traffic.flush", "firewall.confirm", "firewall.bans.update":
+		start = a.Jobs.StartControl
+	case "firewall.bans.sync":
+		var chunk struct {
+			SourcesOnly bool `json:"sources_only"`
+		}
+		if json.Unmarshal(args, &chunk) == nil && !chunk.SourcesOnly {
+			start = a.Jobs.StartControl
+		}
+	}
+	return start(ctx, m.ID, request.Name, func(ctx context.Context, progress func(any)) (any, error) {
 		switch request.Name {
 		case "traffic.flush":
 			return a.flushTraffic(ctx, args)
@@ -649,7 +664,7 @@ func (a *Agent) command(ctx context.Context, m protocol.Message) error {
 			if err != nil {
 				return nil, err
 			}
-			if _, _, err = a.prepareNative(ctx, ctx, config, policy); err != nil {
+			if err = a.validateNative(ctx, config, policy); err != nil {
 				return nil, err
 			}
 			return map[string]bool{"valid": true}, nil
@@ -776,6 +791,13 @@ func (a *Agent) command(ctx context.Context, m protocol.Message) error {
 				}
 			}
 			return map[string]bool{"applied": true}, nil
+		case "firewall.geoip.sync":
+			var chunk protocol.GeoIPChunk
+			if err := protocol.Decode(args, &chunk); err != nil {
+				return nil, err
+			}
+			ready, err := a.Guard.SyncGeoIP(ctx, chunk)
+			return map[string]bool{"ready": ready}, err
 		case "firewall.bans.get":
 			return a.Guard.Status(), nil
 		case "firewall.status":

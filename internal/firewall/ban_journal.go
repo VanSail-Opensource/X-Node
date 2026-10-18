@@ -46,6 +46,9 @@ func (g *Guard) applyRecord(record journalRecord) {
 	for _, item := range record.Exemptions {
 		g.state.Exemptions[item.IP] = item
 	}
+	if len(record.Exemptions) > 0 || len(record.RemoveExemptions) > 0 {
+		defer g.rebuildExemptionMasks()
+	}
 	for _, event := range record.Events {
 		if _, exists := g.state.Events[event.ID]; !exists {
 			g.eventOrder = append(g.eventOrder, event.ID)
@@ -63,7 +66,6 @@ func (g *Guard) applyRecord(record journalRecord) {
 		source := g.state.Sources[id]
 		source.Expired = true
 		g.state.Sources[id] = source
-		delete(g.indexes, id)
 	}
 	for _, id := range record.BaseExpiredSources {
 		source := g.state.Sources[id]
@@ -78,7 +80,6 @@ func (g *Guard) applyRecord(record journalRecord) {
 		if event, ok := g.state.Events[id]; ok && event.Kind == "source_expired" {
 			if source, exists := g.state.Sources[event.Rule]; exists && source.Generation == event.Generation {
 				delete(g.state.Sources, event.Rule)
-				delete(g.indexes, event.Rule)
 			}
 		}
 		delete(g.state.Events, id)

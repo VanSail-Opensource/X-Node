@@ -24,6 +24,18 @@ func (m *Manager) requiredCapabilities() ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
+	diskRequired := false
+	if _, err := os.Stat(filepath.Join(filepath.Dir(m.Dir), "firewall", "disk-sources-v1")); err == nil {
+		diskRequired = true
+	} else if !os.IsNotExist(err) {
+		return nil, err
+	}
+	cidrRequired := false
+	if _, err := os.Stat(filepath.Join(filepath.Dir(m.Dir), "firewall", "cidr-exemptions-v1")); err == nil {
+		cidrRequired = true
+	} else if !os.IsNotExist(err) {
+		return nil, err
+	}
 	controlRequired := false
 	ownershipRequired := false
 	compatRequired := false
@@ -45,6 +57,12 @@ func (m *Manager) requiredCapabilities() ([]string, error) {
 	raw, err := os.ReadFile(filepath.Join(filepath.Dir(m.Dir), "state.json"))
 	if os.IsNotExist(err) {
 		caps := []string{}
+		if cidrRequired {
+			caps = append(caps, "firewall_cidr_exemptions_v1")
+		}
+		if diskRequired {
+			caps = append(caps, "disk_firewall_sources_v1")
+		}
 		if nativeFirewall {
 			caps = append(caps, "native_firewall_v1")
 		}
@@ -67,6 +85,8 @@ func (m *Manager) requiredCapabilities() ([]string, error) {
 		return nil, errors.New("invalid private-state compatibility data")
 	}
 	required := map[string]bool{}
+	required["firewall_cidr_exemptions_v1"] = cidrRequired
+	required["disk_firewall_sources_v1"] = diskRequired
 	required["firewall_control_v1"] = controlRequired
 	required["native_firewall_v1"] = nativeFirewall
 	required["host_firewall_ownership_v1"] = ownershipRequired
@@ -106,9 +126,14 @@ func (m *Manager) requiredCapabilities() ([]string, error) {
 		}
 		if config.Firewall.SourceGeoIP != nil {
 			required["source_geoip_firewall_v1"] = true
+			if config.Firewall.SourceGeoIP.Reference {
+				required["source_geoip_stream_v1"] = true
+			}
 		}
 		for _, certificate := range config.Certificates {
-			if certificate.Config.CertMode == "file" && certificate.Config.Domain == "" { required["node_file_certificates_v1"] = true }
+			if certificate.Config.CertMode == "file" && certificate.Config.Domain == "" {
+				required["node_file_certificates_v1"] = true
+			}
 		}
 		if len(config.BlockedDomains) > 0 {
 			required["shared_domain_blocks_v1"] = true

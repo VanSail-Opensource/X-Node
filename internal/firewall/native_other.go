@@ -8,7 +8,7 @@ import (
 	"github.com/VanSail-Opensource/X-Node/internal/protocol"
 )
 
-type nativeBackend struct{}
+type nativeBackend struct{ dir string }
 
 func (nativeBackend) Reconcile(context.Context, protocol.FirewallPolicy, bool, []int) error {
 	return errors.New("nftables requires Linux")

@@ -31,10 +31,12 @@ func (g *Guard) statusLocked() GuardStatus {
 		}
 	}
 	for id, source := range g.state.Sources {
-		result.SourceGenerations[id] = source.Generation
+		if source.Until.After(now) && !source.Expired {
+			result.SourceGenerations[id] = source.Generation
+		}
 		if source.Until.After(now) && !source.Expired {
 			result.Sources++
-			result.SourcePrefixes += len(source.Prefixes)
+			result.SourcePrefixes += source.PrefixCount
 		}
 	}
 	for _, exemption := range g.state.Exemptions {

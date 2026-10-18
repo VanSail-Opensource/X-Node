@@ -3,26 +3,25 @@ package firewall
 import (
 	"context"
 	"errors"
-	"net/netip"
 	"time"
 
 	"github.com/VanSail-Opensource/X-Node/internal/protocol"
 	"github.com/google/nftables"
 )
 
-func (nativeBackend) StageSources(ctx context.Context, sources []protocol.FirewallSource) (map[string]string, error) {
-	return prepareSources(ctx, sources)
+func (b nativeBackend) StageSources(ctx context.Context, sources []protocol.FirewallSource) (map[string]string, error) {
+	return prepareSourcesFrom(ctx, b.dir, sources)
 }
-func (nativeBackend) Bans(ctx context.Context, bans []protocol.FirewallBan, exemptions []protocol.FirewallExemption, sources []protocol.FirewallSource, replaceSources bool) error {
+func (b nativeBackend) Bans(ctx context.Context, bans []protocol.FirewallBan, exemptions []protocol.FirewallExemption, sources []protocol.FirewallSource, replaceSources bool) error {
 	var targets map[string]string
 	var err error
 	if replaceSources {
-		targets, err = prepareSources(ctx, sources)
+		targets, err = prepareSourcesFrom(ctx, b.dir, sources)
 		if err != nil {
 			return err
 		}
 	}
-	return (nativeBackend{}).ApplyBans(ctx, bans, exemptions, targets, true, replaceSources)
+	return b.ApplyBans(ctx, bans, exemptions, targets, true, replaceSources)
 }
 func (nativeBackend) ApplyBans(ctx context.Context, bans []protocol.FirewallBan, exemptions []protocol.FirewallExemption, targets map[string]string, applyBans, replaceSources bool) error {
 	c, close, err := connection(ctx)
@@ -57,9 +56,13 @@ func (nativeBackend) ApplyBans(ctx context.Context, bans []protocol.FirewallBan,
 		desired[name] = append(desired[name], nftables.SetElement{Key: prefix.Addr().AsSlice(), Timeout: remaining})
 	}
 	for _, exemption := range exemptions {
-		ip, err := netip.ParseAddr(exemption.IP)
+		prefix, err := protocol.ExemptionPrefix(exemption.IP)
+		ip := prefix.Addr()
 		if err != nil {
 			return err
+		}
+		if prefix.Bits() != ip.BitLen() {
+			continue
 		}
 		ip = ip.Unmap()
 		name := "exempt_v4"
@@ -87,6 +90,38 @@ func (nativeBackend) ApplyBans(ctx context.Context, bans []protocol.FirewallBan,
 				return err
 			}
 			if err = changeElements(c, set, add, true); err != nil {
+				return err
+			}
+		}
+	}
+
+	if applyBans {
+		for _, v6 := range []bool{false, true} {
+			name := "exempt_prefix_v4"
+			if v6 {
+				name = "exempt_prefix_v6"
+			}
+			elements, err := exemptionRangeElements(exemptions, now, v6)
+			if err != nil {
+				return err
+			}
+			set := byName[name]
+			if set == nil {
+				if len(elements) == 0 {
+					continue
+				}
+				return errors.New("CIDR exemption sets await configuration apply")
+			}
+			current, err := c.GetSetElements(set)
+			if err != nil {
+				return err
+			}
+			add, remove := timeoutDelta(current, elements)
+			if len(add)+len(remove) == 0 {
+				continue
+			}
+			c.FlushSet(set)
+			if err = changeElements(c, set, elements, true); err != nil {
 				return err
 			}
 		}
@@ -120,44 +155,6 @@ func (nativeBackend) ApplyBans(ctx context.Context, bans []protocol.FirewallBan,
 	}
 	if replaceSources {
 		return cleanupSourceSets(ctx, targets)
-	}
-	return nil
-}
-
-func timeoutDelta(current, desired []nftables.SetElement) (add, remove []nftables.SetElement) {
-	existing := map[string]nftables.SetElement{}
-	for _, item := range current {
-		existing[string(item.Key)] = item
-	}
-	for _, item := range desired {
-		old, ok := existing[string(item.Key)]
-		if !ok {
-			add = append(add, item)
-		} else if delta := old.Expires - item.Timeout; delta > 100*time.Millisecond || delta < -100*time.Millisecond {
-			remove = append(remove, old)
-			add = append(add, item)
-		}
-		delete(existing, string(item.Key))
-	}
-	for _, item := range existing {
-		remove = append(remove, item)
-	}
-	return
-}
-func changeElements(c *nftables.Conn, set *nftables.Set, elements []nftables.SetElement, add bool) error {
-	for len(elements) > 0 {
-		count := min(512, len(elements))
-		chunk := elements[:count]
-		var err error
-		if add {
-			err = c.SetAddElements(set, chunk)
-		} else {
-			err = c.SetDeleteElements(set, chunk)
-		}
-		if err != nil {
-			return err
-		}
-		elements = elements[count:]
 	}
 	return nil
 }

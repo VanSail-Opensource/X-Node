@@ -43,5 +43,5 @@ func (m *Manager) backend() Backend {
 	if m.Backend != nil {
 		return m.Backend
 	}
-	return nativeBackend{}
+	return nativeBackend{dir: m.Dir}
 }

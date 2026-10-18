@@ -303,11 +303,11 @@ func (m *Manager) Stop() {
 // ─── Mode: file ────────────────────────────────────────────────────────────
 
 func (m *Manager) startFile() error {
-	certPEM, err := os.ReadFile(m.cfg.CertFile)
+	certPEM, err := readCertificateFile(m.cfg.CertFile)
 	if err != nil {
 		return fmt.Errorf("cert file: %w", err)
 	}
-	keyPEM, err := os.ReadFile(m.cfg.KeyFile)
+	keyPEM, err := readCertificateFile(m.cfg.KeyFile)
 	if err != nil {
 		return fmt.Errorf("key file: %w", err)
 	}

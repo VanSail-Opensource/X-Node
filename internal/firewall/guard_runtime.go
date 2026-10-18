@@ -13,6 +13,7 @@ func (g *Guard) Run(ctx context.Context, send func(protocol.Message, bool) bool)
 	var workers sync.WaitGroup
 	defer workers.Wait()
 	nextReport := time.Time{}
+	nextCleanup := time.Now().Add(time.Minute)
 	for {
 		select {
 		case <-ctx.Done():
@@ -63,6 +64,10 @@ func (g *Guard) Run(ctx context.Context, send func(protocol.Message, bool) bool)
 				nextReport = time.Now().Add(5 * time.Second)
 			}
 			g.mu.Unlock()
+			if !time.Now().Before(nextCleanup) {
+				g.cleanupExpiredSources(ctx)
+				nextCleanup = time.Now().Add(time.Minute)
+			}
 		}
 	}
 }

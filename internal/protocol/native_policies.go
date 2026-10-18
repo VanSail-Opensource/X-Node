@@ -11,7 +11,8 @@ import (
 // SourceGeoIPPolicy contains master-resolved prefixes, never a GeoIP selector or URL.
 type SourceGeoIPPolicy struct {
 	Generation string                `json:"generation"`
-	Prefixes   []string              `json:"prefixes"`
+	Prefixes   []string              `json:"prefixes,omitempty"`
+	Reference  bool                  `json:"reference,omitempty"`
 	Listeners  []SourceGeoIPListener `json:"listeners"`
 }
 
@@ -81,6 +82,9 @@ func ValidateNativePolicies(config Config) error {
 
 // Validate checks transport bounds independently of the current Xray document.
 func (policy SourceGeoIPPolicy) Validate() error {
+	if policy.Reference && len(policy.Prefixes) > 0 {
+		return errors.New("source GeoIP references cannot carry prefixes")
+	}
 	if !ValidName(policy.Generation) || len(policy.Prefixes) > 500000 || len(policy.Listeners) > 256 {
 		return errors.New("invalid source GeoIP policy")
 	}

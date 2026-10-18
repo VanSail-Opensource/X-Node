@@ -6,12 +6,12 @@ import (
 	"errors"
 	"github.com/VanSail-Opensource/X-Node/internal/protocol"
 	"io"
-	"net/netip"
 	"os"
 	"time"
 )
 
-func (g *Guard) commitSnapshot(id string, version uint64, sourcesOnly bool) error {
+// Dynamic snapshots never share staging or reconstruction with source feeds.
+func (g *Guard) commitSnapshot(id string, version uint64) error {
 	file, err := os.Open(g.file("sync.json.gz"))
 	if err != nil {
 		return err
@@ -25,28 +25,13 @@ func (g *Guard) commitSnapshot(id string, version uint64, sourcesOnly bool) erro
 	next := emptyBans()
 	next.MasterVersion = version
 	next.SourceMasterVersion = g.state.SourceMasterVersion
-	if sourcesOnly {
-		next.MasterVersion = g.state.MasterVersion
-		next.SourceMasterVersion = version
-		next.Bans = make(map[string]protocol.FirewallBan, len(g.state.Bans))
-		for key, value := range g.state.Bans {
-			next.Bans[key] = value
-		}
-		next.Exemptions = g.state.Exemptions
-	}
 	next.SourceRevision = g.state.SourceRevision
-	if sourcesOnly {
-		next.SourceRevision++
-	}
-	sourcesComplete := false
-	removeSources := map[string]bool{}
 	next.Revision = g.state.Revision + 1
-	next.EventNamespace, next.NextEvent = g.state.EventNamespace, g.state.NextEvent
+	next.EventNamespace = g.state.EventNamespace
+	next.NextEvent = g.state.NextEvent
 	next.SnapshotID = id
-	if sourcesOnly {
-		next.SnapshotID = g.state.SnapshotID
-	}
 	next.Events = g.state.Events
+	next.Sources = g.state.Sources
 	seen := map[int]bool{}
 	decoder := json.NewDecoder(io.LimitReader(reader, maxBanStateBytes+1))
 	for {
@@ -56,19 +41,13 @@ func (g *Guard) commitSnapshot(id string, version uint64, sourcesOnly bool) erro
 		} else if err != nil {
 			return err
 		}
-		if chunk.SnapshotID != id || chunk.Version != version || chunk.SourcesOnly != sourcesOnly {
-			return errors.New("firewall staged generation differs")
+		if chunk.SnapshotID != id || chunk.Version != version || chunk.SourcesOnly {
+			return errors.New("dynamic snapshot identity differs")
 		}
 		if seen[chunk.Index] {
 			continue
 		}
 		seen[chunk.Index] = true
-		if chunk.SourcesComplete {
-			sourcesComplete = true
-		}
-		for _, sourceID := range chunk.RemoveSources {
-			removeSources[sourceID] = true
-		}
 		for _, ban := range chunk.Bans {
 			prefix, _ := protocol.FirewallPrefix(ban.Prefix)
 			ban.Prefix = prefix.String()
@@ -78,62 +57,19 @@ func (g *Guard) commitSnapshot(id string, version uint64, sourcesOnly bool) erro
 			next.Bans[ban.Prefix] = ban
 		}
 		for _, exemption := range chunk.Exemptions {
-			ip, _ := netip.ParseAddr(exemption.IP)
-			exemption.IP = ip.Unmap().String()
+			key, _ := protocol.ExemptionKey(exemption.IP)
+			exemption.IP = key
 			next.Exemptions[exemption.IP] = exemption
 		}
-		for _, source := range chunk.Sources {
-			if source.Reference {
-				old, exists := g.state.Sources[source.ID]
-				if !exists || old.Generation != source.Generation || !old.Until.Equal(source.Until) {
-					return errors.New("full source snapshot is required")
-				}
-				next.Sources[source.ID] = old
-				continue
-			}
-			current, ok := next.Sources[source.ID]
-			if ok && (current.Generation != source.Generation || !current.Until.Equal(source.Until)) {
-				return errors.New("inconsistent source snapshot chunks")
-			}
-			current.FirewallSource.ID, current.Generation, current.Until, current.RefreshSeconds = source.ID, source.Generation, source.Until, source.RefreshSeconds
-			current.Prefixes = append(current.Prefixes, source.Prefixes...)
-			next.Sources[source.ID] = current
-		}
-		if len(next.Bans) > 1000000 || len(next.Exemptions) > 100000 || len(next.Sources) > 128 {
-			return errors.New("firewall snapshot capacity exceeded")
-		}
-	}
-	if !sourcesComplete {
-		for sourceID, source := range g.state.Sources {
-			if _, exists := next.Sources[sourceID]; !exists {
-				next.Sources[sourceID] = source
-			}
-		}
-	}
-	for sourceID := range removeSources {
-		delete(next.Sources, sourceID)
-	}
-	if sourcesOnly {
-		for prefix, ban := range next.Bans {
-			if ban.Source != "" {
-				source, ok := next.Sources[ban.Source]
-				if !ok || source.Generation != ban.Generation {
-					delete(next.Bans, prefix)
-				}
-			}
+		if len(next.Bans) > 1000000 || len(next.Exemptions) > 100000 {
+			return errors.New("dynamic snapshot capacity exceeded")
 		}
 	}
 	for prefix, ban := range g.state.Bans {
-		if source, ok := next.Sources[ban.Source]; ok && ban.Generation == source.Generation && ban.Until.After(time.Now()) {
+		if source, ok := next.Sources[ban.Source]; ok && source.Generation == ban.Generation && ban.Until.After(time.Now()) {
 			if _, exists := next.Bans[prefix]; !exists {
 				next.Bans[prefix] = ban
 			}
-		}
-	}
-	for sourceID, source := range next.Sources {
-		if old, ok := g.state.Sources[sourceID]; ok && old.Generation == source.Generation {
-			source.Expired, source.BaseExpired = old.Expired, old.BaseExpired
-			next.Sources[sourceID] = source
 		}
 	}
 	for prefix := range g.state.Bans {
@@ -141,23 +77,21 @@ func (g *Guard) commitSnapshot(id string, version uint64, sourcesOnly bool) erro
 			g.resetAt[prefix] = time.Now().UTC()
 		}
 	}
-	previous, indexes := g.state, g.indexes
+	grants := make([]protocol.FirewallExemption, 0, len(next.Exemptions))
+	for _, grant := range next.Exemptions {
+		grants = append(grants, grant)
+	}
+	if err := g.markExemptionFormat(grants); err != nil {
+		return err
+	}
+	previous := g.state
 	g.state = next
-	if sourcesOnly {
-		if err = g.buildIndexes(); err != nil {
-			g.state = previous
-			g.indexes = indexes
-			return err
-		}
-	}
+	g.rebuildExemptionMasks()
 	g.dirty = true
-	if sourcesOnly {
-		g.sourcesDirty = true
-	}
 	if err = g.compact(); err != nil {
 		if g.state.JournalEpoch == next.JournalEpoch {
 			g.state = previous
-			g.indexes = indexes
+			g.rebuildExemptionMasks()
 		}
 		return err
 	}

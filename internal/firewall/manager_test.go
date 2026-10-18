@@ -3,12 +3,13 @@ package firewall
 import (
 	"context"
 	"errors"
-	"github.com/VanSail-Opensource/X-Node/internal/protocol"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/VanSail-Opensource/X-Node/internal/protocol"
 )
 
 type fakeRunner struct {

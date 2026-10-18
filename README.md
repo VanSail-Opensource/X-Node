@@ -127,7 +127,7 @@ Runtime packages:
 | `internal/cert`, `internal/dns`, `internal/geodata` | Certificate profiles, DDNS, resolver probes and asset lifecycle |
 | `internal/firewall`, `internal/host` | Native atomic firewall reconciliation, JSON boot policy, and typed Linux operations; see `internal/firewall/README.md` and `internal/host/README.md` |
 | `internal/monitor`, `internal/nlog` | Shared metrics sampling and redacted logs |
-| `internal/speedtest`, `internal/update` | Isolated peer probes and verified releases |
+| `internal/speedtest`, `internal/update` | Isolated peer probes and verified releases; see `internal/update/README.md` for self-restart and transaction constraints |
 
 Build helpers under `cmd` generate schemas, sign releases, configure repository automation and run isolated host fixtures. Only `x-node` and `xnodectl` are installed.
 

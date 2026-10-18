@@ -199,7 +199,7 @@ func (m *Manager) Install(ctx context.Context, id, version string, progress func
 		}
 	}
 	progress(map[string]string{"stage": "restart"})
-	if _, e = m.Runner.Run(ctx, "systemctl", "restart", "x-node.service"); e != nil {
+	if e = m.restart(ctx); e != nil {
 		_ = m.rollback(ctx, &transaction)
 		return result, e
 	}
@@ -292,8 +292,7 @@ func (m *Manager) rollback(ctx context.Context, t *Transaction) error {
 	if e := m.write(*t); e != nil {
 		return e
 	}
-	_, e := m.Runner.Run(ctx, "systemctl", "restart", "x-node.service")
-	return e
+	return m.restart(ctx)
 }
 func (m *Manager) read() (Transaction, error) {
 	var t Transaction
@@ -312,11 +311,18 @@ func (m *Manager) write(t Transaction) error {
 	return state.AtomicWrite(filepath.Join(m.Dir, "transaction.json"), b, 0600)
 }
 func (m *Manager) Status() any {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	// AtomicWrite publishes a complete transaction. Observers must not wait for
+	// the install lock: shutdown and the next hello both need this state.
 	t, e := m.read()
 	if e != nil {
 		return map[string]string{"status": "idle"}
 	}
 	return t
+}
+
+func (m *Manager) restart(ctx context.Context) error {
+	// Waiting for our own stop job would wait for the goroutine issuing it.
+	// The persisted transaction and independent rollback timer survive exit.
+	_, err := m.Runner.Run(ctx, "systemctl", "--no-block", "restart", "x-node.service")
+	return err
 }

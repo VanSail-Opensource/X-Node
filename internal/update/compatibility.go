@@ -12,8 +12,8 @@ import (
 
 // Pending reports whether the current binary still depends on its rollback watchdog.
 func (m *Manager) Pending() bool {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	// The transaction is atomically replaced; do not join the installer here.
+	// Pending is called from the main loop and reconnect hello during shutdown.
 	transaction, err := m.read()
 	return err == nil && transaction.Status == "pending"
 }

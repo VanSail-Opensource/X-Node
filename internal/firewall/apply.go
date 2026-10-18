@@ -8,11 +8,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/VanSail-Opensource/X-Node/internal/protocol"
-	"github.com/VanSail-Opensource/X-Node/internal/state"
 	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/VanSail-Opensource/X-Node/internal/protocol"
+	"github.com/VanSail-Opensource/X-Node/internal/state"
 )
 
 func (m *Manager) Apply(ctx context.Context, id string, p protocol.FirewallPolicy, redirect bool) (Pending, error) {

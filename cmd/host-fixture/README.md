@@ -12,7 +12,8 @@ check retained rule handles, timed bans, meters, and foreign-table removal.
 Loopback DNS fixtures check readiness and actual TCP/UDP output redirection.
 
 The `--abandon` subprocess applies a policy and exits without confirmation. The
-parent waits 45 seconds from process exit plus 15 seconds of scheduler tolerance
+parent waits 45 seconds from process exit plus the bounded 30-second recovery
+and 15 seconds of process/scheduler tolerance
 for the independent systemd watchdog to restore the previous policy. If it does
 not, the fixture reports timer/service state, journal entries and pending state.
 After reboot, `--after-reboot` checks live native restoration, disabled DNS before

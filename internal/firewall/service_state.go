@@ -45,9 +45,23 @@ func (m *Manager) serviceStates(ctx context.Context) ([]serviceState, error) {
 // Restore service ownership before replaying the kernel snapshot: stopping
 // nftables or starting UFW may itself change the host's rules.
 func (m *Manager) restoreServices(ctx context.Context, states []serviceState) error {
+	if len(states) == 0 {
+		return nil
+	}
+	current, err := m.serviceStates(ctx)
+	if err != nil {
+		return err
+	}
+	byName := map[string]serviceState{}
+	for _, s := range current {
+		byName[s.Name] = s
+	}
 	for _, s := range states {
 		if s.Name != "nftables.service" && s.Name != "ufw.service" {
 			return errors.New("invalid saved firewall service")
+		}
+		if now, ok := byName[s.Name]; ok && now == s {
+			continue
 		}
 		for _, args := range [][]string{{"unmask", s.Name}, {"unmask", "--runtime", s.Name}} {
 			if _, err := m.Runner.Run(ctx, "systemctl", args...); err != nil {

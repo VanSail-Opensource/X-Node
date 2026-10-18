@@ -98,3 +98,20 @@ func TestOwnershipPersistenceFailureRestoresServicesBeforeKernelSnapshot(t *test
 		t.Fatal("service start overwrote restored kernel rules")
 	}
 }
+
+func TestRecoveryDoesNotRestartUnchangedFirewallOwners(t *testing.T) {
+	m, f, _ := fixture(t)
+	r := &serviceRunner{fakeRunner: f, states: map[string]serviceState{
+		"nftables.service": {Name: "nftables.service", Enabled: "enabled", Active: true},
+		"ufw.service":      {Name: "ufw.service", Enabled: "masked"},
+	}}
+	m.Runner = r
+	if err := m.restoreServices(context.Background(), []serviceState{r.states["nftables.service"], r.states["ufw.service"]}); err != nil {
+		t.Fatal(err)
+	}
+	for _, action := range []string{"start", "stop", "unmask", "mask", "enable", "disable"} {
+		if strings.Contains(f.log(), "systemctl "+action+" ") {
+			t.Fatal("unchanged service mutated during watchdog recovery", f.log())
+		}
+	}
+}

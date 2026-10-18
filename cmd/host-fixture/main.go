@@ -17,7 +17,7 @@ func main() {
 	if e := checkDisposableHost(); e != nil {
 		fail(e)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 6*time.Minute)
 	defer cancel()
 	runner := fixtureRunner{}
 	if len(os.Args) > 1 && os.Args[1] == "--abandon" {

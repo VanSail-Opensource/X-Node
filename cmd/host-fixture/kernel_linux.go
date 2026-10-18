@@ -135,8 +135,9 @@ func watchdogCheck(ctx context.Context, m *firewall.Manager, p protocol.Firewall
 	}
 	// Apply records its confirmation deadline before systemd-run arms the
 	// independent timer. Start the fixture's 45-second timer window when the
-	// applying process exits, then allow 15 seconds for scheduler delay.
-	rollbackDeadline := time.Now().Add(60 * time.Second)
+	// applying process exits, then allow the bounded 30-second recovery and
+	// 15 seconds for process startup/scheduler delay in emulated CI guests.
+	rollbackDeadline := time.Now().Add(90 * time.Second)
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 	for {
@@ -161,6 +162,7 @@ func watchdogDiagnostics(ctx context.Context, runner host.Runner, tx firewall.Pe
 		{"systemctl", "show", tx.Unit + ".timer", "--property=ActiveState,SubState,Result"},
 		{"systemctl", "show", tx.Unit + ".service", "--property=ActiveState,SubState,Result,ExecMainStatus"},
 		{"journalctl", "-u", tx.Unit + ".service", "--no-pager", "-n", "30"},
+		{"systemctl", "list-jobs", "--no-pager"},
 		{"cat", "/var/lib/x-node/firewall/pending.json"},
 	}
 	var details strings.Builder

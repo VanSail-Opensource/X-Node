@@ -88,7 +88,6 @@
               }
             },
             "required": [
-              "domain",
               "cert_mode"
             ],
             "type": "object"

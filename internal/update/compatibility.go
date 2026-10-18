@@ -107,6 +107,9 @@ func (m *Manager) requiredCapabilities() ([]string, error) {
 		if config.Firewall.SourceGeoIP != nil {
 			required["source_geoip_firewall_v1"] = true
 		}
+		for _, certificate := range config.Certificates {
+			if certificate.Config.CertMode == "file" && certificate.Config.Domain == "" { required["node_file_certificates_v1"] = true }
+		}
 		if len(config.BlockedDomains) > 0 {
 			required["shared_domain_blocks_v1"] = true
 		}

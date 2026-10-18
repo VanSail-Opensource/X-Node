@@ -12,22 +12,22 @@ import (
 	"time"
 )
 
-func (a *Agent) ensureAssets(ctx context.Context, c protocol.Config, p geodata.Policy, refresh bool) error {
+func (a *Agent) ensureAssets(ctx context.Context, c protocol.Config, p geodata.Policy, refresh bool) (string, error) {
 	a.geoMu.Lock()
 	defer a.geoMu.Unlock()
 	if ctx.Err() != nil {
-		return ctx.Err()
+		return "", ctx.Err()
 	}
 	var client *http.Client
 	if p.Outbound != "" {
 		proxy, close, e := xray.DownloadClient(ctx, c.Xray, p.Outbound)
 		if e != nil {
-			return e
+			return "", e
 		}
 		defer close()
 		client = proxy
 	}
-	return geodata.Ensure(ctx, filepath.Join(a.Dir, "geodata"), p, c.AssetHashes, client, refresh)
+	return geodata.Prepare(ctx, filepath.Join(a.Dir, "geodata"), p, c.AssetHashes, client, refresh)
 }
 func (a *Agent) scheduleUtilities(ctx context.Context, now time.Time) {
 	notifySystemd("WATCHDOG=1")

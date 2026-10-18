@@ -84,6 +84,9 @@ type Agent struct {
 	geoRunning         atomic.Bool
 	notify             chan string
 	generation         uint64
+	nativeMu           sync.Mutex
+	geoCandidate       string
+	geoCandidateKey    string
 	geoMu              sync.Mutex
 	dnsMu              sync.Mutex
 	utilityCancel      context.CancelFunc
@@ -139,7 +142,7 @@ func New(dir, version string, client *transport.Client, logs *nlog.Stream) (*Age
 	return a, nil
 }
 
-var Capabilities = []string{"xtables_compat_snapshot_v1", "host_firewall_ownership_v1", "sampled_activity_v1", "transit_credentials_v1", "source_geoip_firewall_v1", "shared_domain_blocks_v1", "geodata_interval_v1", "native_firewall_v1", "firewall_control_v1", "native_xray", "multi_inbound", "tcp_udp_limits", "session_revocation", "traffic_ack", "certificates", "ddns", "xray_scoped_dns_v1", "geodata", "nftables", "port_forward", "metrics", "logs", "peer_speedtest", "torrent_ban", "signed_updates", "traffic_periods_v1", "measured_user_rates", "authorization_expiry", "member_outbound_guards", "traffic_period_barriers_v1", "config_validation_v1", "volatile_connection_controls_v1", "native_auxiliary_inbounds_v1"}
+var Capabilities = []string{"node_file_certificates_v1", "xtables_compat_snapshot_v1", "host_firewall_ownership_v1", "sampled_activity_v1", "transit_credentials_v1", "source_geoip_firewall_v1", "shared_domain_blocks_v1", "geodata_interval_v1", "native_firewall_v1", "firewall_control_v1", "native_xray", "multi_inbound", "tcp_udp_limits", "session_revocation", "traffic_ack", "certificates", "ddns", "xray_scoped_dns_v1", "geodata", "nftables", "port_forward", "metrics", "logs", "peer_speedtest", "torrent_ban", "signed_updates", "traffic_periods_v1", "measured_user_rates", "authorization_expiry", "member_outbound_guards", "traffic_period_barriers_v1", "config_validation_v1", "volatile_connection_controls_v1", "native_auxiliary_inbounds_v1"}
 
 func (a *Agent) Run(ctx context.Context) error {
 	if err := a.Firewall.RestoreFile(ctx); err != nil {
@@ -350,6 +353,8 @@ func (a *Agent) applyLoop(ctx context.Context) {
 	}
 }
 func (a *Agent) activate(lifetime context.Context, job applyJob) error {
+	a.nativeMu.Lock()
+	defer a.nativeMu.Unlock()
 	if job.Context.Err() != nil {
 		return job.Context.Err()
 	}
@@ -358,17 +363,8 @@ func (a *Agent) activate(lifetime context.Context, job applyJob) error {
 	if e != nil {
 		return e
 	}
-	if e = a.ensureAssets(job.Context, c, p, false); e != nil {
-		return e
-	}
-	resolved, e := a.Certificates.Prepare(lifetime, c)
+	resolved, assetDir, e := a.prepareNative(job.Context, lifetime, c, p)
 	if e != nil {
-		return e
-	}
-	if job.Context.Err() != nil {
-		return job.Context.Err()
-	}
-	if _, e = xray.Prepare(resolved); e != nil {
 		return e
 	}
 	if !job.Cached {
@@ -380,16 +376,6 @@ func (a *Agent) activate(lifetime context.Context, job applyJob) error {
 	if e = a.Firewall.EnableConfirmedDNS(job.Context, false); e != nil {
 		return e
 	}
-	// Every native asset path resolves inside the managed directory.
-	var native map[string]any
-	_ = json.Unmarshal(resolved.Xray, &native)
-	env, _ := native["env"].(map[string]any)
-	if env == nil {
-		env = map[string]any{}
-	}
-	env["XRAY_LOCATION_ASSET"] = geodata.Resolve(filepath.Join(a.Dir, "geodata"))
-	native["env"] = env
-	resolved.Xray, _ = json.Marshal(native)
 	if a.Store.Snapshot().Revision != job.Revision {
 		return errors.New("configuration superseded")
 	}
@@ -403,9 +389,6 @@ func (a *Agent) activate(lifetime context.Context, job applyJob) error {
 	a.Certificates.Commit(c)
 	a.Sampler.Interval(c.SampleInterval())
 	a.scheduleGeodata(p)
-	if e = a.Updater.Confirm(job.Context); e != nil {
-		return e
-	}
 	if !c.Firewall.Enabled {
 		if e = a.Firewall.RestoreOriginal(job.Context); e != nil {
 			return e
@@ -428,6 +411,15 @@ func (a *Agent) activate(lifetime context.Context, job applyJob) error {
 	}
 	a.Guard.Configure(c.Firewall)
 	if e = a.Store.Accept(c, job.Revision); e != nil {
+		return e
+	}
+	if len(p.Assets) > 0 {
+		if e = geodata.Activate(filepath.Join(a.Dir, "geodata"), assetDir); e != nil {
+			return e
+		}
+	}
+	a.geoCandidate, a.geoCandidateKey = "", ""
+	if e = a.Updater.Confirm(job.Context); e != nil {
 		return e
 	}
 	a.Registry.Pause(false)
@@ -651,8 +643,14 @@ func (a *Agent) command(ctx context.Context, m protocol.Message) error {
 			if err != nil {
 				return nil, err
 			}
-			if _, err = xray.Prepare(config); err != nil {
-				return nil, errors.New("native configuration validation failed")
+			a.nativeMu.Lock()
+			defer a.nativeMu.Unlock()
+			policy, err := geodata.FromNative(config.Xray)
+			if err != nil {
+				return nil, err
+			}
+			if _, _, err = a.prepareNative(ctx, ctx, config, policy); err != nil {
+				return nil, err
 			}
 			return map[string]bool{"valid": true}, nil
 		case "connections.list":

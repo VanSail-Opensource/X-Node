@@ -293,7 +293,7 @@ func Prepare(c protocol.Config) (*Prepared, error) {
 	}
 	pb, err := confserial.LoadJSONConfig(bytes.NewReader(b))
 	if err != nil {
-		return nil, errors.New("Xray configuration validation failed")
+		return nil, fmt.Errorf("Xray configuration validation failed: %w", err)
 	}
 	// Loading PEM during configuration parsing does not itself check key pairing.
 	for _, in := range pb.Inbound {

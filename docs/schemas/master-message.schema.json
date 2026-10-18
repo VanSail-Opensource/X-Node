@@ -141,7 +141,6 @@
                       }
                     },
                     "required": [
-                      "domain",
                       "cert_mode"
                     ],
                     "type": "object"
@@ -681,7 +680,6 @@
                       }
                     },
                     "required": [
-                      "domain",
                       "cert_mode"
                     ],
                     "type": "object"

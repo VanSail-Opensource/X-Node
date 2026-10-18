@@ -64,7 +64,12 @@ func (a *Agent) refreshGeodata(ctx context.Context, config protocol.Config, poli
 	}
 	a.geoNext.Store(0)
 	a.geoMu.Unlock()
-	err := a.ensureAssets(ctx, config, policy, true)
+	a.nativeMu.Lock()
+	defer a.nativeMu.Unlock()
+	target, err := a.ensureAssets(ctx, config, policy, true)
+	if err == nil {
+		a.geoCandidate, a.geoCandidateKey = target, assetKey(config, policy)
+	}
 	a.finishGeodata(policy, err)
 	return err
 }

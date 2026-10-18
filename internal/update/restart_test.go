@@ -2,6 +2,8 @@ package update
 
 import (
 	"context"
+	"errors"
+	"github.com/VanSail-Opensource/X-Node/internal/host"
 	"os"
 	"path/filepath"
 	"slices"
@@ -16,6 +18,17 @@ type restartRunner struct {
 
 func (r restartRunner) Run(_ context.Context, name string, args ...string) ([]byte, error) {
 	r.t.Helper()
+	if !r.manager.mu.TryLock() {
+		r.t.Fatal("restart submitted while update mutex is held")
+	}
+	r.manager.mu.Unlock()
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	release, err := host.LockContext(ctx, filepath.Join(r.manager.Dir, "lock"))
+	if err != nil {
+		r.t.Fatalf("restart submitted while host lock is held: %v", err)
+	}
+	release()
 	if name != "systemctl" || !slices.Equal(args, []string{"--no-block", "restart", "x-node.service"}) {
 		r.t.Fatalf("restart waits for its own shutdown: %s %v", name, args)
 	}
@@ -26,6 +39,17 @@ func (r restartRunner) Run(_ context.Context, name string, args ...string) ([]by
 		r.t.Fatal("status unavailable from restart callback")
 	}
 	return nil, nil
+}
+
+func TestTransactionLockHonorsCancellation(t *testing.T) {
+	m := &Manager{Dir: t.TempDir()}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+	if _, err := m.lock(ctx); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("lock = %v", err)
+	}
 }
 
 func TestUpgradeObserversNeverWaitForInstaller(t *testing.T) {

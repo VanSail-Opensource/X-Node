@@ -393,8 +393,11 @@ func (c Config) Validate() error {
 		}
 	}
 	for id, p := range c.Certificates {
-		if !ValidName(id) || p.Config.Domain == "" {
+		if !ValidName(id) || p.Config.Domain == "" && p.Config.CertMode != "file" {
 			return errors.New("invalid certificate profile")
+		}
+		if p.Config.CertMode == "file" && (p.Config.CertFile == "" || p.Config.KeyFile == "") {
+			return errors.New("node-file certificates require certificate and key paths")
 		}
 		if p.Provider != "" {
 			if _, ok := c.Providers[p.Provider]; !ok {

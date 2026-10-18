@@ -49,7 +49,7 @@ func Validate(c Bootstrap) error {
 // CertConfig is transported inside a remote certificate profile, never bootstrap.
 type CertConfig struct {
 	AutoTLS               bool              `json:"auto_tls,omitempty"`
-	Domain                string            `json:"domain"`
+	Domain                string            `json:"domain,omitempty"`
 	Email                 string            `json:"email,omitempty"`
 	CertFile              string            `json:"cert_file,omitempty"`
 	KeyFile               string            `json:"key_file,omitempty"`

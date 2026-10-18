@@ -122,7 +122,10 @@ func watchdogCheck(ctx context.Context, m *firewall.Manager, p protocol.Firewall
 	if err != nil {
 		return err
 	}
-	raw, err := exec.CommandContext(ctx, executable, "--abandon").CombinedOutput()
+	command := exec.CommandContext(ctx, executable, "--abandon")
+	// stdout is the Pending JSON contract; utility diagnostics stay on stderr.
+	command.Stderr = os.Stderr
+	raw, err := command.Output()
 	if err != nil {
 		return fmt.Errorf("abandoned firewall subprocess: %w: %s", err, raw)
 	}

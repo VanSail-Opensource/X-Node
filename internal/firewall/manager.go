@@ -37,4 +37,8 @@ type Manager struct {
 	Backend       Backend
 	UnitPath      string
 	UFWConfigPath string
+	// RecoveryTimeout bounds snapshot and service restoration after a failed or
+	// cancelled transaction. Zero selects the production 30-second default.
+	// Disposable software-emulated hosts may extend only this bound.
+	RecoveryTimeout time.Duration
 }

@@ -164,3 +164,17 @@ func TestWatchdogFailureDoesNotTouchKernel(t *testing.T) {
 		t.Fatal("kernel changed before watchdog was armed")
 	}
 }
+
+func TestRecoveryTimeoutBoundsSlowRestore(t *testing.T) {
+	m, f, _ := fixture(t)
+	p := applyFixture(t, m)
+	m.RecoveryTimeout = 50 * time.Millisecond
+	f.block = "nft -f"
+	started := time.Now()
+	if err := m.RollbackID(context.Background(), p.ID); err == nil {
+		t.Fatal("slow recovery was reported as successful")
+	}
+	if elapsed := time.Since(started); elapsed > 5*time.Second {
+		t.Fatalf("recovery ignored the configured timeout: %s", elapsed)
+	}
+}

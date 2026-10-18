@@ -30,7 +30,11 @@ func (m *Manager) RollbackID(ctx context.Context, id string) error {
 	return m.recover(ctx, &p, true)
 }
 func (m *Manager) recover(parent context.Context, p *record, kernel bool) error {
-	ctx, cancel := context.WithTimeout(context.WithoutCancel(parent), 30*time.Second)
+	timeout := m.RecoveryTimeout
+	if timeout <= 0 {
+		timeout = 30 * time.Second
+	}
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(parent), timeout)
 	defer cancel()
 	var failures []error
 	if p.ForwardIPv4 != "" && p.ForwardIPv6 != "" {

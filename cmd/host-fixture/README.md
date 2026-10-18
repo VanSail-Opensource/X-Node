@@ -35,8 +35,11 @@ finish, with a bounded deadline and unit-journal diagnostics.
 
 The aggregate fixture has a 12-minute budget for software-emulated UFW/Python and
 iptables process startup. `commands.go` reports utility name, duration and context
-expiry without printing arguments. Production transaction/watchdog/recovery
-deadlines remain unchanged and are still exercised by the fixture.
+expiry without printing arguments. Only `Manager.RecoveryTimeout` is extended for
+the fixture: restoring UFW ownership needs more than the production 30-second
+recovery budget when systemd runs under TCG. Agent transactions, the 45-second
+watchdog and the watchdog's default recovery budget remain unchanged and are
+still exercised by the fixture.
 
 `firewall_control.go` validates real NFLOG reporting without autonomous bans,
 master-authorized nftables restrictions, repeated-hit refresh, exact IPv6

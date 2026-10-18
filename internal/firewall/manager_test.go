@@ -16,6 +16,7 @@ type fakeRunner struct {
 	mu               sync.Mutex
 	calls            []string
 	fail             string
+	block            string
 	canceledRecovery bool
 }
 
@@ -24,6 +25,10 @@ func (f *fakeRunner) Run(ctx context.Context, name string, args ...string) ([]by
 	defer f.mu.Unlock()
 	call := name + " " + strings.Join(args, " ")
 	f.calls = append(f.calls, call)
+	if f.block != "" && strings.Contains(call, f.block) {
+		<-ctx.Done()
+		return nil, ctx.Err()
+	}
 	if strings.Contains(call, "nft -f") && ctx.Err() != nil {
 		f.canceledRecovery = true
 		return nil, ctx.Err()

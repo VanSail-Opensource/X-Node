@@ -12,6 +12,10 @@ import (
 	"time"
 )
 
+// Software-emulated guests can spend well over the production 30-second
+// recovery budget in systemd and UFW process startup.
+const recoveryTimeout = 3 * time.Minute
+
 func main() {
 	if e := checkDisposableHost(); e != nil {
 		fail(e)
@@ -22,7 +26,7 @@ func main() {
 	defer cancel()
 	runner := fixtureRunner{}
 	if len(os.Args) > 1 && os.Args[1] == "--abandon" {
-		m := &firewall.Manager{Dir: "/var/lib/x-node/firewall", ConfigPath: "/etc/nftables.conf", Executable: "/usr/local/bin/xnodectl", Runner: runner}
+		m := &firewall.Manager{Dir: "/var/lib/x-node/firewall", ConfigPath: "/etc/nftables.conf", Executable: "/usr/local/bin/xnodectl", Runner: runner, RecoveryTimeout: recoveryTimeout}
 		tx, err := m.Apply(ctx, "fixture-real-watchdog", protocol.FirewallPolicy{Enabled: true, Protect: true, MasterControlled: true, TCPPorts: []int{22, 443, 9443, 60001}, UDPPorts: []int{443, 9443}, Forward: forwardingPolicy()}, false)
 		if err != nil {
 			fail(err)
@@ -52,7 +56,7 @@ func main() {
 	if _, e := runner.Run(ctx, "nft", "add", "table", "inet", "fixture_original"); e != nil {
 		fail(e)
 	}
-	m := &firewall.Manager{Dir: "/var/lib/x-node/firewall", ConfigPath: "/etc/nftables.conf", Executable: "/usr/local/bin/xnodectl", Runner: runner}
+	m := &firewall.Manager{Dir: "/var/lib/x-node/firewall", ConfigPath: "/etc/nftables.conf", Executable: "/usr/local/bin/xnodectl", Runner: runner, RecoveryTimeout: recoveryTimeout}
 	policy := protocol.FirewallPolicy{Enabled: true, Protect: true, MasterControlled: true, TCPPorts: []int{443, 9443}, UDPPorts: []int{443, 9443}, SSHPorts: []int{22}, Forward: forwardingPolicy()}
 	pending, e := m.Apply(ctx, "fixture-rollback", policy, false)
 	if e != nil {

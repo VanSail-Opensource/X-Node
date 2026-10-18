@@ -38,7 +38,9 @@ checking connectivity. Reusing the current ID with different inputs fails.
 Known atomic rejections restore metadata/sysctls; service-state recovery also
 replays the snapshot after restoring owners, because service actions can change rules.
 Cancellation or an ambiguous missing acknowledgment triggers full snapshot
-recovery using a separate cancellation-independent context. Recovery leaves the
+recovery using a separate cancellation-independent context. `RecoveryTimeout`
+defaults to the 30-second production budget; only disposable software-emulated
+hosts extend it for slow systemd/UFW startup. Recovery leaves the
 transaction pending if restoration fails, so the watchdog can retry. Late
 confirmation and stale watchdog IDs cannot replay obsolete snapshots.
 

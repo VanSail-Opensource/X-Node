@@ -30,6 +30,8 @@ already-on nftables, disabled nftables, or Ubuntu UFW baselines, and checks
 takeover, reboot and uninstall ownership. The CI matrix runs all three cases
 in separate disposable VMs. The VM script verifies the official Debian SHA512
 or Ubuntu SHA256 image checksum before boot; no privileged fixture runs locally.
+`startup.go` waits for the actual agent process after its firewall dependencies
+finish, with a bounded deadline and unit-journal diagnostics.
 
 `firewall_control.go` validates real NFLOG reporting without autonomous bans,
 master-authorized nftables restrictions, repeated-hit refresh, exact IPv6

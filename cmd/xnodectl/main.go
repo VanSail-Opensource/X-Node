@@ -108,7 +108,10 @@ func run(args []string) error {
 		if e := flags.Parse(args[1:]); e != nil {
 			return e
 		}
-		m := update.New("/var/lib/x-node/updates", version, runner)
+		m, e := installedUpdater(ctx, runner)
+		if e != nil {
+			return e
+		}
 		if *check {
 			result, e := m.Check(ctx, *target)
 			if e != nil {

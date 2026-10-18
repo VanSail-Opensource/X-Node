@@ -18,3 +18,6 @@ Hosted cases in `restart_test.go` exercise main-loop observations during an
 install lock and reentrant status reads during rollback. Signature and capability
 regressions remain in the adjacent verification and compatibility tests. These
 tests use a fake host runner and never mutate the developer host's services.
+The shell installer delegates existing installations to its newly verified CLI,
+which reads the installed agent's version. It never reuses an obsolete installed
+CLI's platform gate or compares the upgrade target against the staged CLI itself.

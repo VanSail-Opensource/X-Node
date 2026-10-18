@@ -130,6 +130,7 @@ Runtime packages:
 | `internal/speedtest`, `internal/update` | Isolated peer probes and verified releases; see `internal/update/README.md` for self-restart and transaction constraints |
 
 Build helpers under `cmd` generate schemas, sign releases, configure repository automation and run isolated host fixtures. Only `x-node` and `xnodectl` are installed.
+See `cmd/xnodectl/README.md` for bootstrap and signed installer upgrade delegation.
 
 ## Migration and licensing
 

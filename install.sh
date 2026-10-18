@@ -69,7 +69,7 @@ if [[ -n "$master_url" ]]; then
 fi
 # Installed systems use the signed, rollback-aware updater rather than replacing a live process here.
 if [[ -x /usr/local/bin/xnodectl && -x /usr/local/bin/x-node ]]; then
-    /usr/local/bin/xnodectl upgrade --version "$version"
+    "$stage_dir/xnodectl-linux-$arch" upgrade --version "$version"
     exit
 fi
 install -m 0755 "$stage_dir/x-node-linux-$arch" /usr/local/bin/x-node

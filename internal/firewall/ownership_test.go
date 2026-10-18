@@ -115,3 +115,22 @@ func TestRecoveryDoesNotRestartUnchangedFirewallOwners(t *testing.T) {
 		}
 	}
 }
+
+func TestBootRestoreDoesNotStopAnAlreadyOwnedUFWService(t *testing.T) {
+	m, f, backend := fixture(t)
+	r := &serviceRunner{fakeRunner: f, states: map[string]serviceState{
+		"ufw.service": {Name: "ufw.service", Enabled: "masked"},
+	}}
+	m.Runner = r
+	m.UFWConfigPath = filepath.Join(filepath.Dir(m.Dir), "ufw.conf")
+	if err := os.WriteFile(m.ufwConfig(), []byte("ENABLED=no\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	tx := record{Services: []serviceState{r.states["ufw.service"]}}
+	if err := m.takeControl(context.Background(), tx); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(f.log(), "systemctl stop") || strings.Contains(f.log(), "ufw --force") || backend.calls != 0 {
+		t.Fatal("boot restoration mutated an already controlled owner", f.log())
+	}
+}

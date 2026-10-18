@@ -71,18 +71,39 @@ func (m *Manager) takeControl(ctx context.Context, tx record) error {
 		if s.Name != "ufw.service" {
 			continue
 		}
-		if _, err := m.Runner.Run(ctx, "systemctl", "mask", s.Name); err != nil {
+		current, err := m.serviceStates(ctx)
+		if err != nil {
 			return err
+		}
+		var owner serviceState
+		for _, unit := range current {
+			if unit.Name == s.Name {
+				owner = unit
+			}
+		}
+		b, err := os.ReadFile(m.ufwConfig())
+		if err != nil {
+			return err
+		}
+		if strings.HasPrefix(owner.Enabled, "masked") && !owner.Active && ufwDisabled(b) {
+			return nil
+		}
+		if !strings.HasPrefix(owner.Enabled, "masked") {
+			if _, err := m.Runner.Run(ctx, "systemctl", "mask", s.Name); err != nil {
+				return err
+			}
 		}
 		// CLI-enabled UFW can enforce rules while its oneshot unit is inactive.
 		// Disable it explicitly so iptables-legacy rules cannot shadow x_node.
 		if _, err := m.Runner.Run(ctx, "ufw", "--force", "disable"); err != nil {
 			return err
 		}
-		if _, err := m.Runner.Run(ctx, "systemctl", "stop", s.Name); err != nil {
-			return err
+		if owner.Active {
+			if _, err := m.Runner.Run(ctx, "systemctl", "stop", s.Name); err != nil {
+				return err
+			}
 		}
-		b, err := os.ReadFile(m.ufwConfig())
+		b, err = os.ReadFile(m.ufwConfig())
 		if err != nil {
 			return err
 		}

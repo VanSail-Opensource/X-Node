@@ -9,7 +9,6 @@ import (
 	"github.com/VanSail-Opensource/X-Node/internal/protocol"
 	"os"
 	"os/exec"
-	"strings"
 	"time"
 )
 
@@ -113,10 +112,8 @@ func main() {
 	if _, e = runner.Run(ctx, "systemctl", "start", "--no-block", "x-node.service"); e != nil {
 		fail(e)
 	}
-	time.Sleep(2 * time.Second)
-	status, e := runner.Run(ctx, "systemctl", "show", "x-node.service", "--property=MainPID", "--value")
-	if e != nil || strings.TrimSpace(string(status)) == "0" {
-		fail(fmt.Errorf("agent process did not start"))
+	if e = waitAgentProcess(ctx, runner); e != nil {
+		fail(e)
 	}
 	if _, e = runner.Run(ctx, "systemctl", "stop", "x-node.service"); e != nil {
 		fail(e)

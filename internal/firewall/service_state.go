@@ -109,3 +109,14 @@ func (m *Manager) restoreServices(ctx context.Context, states []serviceState) er
 	}
 	return nil
 }
+
+func ufwDisabled(raw []byte) bool {
+	value := ""
+	for _, line := range strings.Split(string(raw), "\n") {
+		key, v, ok := strings.Cut(strings.TrimSpace(line), "=")
+		if ok && key == "ENABLED" {
+			value = strings.Trim(strings.TrimSpace(v), "\"'")
+		}
+	}
+	return value == "no"
+}

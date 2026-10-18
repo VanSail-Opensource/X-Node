@@ -91,7 +91,7 @@ jobs:
   debian:
     name: Host ${{ matrix.distribution }} / ${{ matrix.ownership }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 25
     strategy:
       fail-fast: false
       matrix:

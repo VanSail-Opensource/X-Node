@@ -33,6 +33,11 @@ or Ubuntu SHA256 image checksum before boot; no privileged fixture runs locally.
 `startup.go` waits for the actual agent process after its firewall dependencies
 finish, with a bounded deadline and unit-journal diagnostics.
 
+The aggregate fixture has a 12-minute budget for software-emulated UFW/Python and
+iptables process startup. `commands.go` reports utility name, duration and context
+expiry without printing arguments. Production transaction/watchdog/recovery
+deadlines remain unchanged and are still exercised by the fixture.
+
 `firewall_control.go` validates real NFLOG reporting without autonomous bans,
 master-authorized nftables restrictions, repeated-hit refresh, exact IPv6
 exemptions and outbound/reply preservation. It leaves an authoritative ban and

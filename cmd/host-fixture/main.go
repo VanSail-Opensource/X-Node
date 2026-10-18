@@ -16,7 +16,9 @@ func main() {
 	if e := checkDisposableHost(); e != nil {
 		fail(e)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 6*time.Minute)
+	// UFW invokes Python and many iptables processes under software-emulated CI.
+	// Keep the overall fixture bounded independently of the unchanged 45s watchdog.
+	ctx, cancel := context.WithTimeout(context.Background(), 12*time.Minute)
 	defer cancel()
 	runner := fixtureRunner{}
 	if len(os.Args) > 1 && os.Args[1] == "--abandon" {

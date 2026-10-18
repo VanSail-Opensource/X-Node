@@ -52,7 +52,7 @@ func (r *Runtime) Stop() {
 	}
 	r.current = nil
 }
-func (r *Runtime) Apply(ctx context.Context, c wire.Config) error {
+func (r *Runtime) Apply(ctx context.Context, c wire.Config, reload ...bool) error {
 	next, err := Prepare(c)
 	if err != nil {
 		return err
@@ -60,7 +60,7 @@ func (r *Runtime) Apply(ctx context.Context, c wire.Config) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.registry.SetInboundEpochs(next.Epochs)
-	if r.instance != nil && r.current.BaseHash == next.BaseHash {
+	if r.instance != nil && r.current.BaseHash == next.BaseHash && (len(reload) == 0 || !reload[0]) {
 		if r.bridge != nil {
 			r.bridge.BanNanos.Store(int64(c.BanDuration()))
 			r.bridge.setAuxiliary(next.Auxiliary)

@@ -3,6 +3,7 @@ package protocol
 import (
 	"encoding/json"
 	wire "github.com/VanSail-Opensource/X-Node/internal/protocol"
+	"time"
 )
 
 func New(kind, id string, revision uint64, data any) Message {
@@ -30,6 +31,7 @@ func ValidateMemberOutbounds(raw json.RawMessage, tags []string) error {
 func AuxiliaryInboundTags(raw json.RawMessage) ([]string, error) {
 	return wire.AuxiliaryInboundTags(raw)
 }
-func Clone[T any](value T) T  { return wire.Clone(value) }
-func CommandNames() []string  { return append([]string(nil), wire.CommandNames...) }
-func Schemas() map[string]any { return wire.Schemas() }
+func Clone[T any](value T) T                   { return wire.Clone(value) }
+func CommandNames() []string                   { return append([]string(nil), wire.CommandNames...) }
+func CommandTimeout(name string) time.Duration { return wire.CommandTimeout(name) }
+func Schemas() map[string]any                  { return wire.Schemas() }

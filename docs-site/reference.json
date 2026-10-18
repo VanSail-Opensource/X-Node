@@ -22,7 +22,7 @@
       "key": "command-lifecycle",
       "title": "Command lifecycle",
       "description": "Accepted jobs, progress, results, cancellation and deduplication.",
-      "body": "## Submit a typed command\n```json\n{\"v\":1,\"type\":\"command\",\"id\":\"list-001\",\"data\":{\"name\":\"connections.list\",\"args\":{\"limit\":100}}}\n```\n\nThe agent emits `command.accepted`, optional `command.progress`, then `command.result`. Match the operation using the request ID. Progress data is command-specific. Results contain `id`, `command`, `status`, completion time and optional `data` or `error`.\n\n## Concurrency and retries\nTwo utility workers execute jobs concurrently. The agent retains the last 128 completed results across restarts for request-ID deduplication. Use unique IDs beyond that bounded retention window; retry an uncertain operation using the same ID while it remains retained.\n\n`jobs.list` returns the current retained job view. A result indicating that runtime reconstruction was queued is not proof that the new runtime is ready; also observe telemetry and state activation.\n\n## Cancellation\n```json\n{\"v\":1,\"type\":\"command.cancel\",\"data\":{\"id\":\"list-001\"}}\n```\n\nCancellation propagates through the command context. It cannot reverse a DNS-provider mutation that has already succeeded, a committed firewall transaction or an installed release. Query retained results before deciding whether to retry.\n\n## Host safety\nPrivileged actions use typed argument structures. Firewall changes include an independent rollback watchdog and require confirmation from the master after connectivity testing. Update installation requires authenticated release artifacts. Speedtests use an isolated Xray client with bounded transfers and cancellation."
+      "body": "## Submit a typed command\n```json\n{\"v\":1,\"type\":\"command\",\"id\":\"list-001\",\"data\":{\"name\":\"connections.list\",\"args\":{\"limit\":100}}}\n```\n\nThe agent emits `command.accepted`, optional `command.progress`, then `command.result`. Match the operation using the request ID. Progress data is command-specific. Results contain `id`, `command`, `status`, completion time and optional `data` or `error`.\n\n## Concurrency and retries\nTwo utility workers execute jobs concurrently. The agent retains the last 128 completed results across restarts for request-ID deduplication. Use unique IDs beyond that bounded retention window; retry an uncertain operation using the same ID while it remains retained.\n\n`jobs.list` returns the current retained job view. A result indicating that runtime reconstruction was queued is not proof that the new runtime is ready; also observe telemetry and state activation.\n\n## Cancellation\n```json\n{\"v\":1,\"type\":\"command.cancel\",\"data\":{\"id\":\"list-001\"}}\n```\n\nCancellation propagates through the command context. It cannot reverse a DNS-provider mutation that has already succeeded, a committed firewall transaction or an installed release. Query retained results before deciding whether to retry.\n\n## Host safety\nPrivileged actions use typed argument structures. Firewall changes include an independent rollback watchdog and require confirmation from the master after connectivity testing. Update installation requires authenticated release artifacts. Speedtests use an isolated Xray client with bounded transfers and cancellation.\n\n## Acceptance and recovery\nBound acceptance to 30 seconds independently of protocol-defined execution deadlines. Distinguish undelivered, rejected, failed and uncertain results. Reload completion follows activation on activation_commands_v1 agents. Use update.status after reconnect; retained transaction plus current revision readiness confirms upgrade completion."
     },
     {
       "key": "users-and-ips",
@@ -545,7 +545,7 @@
     {
       "name": "runtime.reload",
       "description": "Queue reconstruction from the current accepted state.",
-      "body": "## Controlled reconstruction\nQueues runtime reconstruction using accepted native configuration, authorization, certificates and asset generation. A successful result indicates queue acceptance. Observe state/readiness telemetry for actual runtime activation. Existing affected streams may close.\n\n## Arguments\nUse an empty object."
+      "body": "## Validated reconstruction\nWaits for runtime activation and readiness. Native preparation validates assets and certificates before replacing the serving runtime. A newer desired configuration supersedes the request. Agents advertise activation_commands_v1 for this completion contract."
     },
     {
       "name": "ddns.run",
@@ -782,6 +782,54 @@
       "name": "firewall.bans.update",
       "description": "Apply an authoritative ban or exact exemption delta.",
       "body": "Absolute deadlines replace prior durations, including shortening. Stable generation and version make retries idempotent. Remove and RemoveExemptions apply immediate unban/revocation without restarting Xray."
+    },
+    {
+      "name": "update.status",
+      "description": "Inspect the durable upgrade transaction without waiting for utility capacity.",
+      "body": "## Recovery inspection\nReturns transaction id, version, previous, status and deadline, or idle before any transaction. Match install results by request ID. After reconnect require confirmed transaction status and fresh ready/synchronized telemetry at the current revision. Capability: update_transaction_v1. This read and jobs.list can reply directly with command.result.",
+      "fields": [],
+      "args": {}
+    },
+    {
+      "name": "firewall.geoip.sync",
+      "description": "Stage a bounded disk-backed country IP generation.",
+      "body": "## Country range staging\nRequires source_geoip_stream_v1. Probe a generation before uploading. Chunks carry generation, index and at most 256 prefixes; final publishes the immutable file. Activate with SourceGeoIPPolicy reference. Staging cannot replace current enforcement until publication.",
+      "fields": [
+        [
+          "generation",
+          "string",
+          "Required",
+          "Immutable generation identifier."
+        ],
+        [
+          "probe",
+          "boolean",
+          "Optional",
+          "Return readiness without uploading."
+        ],
+        [
+          "index",
+          "integer",
+          "Optional",
+          "Contiguous chunk index."
+        ],
+        [
+          "prefixes",
+          "array",
+          "Optional",
+          "Up to 256 canonical IP prefixes."
+        ],
+        [
+          "final",
+          "boolean",
+          "Optional",
+          "Publish the complete generation."
+        ]
+      ],
+      "args": {
+        "generation": "example-country-generation",
+        "probe": true
+      }
     }
   ]
 }

@@ -36,6 +36,14 @@ func TestBulkUtilitiesCannotOccupyUrgentControlSlot(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	if err := j.Start(ctx, "one", "update.install", block); err == nil {
+		t.Fatal("running request ID was reused for another command")
+	}
+	for _, result := range j.Snapshot() {
+		if result.Status == "running" && result.Command != "geodata.refresh" {
+			t.Fatal("running command lost its identity", result)
+		}
+	}
 	if err = j.Start(ctx, "overflow", "geodata.refresh", block); err == nil {
 		t.Fatal("ordinary job consumed reserved capacity")
 	}

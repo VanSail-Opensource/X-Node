@@ -34,3 +34,5 @@ registry is inspected. `inbound_observer_test.go` exercises classification and a
 real managed TCP probe in hosted Quality.
 
 `transit.go` expands owner-scoped peer accounts with separate credential generations and managed authentication labels. `domain_blocks.go` inserts the master domain block rule before all native/system rules with a reserved block outbound. Agent validation refuses unresolved IP geodata and mixed REALITY/source-filter sockets before listener activation.
+
+`reload_test.go` verifies forced reload validates before stopping the serving runtime and rebuilds unchanged native documents. The optional reload flag on `Runtime.Apply` retains account-only updates and activation fallback.

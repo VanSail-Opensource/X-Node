@@ -24,3 +24,5 @@ separate periods and transactional overflow rejection.
 while preserving live admission controls. Previously persisted decisions are
 scrubbed on open. `connection_controls_test.go` covers restart, upgrade cleanup,
 and preservation of credential/period/expiry fields.
+
+`configuration.go` exposes bounded configuration copies and revision reads without cloning accounting journals for recovery commands.

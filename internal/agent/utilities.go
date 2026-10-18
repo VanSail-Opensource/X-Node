@@ -68,12 +68,7 @@ func (a *Agent) scheduleUtilities(ctx context.Context, now time.Time) {
 				if e := a.refreshGeodata(ctx, c, p); e != nil {
 					return nil, e
 				}
-				select {
-				case a.notify <- "geodata-refresh":
-				case <-ctx.Done():
-					return nil, ctx.Err()
-				}
-				return map[string]bool{"refreshed": true}, nil
+				return a.reloadRuntime(ctx, "geodata-refresh")
 			})
 			if err != nil {
 				a.finishGeodata(p, err)

@@ -1502,6 +1502,7 @@
                 "firewall.apply",
                 "speedtest",
                 "update.check",
+                "update.status",
                 "update.install",
                 "update.rollback",
                 "runtime.reload",

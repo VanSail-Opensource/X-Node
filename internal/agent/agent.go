@@ -15,7 +15,6 @@ import (
 	"time"
 
 	"github.com/VanSail-Opensource/X-Node/internal/cert"
-	"github.com/VanSail-Opensource/X-Node/internal/dns"
 	"github.com/VanSail-Opensource/X-Node/internal/firewall"
 	"github.com/VanSail-Opensource/X-Node/internal/geodata"
 	"github.com/VanSail-Opensource/X-Node/internal/host"
@@ -24,7 +23,6 @@ import (
 	"github.com/VanSail-Opensource/X-Node/internal/nlog"
 	"github.com/VanSail-Opensource/X-Node/internal/protocol"
 	"github.com/VanSail-Opensource/X-Node/internal/sessions"
-	"github.com/VanSail-Opensource/X-Node/internal/speedtest"
 	"github.com/VanSail-Opensource/X-Node/internal/state"
 	"github.com/VanSail-Opensource/X-Node/internal/transport"
 	updatepkg "github.com/VanSail-Opensource/X-Node/internal/update"
@@ -32,12 +30,15 @@ import (
 )
 
 type applyJob struct {
-	ID         string
-	Revision   uint64
-	Config     protocol.Config
-	Cached     bool
-	Context    context.Context
-	Generation uint64
+	Done          chan error
+	Reload        bool
+	RefreshAssets bool
+	ID            string
+	Revision      uint64
+	Config        protocol.Config
+	Cached        bool
+	Context       context.Context
+	Generation    uint64
 }
 type applied struct {
 	Job   applyJob
@@ -82,7 +83,8 @@ type Agent struct {
 	geoFailures        int
 	geoPolicy          string
 	geoRunning         atomic.Bool
-	notify             chan string
+	notify             chan reloadRequest
+	reloadDone         chan error
 	generation         uint64
 	nativeMu           sync.Mutex
 	geoCandidate       string
@@ -106,7 +108,7 @@ func New(dir, version string, client *transport.Client, logs *nlog.Stream) (*Age
 	}
 	runner := host.Commands{}
 	registry := sessions.New()
-	a := &Agent{Dir: dir, Version: version, BootID: state.ID(), Store: store, Registry: registry, Runtime: xray.New(registry), Client: client, Logs: logs, Sampler: monitor.New(), Certificates: cert.NewPool(filepath.Join(dir, "certs")), Runner: runner, apply: make(chan applyJob, 1), applied: make(chan applied, 1), bans: make(chan banEvent, 128), previous: state.Traffic{}, lastDDNS: map[string]time.Time{}, notify: make(chan string, 1)}
+	a := &Agent{Dir: dir, Version: version, BootID: state.ID(), Store: store, Registry: registry, Runtime: xray.New(registry), Client: client, Logs: logs, Sampler: monitor.New(), Certificates: cert.NewPool(filepath.Join(dir, "certs")), Runner: runner, apply: make(chan applyJob, 1), applied: make(chan applied, 1), bans: make(chan banEvent, 128), previous: state.Traffic{}, lastDDNS: map[string]time.Time{}, notify: make(chan reloadRequest, 1)}
 	if cached := store.Snapshot(); cached.Config != nil {
 		a.Certificates.RetainStored(*cached.Config)
 	}
@@ -145,7 +147,7 @@ func New(dir, version string, client *transport.Client, logs *nlog.Stream) (*Age
 	return a, nil
 }
 
-var Capabilities = []string{"firewall_cidr_exemptions_v1", "source_geoip_stream_v1", "disk_firewall_sources_v1", "node_file_certificates_v1", "xtables_compat_snapshot_v1", "host_firewall_ownership_v1", "sampled_activity_v1", "transit_credentials_v1", "source_geoip_firewall_v1", "shared_domain_blocks_v1", "geodata_interval_v1", "native_firewall_v1", "firewall_control_v1", "native_xray", "multi_inbound", "tcp_udp_limits", "session_revocation", "traffic_ack", "certificates", "ddns", "xray_scoped_dns_v1", "geodata", "nftables", "port_forward", "metrics", "logs", "peer_speedtest", "torrent_ban", "signed_updates", "traffic_periods_v1", "measured_user_rates", "authorization_expiry", "member_outbound_guards", "traffic_period_barriers_v1", "config_validation_v1", "volatile_connection_controls_v1", "native_auxiliary_inbounds_v1"}
+var Capabilities = []string{"activation_commands_v1", "update_transaction_v1", "firewall_cidr_exemptions_v1", "source_geoip_stream_v1", "disk_firewall_sources_v1", "node_file_certificates_v1", "xtables_compat_snapshot_v1", "host_firewall_ownership_v1", "sampled_activity_v1", "transit_credentials_v1", "source_geoip_firewall_v1", "shared_domain_blocks_v1", "geodata_interval_v1", "native_firewall_v1", "firewall_control_v1", "native_xray", "multi_inbound", "tcp_udp_limits", "session_revocation", "traffic_ack", "certificates", "ddns", "xray_scoped_dns_v1", "geodata", "nftables", "port_forward", "metrics", "logs", "peer_speedtest", "torrent_ban", "signed_updates", "traffic_periods_v1", "measured_user_rates", "authorization_expiry", "member_outbound_guards", "traffic_period_barriers_v1", "config_validation_v1", "volatile_connection_controls_v1", "native_auxiliary_inbounds_v1"}
 
 func (a *Agent) Run(ctx context.Context) error {
 	if err := a.Firewall.RestoreFile(ctx); err != nil {
@@ -218,7 +220,9 @@ func (a *Agent) Run(ctx context.Context) error {
 		case event := <-a.bans:
 			a.Client.Send(protocol.New("torrent.detected", "", 0, map[string]any{"user_id": event.ID, "until": event.Until}), true)
 		case done := <-a.applied:
+			finishReload(done.Job.Done, done.Error)
 			if done.Job.Generation == a.generation {
+				a.reloadDone = nil
 				a.applying.Store(false)
 				if done.Error != nil {
 					if a.retryDelay == 0 {
@@ -239,11 +243,13 @@ func (a *Agent) Run(ctx context.Context) error {
 				a.Client.Send(protocol.New("state.applied", done.Job.ID, done.Job.Revision, map[string]any{"ready": a.Runtime.Ready()}), true)
 			}
 			a.sendStatus()
-		case id := <-a.notify:
-			if a.hasDesired {
-				a.Runtime.Stop()
-				d := a.Store.Snapshot()
-				a.queue(child, applyJob{ID: id, Revision: d.Revision, Config: a.desired, Cached: a.desiredCached})
+		case request := <-a.notify:
+			if request.Context.Err() != nil {
+				finishReload(request.Done, request.Context.Err())
+			} else if a.hasDesired {
+				a.queue(request.Context, applyJob{ID: request.ID, Revision: a.Store.Revision(), Config: a.desired, Cached: a.desiredCached, Reload: true, RefreshAssets: request.RefreshAssets, Done: request.Done})
+			} else {
+				finishReload(request.Done, errors.New("full baseline required before reload"))
 			}
 		case <-tick.C:
 			a.Registry.ExpireUsers(time.Now())
@@ -321,6 +327,8 @@ func (a *Agent) registerSecrets(c protocol.Config) {
 	a.Logs.SetSecrets(values...)
 }
 func (a *Agent) queue(ctx context.Context, job applyJob) {
+	finishReload(a.reloadDone, errors.New("configuration superseded"))
+	a.reloadDone = job.Done
 	if a.cancelApply != nil {
 		a.cancelApply()
 	}
@@ -366,6 +374,13 @@ func (a *Agent) activate(lifetime context.Context, job applyJob) error {
 	if e != nil {
 		return e
 	}
+	if job.RefreshAssets {
+		target, err := a.ensureAssets(job.Context, c, p, true)
+		if err != nil {
+			return err
+		}
+		a.geoCandidate, a.geoCandidateKey = target, assetKey(c, p)
+	}
 	resolved, assetDir, e := a.prepareNative(job.Context, lifetime, c, p)
 	if e != nil {
 		return e
@@ -383,7 +398,7 @@ func (a *Agent) activate(lifetime context.Context, job applyJob) error {
 		return errors.New("configuration superseded")
 	}
 	resolved.Users = a.Store.Snapshot().Users
-	if e = a.Runtime.Apply(lifetime, resolved); e != nil {
+	if e = a.Runtime.Apply(lifetime, resolved, job.Reload); e != nil {
 		return e
 	}
 	if job.Context.Err() != nil {
@@ -619,233 +634,6 @@ func (a *Agent) periodic(ctx context.Context) {
 		a.queue(ctx, applyJob{Revision: d.Revision, Config: a.desired, Cached: a.desiredCached})
 	}
 	a.scheduleUtilities(ctx, now)
-}
-func (a *Agent) command(ctx context.Context, m protocol.Message) error {
-	var request struct {
-		Name string          `json:"name"`
-		Args json.RawMessage `json:"args"`
-	}
-	if e := protocol.Decode(m.Data, &request); e != nil {
-		return e
-	}
-	args := request.Args
-	if len(args) == 0 {
-		args = []byte("{}")
-	}
-	var configuration protocol.Config
-	switch request.Name {
-	case "geodata.refresh", "ddns.run", "firewall.apply":
-		configuration, _ = a.Store.Configuration()
-	}
-	start := a.Jobs.Start
-	switch request.Name {
-	case "traffic.flush", "firewall.confirm", "firewall.bans.update":
-		start = a.Jobs.StartControl
-	case "firewall.bans.sync":
-		var chunk struct {
-			SourcesOnly bool `json:"sources_only"`
-		}
-		if json.Unmarshal(args, &chunk) == nil && !chunk.SourcesOnly {
-			start = a.Jobs.StartControl
-		}
-	}
-	return start(ctx, m.ID, request.Name, func(ctx context.Context, progress func(any)) (any, error) {
-		switch request.Name {
-		case "traffic.flush":
-			return a.flushTraffic(ctx, args)
-		case "config.validate":
-			config, err := protocol.ParseConfig(args)
-			if err != nil {
-				return nil, err
-			}
-			a.nativeMu.Lock()
-			defer a.nativeMu.Unlock()
-			policy, err := geodata.FromNative(config.Xray)
-			if err != nil {
-				return nil, err
-			}
-			if err = a.validateNative(ctx, config, policy); err != nil {
-				return nil, err
-			}
-			return map[string]bool{"valid": true}, nil
-		case "connections.list":
-			var p struct {
-				After string `json:"after,omitempty"`
-				Limit int    `json:"limit,omitempty"`
-			}
-			if e := protocol.Decode(args, &p); e != nil {
-				return nil, e
-			}
-			return a.Registry.List(p.After, p.Limit), nil
-		case "users.active_ips":
-			var p struct {
-				UserID int `json:"user_id,omitempty"`
-			}
-			if e := protocol.Decode(args, &p); e != nil {
-				return nil, e
-			}
-			if p.UserID < 0 {
-				return nil, errors.New("invalid user ID")
-			}
-			return a.Registry.ActiveIPs(p.UserID), nil
-		case "ips.control":
-			var p protocol.IPControl
-			if e := protocol.Decode(args, &p); e != nil {
-				return nil, e
-			}
-			ip, e := sessions.CanonicalIP(p.SourceIP)
-			if e != nil {
-				return nil, e
-			}
-			if p.UserID < 0 || p.BlockSeconds < 0 || p.BlockSeconds > 604800 || p.Unblock && p.BlockSeconds > 0 || !p.Drop && !p.Unblock && p.BlockSeconds == 0 {
-				return nil, errors.New("invalid IP control")
-			}
-			key := sessions.IPBlockKey(p.UserID, ip)
-			block := protocol.IPBlock{SourceIP: ip, UserID: p.UserID}
-			if p.BlockSeconds > 0 {
-				block.Until = time.Now().Add(time.Duration(p.BlockSeconds) * time.Second)
-			}
-			if p.BlockSeconds > 0 || p.Unblock {
-				if e = a.Store.BlockIP(key, block); e != nil {
-					return nil, e
-				}
-				a.Registry.SetIPBlock(key, block)
-			}
-			dropped := 0
-			if p.Drop {
-				dropped = a.Registry.DropIP(ip, p.UserID)
-			}
-			return map[string]any{"source_ip": ip, "user_id": p.UserID, "dropped": dropped, "blocked_until": block.Until}, nil
-		case "connections.close":
-			var p struct {
-				ID         string `json:"id"`
-				UserID     int    `json:"user_id,omitempty"`
-				InboundTag string `json:"inbound_tag,omitempty"`
-			}
-			if e := protocol.Decode(args, &p); e != nil {
-				return nil, e
-			}
-			if p.UserID > 0 {
-				a.Registry.CloseUser(p.UserID, p.InboundTag)
-				return map[string]bool{"closed": true}, nil
-			}
-			return map[string]bool{"closed": a.Registry.CloseConnection(p.ID)}, nil
-		case "metrics.get":
-			return a.Sampler.Snapshot(), nil
-		case "certificates.get":
-			return a.Certificates.Status(), nil
-		case "runtime.reload":
-			select {
-			case a.notify <- m.ID:
-				return map[string]bool{"queued": true}, nil
-			case <-ctx.Done():
-				return nil, ctx.Err()
-			}
-		case "geodata.refresh":
-			p, e := geodata.FromNative(configuration.Xray)
-			if e != nil {
-				return nil, e
-			}
-			if e = a.refreshGeodata(ctx, configuration, p); e != nil {
-				return nil, e
-			}
-			select {
-			case a.notify <- m.ID:
-			case <-ctx.Done():
-				return nil, ctx.Err()
-			}
-			return map[string]bool{"refreshed": true}, nil
-		case "ddns.run":
-			var p struct {
-				ID string `json:"job_id"`
-			}
-			if e := protocol.Decode(args, &p); e != nil {
-				return nil, e
-			}
-			for _, job := range configuration.DDNS {
-				if job.ID == p.ID {
-					a.dnsMu.Lock()
-					defer a.dnsMu.Unlock()
-					provider, e := dns.Provider(configuration.Providers[job.Provider])
-					if e != nil {
-						return nil, e
-					}
-					return dns.DDNS(ctx, job, provider, nil)
-				}
-			}
-			return nil, errors.New("unknown DDNS job")
-		case "jobs.list":
-			return a.Jobs.Snapshot(), nil
-		case "firewall.bans.sync", "firewall.bans.update":
-			var update protocol.FirewallUpdate
-			if e := protocol.Decode(args, &update); e != nil {
-				return nil, e
-			}
-			if request.Name == "firewall.bans.sync" {
-				if e := a.Guard.Sync(ctx, update); e != nil {
-					return nil, e
-				}
-			} else {
-				if e := a.Guard.Update(ctx, update); e != nil {
-					return nil, e
-				}
-			}
-			return map[string]bool{"applied": true}, nil
-		case "firewall.geoip.sync":
-			var chunk protocol.GeoIPChunk
-			if err := protocol.Decode(args, &chunk); err != nil {
-				return nil, err
-			}
-			ready, err := a.Guard.SyncGeoIP(ctx, chunk)
-			return map[string]bool{"ready": ready}, err
-		case "firewall.bans.get":
-			return a.Guard.Status(), nil
-		case "firewall.status":
-			return a.Firewall.Status(), nil
-		case "firewall.confirm":
-			var p struct {
-				ID string `json:"transaction_id"`
-			}
-			if e := protocol.Decode(args, &p); e != nil {
-				return nil, e
-			}
-			return map[string]bool{"confirmed": true}, a.Firewall.Confirm(ctx, p.ID)
-		case "firewall.apply":
-			var p struct {
-				Policy      protocol.FirewallPolicy `json:"policy"`
-				DNSRedirect bool                    `json:"dns_redirect,omitempty"`
-			}
-			if e := protocol.Decode(args, &p); e != nil {
-				return nil, e
-			}
-			candidate := protocol.Clone(configuration)
-			candidate.Firewall = p.Policy
-			if err := protocol.ValidateNativePolicies(candidate); err != nil {
-				return nil, err
-			}
-			return a.Firewall.Apply(ctx, m.ID, p.Policy, p.DNSRedirect)
-		case "speedtest":
-			var p speedtest.Request
-			if e := protocol.Decode(args, &p); e != nil {
-				return nil, e
-			}
-			return speedtest.Run(ctx, p, func(stage string) { progress(map[string]string{"stage": stage}) })
-		case "update.check":
-			return a.Updater.Check(ctx, "")
-		case "update.install":
-			var p struct {
-				Version string `json:"version,omitempty"`
-			}
-			if e := protocol.Decode(args, &p); e != nil {
-				return nil, e
-			}
-			return a.Updater.Install(ctx, m.ID, p.Version, progress)
-		case "update.rollback":
-			return map[string]bool{"rolled_back": true}, a.Updater.Rollback(ctx)
-		default:
-			return nil, errors.New("unsupported utility command")
-		}
-	})
 }
 func (a *Agent) systemdReady() { notifySystemd("READY=1\nSTATUS=Proxy runtime ready\nWATCHDOG=1") }
 func notifySystemd(message string) {

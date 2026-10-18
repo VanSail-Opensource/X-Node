@@ -34,3 +34,7 @@ the existing utility executor. Read-only firewall status never enters job histor
 `geodata_schedule.go` owns completion-based hour intervals and bounded refresh retries; related hosted fixtures cover superseded configuration and successful/failure completion. GeoIP remains master-only.
 
 `native_prepare.go` shares asset injection across activation and command validation. Certificate preflight uses an isolated pool and never issues ACME certificates or changes active certificate status. `Jobs.StartControl` reserves one bounded utility slot for urgent bans, traffic barriers and firewall confirmation; ordinary jobs retain two slots. Session/metrics commands no longer clone configuration and accounting journals unnecessarily.
+
+`commands.go` dispatches protocol commands with execution deadlines; `command_connections.go` owns ephemeral connection/IP controls. `command_reload.go` waits for actor-owned activation, propagates supersession and keeps traffic acknowledgments available. `command_reload_test.go` covers queued versus completed activation. Immediate read-only `update.status` and `jobs.list` replies remain independent of occupied utility slots.
+
+`job_result_test.go` covers failed result-journal writes: completed mutations become uncertain and their in-process replay retains that outcome without repeating execution. Running IDs are bound to command names and remain visible in recovery inspection.

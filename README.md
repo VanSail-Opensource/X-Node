@@ -115,7 +115,7 @@ python3 scripts/check_schema.py
 make build
 ```
 
-`scripts/debian-vm.sh` runs privileged integration in a disposable Debian 13 VM. It does not modify the developer host's nftables rules. CI runs race tests, native Xray regressions, schema checks, vulnerability scanning, cross builds and Debian host checks as independent jobs.
+`scripts/debian-vm.sh` runs privileged integration in disposable Debian 13 or Ubuntu 24.04 VMs. It does not modify the developer host's nftables rules. CI covers already-on/disabled nftables and enabled UFW, including takeover, reboot, watchdog and uninstall, alongside race tests, native Xray regressions, schema checks, vulnerability scanning and cross builds.
 
 Runtime packages:
 

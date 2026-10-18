@@ -92,6 +92,9 @@ func (m *Manager) apply(ctx context.Context, id string, p protocol.FirewallPolic
 	if err = m.backend().Reconcile(ctx, p, activeRedirect, ssh); err != nil {
 		return tx.Pending, errors.Join(err, m.recover(ctx, &tx, !errors.Is(err, errUnchanged)))
 	}
+	if err = m.takeControl(ctx, tx); err != nil {
+		return tx.Pending, errors.Join(err, m.recover(ctx, &tx, true))
+	}
 	return tx.Pending, nil
 }
 
@@ -138,6 +141,9 @@ func (m *Manager) prepare(ctx context.Context, id string, p protocol.FirewallPol
 		return tx, err
 	}
 	if err = m.prepareForwarding(ctx, &tx.Pending); err != nil {
+		return tx, err
+	}
+	if err = m.prepareServices(ctx, &tx); err != nil {
 		return tx, err
 	}
 	return tx, nil

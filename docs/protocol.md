@@ -143,6 +143,13 @@ transactions are recovered after restart. The `native_firewall_v1` capability
 identifies binaries that support native policy restoration; firewall command and
 policy wire formats remain unchanged.
 
+`host_firewall_ownership_v1` additionally identifies nftables/UFW service takeover
+and durable service-state rollback. A confirmed policy enables nftables, disables
+and masks competing UFW enforcement, and restores original service/config state
+on rollback or uninstall. A stored takeover journal prevents unsafe binary
+downgrades. The privileged CI fixture covers enabled/disabled nftables and Ubuntu
+24.04 UFW in marked disposable VMs.
+
 Speedtests use a separate outbound-only Xray client and transfer HTTPS payloads through the peer. They default to three request-latency samples, at most 32 MiB download, 8 MiB upload and 60 seconds total. The transfer bound can reach 64 MiB and timeout 120 seconds. Test credentials and HTTP endpoints are supplied and managed by the master.
 
 `torrent.detected` reports `user_id` and ban deadline. `torrent.expired` reports expiry. `block_new` controls and per-machine connection reports implement approximate global totals; no per-admission master reservation is performed.

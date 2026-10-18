@@ -12,7 +12,8 @@ import (
 
 const bootUnit = `[Unit]
 Description=Restore confirmed X-Node firewall policy
-After=local-fs.target systemd-sysctl.service nftables.service
+After=local-fs.target systemd-sysctl.service nftables.service ufw.service
+Wants=nftables.service
 Before=x-node.service
 ConditionPathExists=/var/lib/x-node/firewall/policy.json
 
@@ -121,7 +122,7 @@ func (m *Manager) migrationPolicy(ctx context.Context) (*record, error) {
 	if err != nil {
 		return nil, err
 	}
-	if p.Engine == 1 {
+	if p.Engine == 1 && p.Ownership {
 		matches := true
 		for _, f := range []struct{ path, body string }{{m.ConfigPath, bootConfig}, {m.unitPath(), bootUnit}, {m.dropinPath(), bootDropin}} {
 			b, err := os.ReadFile(f.path)

@@ -89,9 +89,19 @@ jobs:
           cache: true
       - run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
   debian:
-    name: Debian 13 host integration
+    name: Host ${{ matrix.distribution }} / ${{ matrix.ownership }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - distribution: debian
+            ownership: nftables-on
+          - distribution: debian
+            ownership: nftables-off
+          - distribution: ubuntu
+            ownership: ufw-on
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
@@ -100,9 +110,9 @@ jobs:
           cache: true
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
-          path: .cache/debian-vm
-          key: debian-13-cloud-image-v1
+          path: .cache/${{ matrix.distribution }}-vm
+          key: ${{ matrix.distribution }}-cloud-image-v2
       - name: Install VM tools
         run: sudo apt-get update -qq && sudo apt-get install -y -qq qemu-system-x86 qemu-utils cloud-image-utils
-      - name: Disposable Debian verification
-        run: bash scripts/debian-vm.sh
+      - name: Disposable host verification
+        run: bash scripts/debian-vm.sh '${{ matrix.distribution }}' '${{ matrix.ownership }}'

@@ -46,6 +46,11 @@ func (m *Manager) restorePolicy(ctx context.Context) (*protocol.FirewallPolicy, 
 	if err = m.backend().Reconcile(ctx, p.Policy, false, p.SSH); err != nil {
 		return nil, err
 	}
+	if p.Ownership {
+		if err = m.takeControl(ctx, p); err != nil {
+			return nil, err
+		}
+	}
 	return &p.Policy, nil
 }
 
@@ -58,6 +63,13 @@ func (m *Manager) RestoreOriginal(ctx context.Context) error {
 	}
 	defer release()
 	tx, err := readRecord(m.path())
+	if err == nil && tx.Status == "unmanaged" {
+		err = os.Remove(filepath.Join(m.Dir, "policy.json"))
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
 	if err == nil && tx.Status == "pending" {
 		if err = m.recover(ctx, &tx, true); err != nil {
 			return err
@@ -73,7 +85,7 @@ func (m *Manager) RestoreOriginal(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	if _, err = m.Runner.Run(ctx, "nft", "-f", path); err != nil {
+	if err = m.restoreOriginalServices(ctx); err != nil {
 		return err
 	}
 	original, err := m.originalForwarding()
@@ -91,6 +103,9 @@ func (m *Manager) RestoreOriginal(ctx context.Context) error {
 		return err
 	}
 	if err = state.AtomicWrite(m.ConfigPath, b, 0600); err != nil {
+		return err
+	}
+	if _, err = m.Runner.Run(ctx, "nft", "-f", path); err != nil {
 		return err
 	}
 	tx.Status = "unmanaged"

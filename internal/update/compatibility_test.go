@@ -54,3 +54,28 @@ func TestBinaryDowngradeCannotLoseAuxiliaryListeners(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestBinaryCompatibilityIncludesStagedManagedPolicies(t *testing.T) {
+	dir := t.TempDir()
+	store, err := state.Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	config := protocol.Config{Xray: json.RawMessage(`{"inbounds":[],"geodata":{"interval_hours":24}}`),
+		Users:          []protocol.User{{ID: 1, TransitCredentials: []protocol.TransitCredential{{SourceNodeID: "source", InboundTag: "paid", Generation: "v1", Credential: json.RawMessage(`{"id":"private"}`)}}}},
+		BlockedDomains: []string{"domain:example.com"}, Firewall: protocol.FirewallPolicy{SourceGeoIP: &protocol.SourceGeoIPPolicy{}},
+	}
+	if err = store.Authorize(config.Users, 1); err != nil {
+		t.Fatal(err)
+	}
+	if err = store.Stage(config, 1); err != nil {
+		t.Fatal(err)
+	}
+	m := &Manager{Dir: filepath.Join(dir, "updates")}
+	if err = m.checkCapabilities([]byte(`{"capabilities":["volatile_connection_controls_v1"]}`)); err == nil {
+		t.Fatal("downgrade ignored staged policies")
+	}
+	if err = m.checkCapabilities([]byte(`{"capabilities":["volatile_connection_controls_v1","transit_credentials_v1","source_geoip_firewall_v1","shared_domain_blocks_v1","geodata_interval_v1"]}`)); err != nil {
+		t.Fatal(err)
+	}
+}

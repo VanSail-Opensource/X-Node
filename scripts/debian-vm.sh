@@ -1,7 +1,10 @@
 #!/bin/bash
 set -euo pipefail
 workspace=$(cd "$(dirname "$0")/.." && pwd)
-cache_dir="$workspace/.cache/debian-vm"
+distribution=${1:-debian}
+ownership=${2:-nftables-off}
+case "$distribution/$ownership" in debian/nftables-on|debian/nftables-off|ubuntu/ufw-on) ;; *) echo 'Unsupported disposable VM case.' >&2; exit 1 ;; esac
+cache_dir="$workspace/.cache/$distribution-vm"
 run_dir=$(mktemp -d -t x-node-vm.XXXXXXXX)
 qemu_pid=''
 cleanup() {
@@ -10,12 +13,23 @@ cleanup() {
 }
 trap cleanup EXIT
 mkdir -p "$cache_dir" "$workspace/dist"
-image="$cache_dir/debian-13-genericcloud-amd64.qcow2"
-if [[ ! -f "$image" ]]; then
-    curl --fail --location --silent --show-error https://cloud.debian.org/images/cloud/trixie/latest/debian-13-genericcloud-amd64.qcow2 -o "$image"
-    curl --fail --location --silent --show-error https://cloud.debian.org/images/cloud/trixie/latest/SHA512SUMS -o "$cache_dir/SHA512SUMS"
-    (cd "$cache_dir" && grep 'debian-13-genericcloud-amd64.qcow2$' SHA512SUMS | sha512sum -c -)
+if [[ "$distribution" == ubuntu ]]; then
+    image_name=noble-server-cloudimg-amd64.img
+    image_base=https://cloud-images.ubuntu.com/noble/current
+    sums=SHA256SUMS
+    checksum=sha256sum
+else
+    image_name=debian-13-genericcloud-amd64.qcow2
+    image_base=https://cloud.debian.org/images/cloud/trixie/latest
+    sums=SHA512SUMS
+    checksum=sha512sum
 fi
+image="$cache_dir/$image_name"
+if [[ ! -f "$image" ]]; then
+    curl --fail --location --silent --show-error "$image_base/$image_name" -o "$image"
+    curl --fail --location --silent --show-error "$image_base/$sums" -o "$cache_dir/$sums"
+fi
+(cd "$cache_dir" && awk -v file="$image_name" '$2 == file || $2 == "*" file' "$sums" | "$checksum" -c -)
 cd "$workspace"
 make build-amd64
 CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -o dist/host-fixture ./cmd/host-fixture
@@ -38,7 +52,7 @@ write_files:
   - path: /etc/x-node-fixture-vm
     content: disposable
 package_update: true
-packages: [nftables, openssh-server, minisign, ca-certificates, iproute2, python3]
+packages: [nftables, openssh-server, minisign, ca-certificates, iproute2, python3, ufw]
 USER
 cloud-localds "$run_dir/seed.img" "$run_dir/user-data" "$run_dir/meta-data"
 qemu-img create -q -f qcow2 -F qcow2 -b "$image" "$run_dir/root.qcow2" 8G
@@ -54,7 +68,8 @@ for attempt in $(seq 1 90); do
 done
 if ! "$ready"; then cat "$run_dir/console.log"; exit 1; fi
 scp -i "$run_dir/ssh-key" -P 10022 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null dist/x-node-linux-amd64 dist/xnodectl-linux-amd64 dist/host-fixture deploy/x-node.service deploy/x-node-firewall.service fixture@127.0.0.1:/tmp/
-ssh "${ssh_args[@]}" fixture@127.0.0.1 'sudo install -m 0755 /tmp/x-node-linux-amd64 /usr/local/bin/x-node && sudo install -m 0755 /tmp/xnodectl-linux-amd64 /usr/local/bin/xnodectl && sudo install -m 0644 /tmp/x-node.service /etc/systemd/system/x-node.service && sudo install -m 0644 /tmp/x-node-firewall.service /etc/systemd/system/x-node-firewall.service && sudo mkdir -p /etc/x-node /var/lib/x-node && printf "{\"master_url\":\"wss://127.0.0.1:65534/v1/agents/connect\",\"token\":\"disposable-fixture-token\"}" | sudo tee /etc/x-node/bootstrap.json >/dev/null && sudo chmod 0600 /etc/x-node/bootstrap.json && sudo systemctl daemon-reload && sudo install -D -m 0755 /tmp/host-fixture /usr/local/libexec/x-node-host-fixture && sudo /usr/local/libexec/x-node-host-fixture'
+ssh "${ssh_args[@]}" fixture@127.0.0.1 'sudo install -m 0755 /tmp/x-node-linux-amd64 /usr/local/bin/x-node && sudo install -m 0755 /tmp/xnodectl-linux-amd64 /usr/local/bin/xnodectl && sudo install -m 0644 /tmp/x-node.service /etc/systemd/system/x-node.service && sudo install -m 0644 /tmp/x-node-firewall.service /etc/systemd/system/x-node-firewall.service && sudo mkdir -p /etc/x-node /var/lib/x-node && printf "{\"master_url\":\"wss://127.0.0.1:65534/v1/agents/connect\",\"token\":\"disposable-fixture-token\"}" | sudo tee /etc/x-node/bootstrap.json >/dev/null && sudo chmod 0600 /etc/x-node/bootstrap.json && sudo systemctl daemon-reload && sudo install -D -m 0755 /tmp/host-fixture /usr/local/libexec/x-node-host-fixture'
+ssh "${ssh_args[@]}" fixture@127.0.0.1 "sudo /usr/local/libexec/x-node-host-fixture --ownership $ownership"
 
 # A real reboot verifies restore ordering and that a fresh SSH connection works.
 initial_boot=$(ssh "${ssh_args[@]}" fixture@127.0.0.1 'cat /proc/sys/kernel/random/boot_id')

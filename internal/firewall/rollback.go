@@ -33,11 +33,6 @@ func (m *Manager) recover(parent context.Context, p *record, kernel bool) error 
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(parent), 30*time.Second)
 	defer cancel()
 	var failures []error
-	if kernel {
-		if _, err := m.Runner.Run(ctx, "nft", "-f", p.Backup); err != nil {
-			failures = append(failures, err)
-		}
-	}
 	if p.ForwardIPv4 != "" && p.ForwardIPv6 != "" {
 		if _, err := m.Runner.Run(ctx, "sysctl", "-w", "net.ipv4.ip_forward="+p.ForwardIPv4, "net.ipv6.conf.all.forwarding="+p.ForwardIPv6); err != nil {
 			failures = append(failures, err)
@@ -60,6 +55,17 @@ func (m *Manager) recover(parent context.Context, p *record, kernel bool) error 
 	}
 	if len(p.Files) > 0 {
 		if _, err := m.Runner.Run(ctx, "systemctl", "daemon-reload"); err != nil {
+			failures = append(failures, err)
+		}
+	}
+	if err := m.restoreServices(ctx, p.Services); err != nil {
+		failures = append(failures, err)
+	}
+	if err := m.restoreUFWEnforcement(ctx, p.Services); err != nil {
+		failures = append(failures, err)
+	}
+	if kernel || len(p.Services) > 0 {
+		if _, err := m.Runner.Run(ctx, "nft", "-f", p.Backup); err != nil {
 			failures = append(failures, err)
 		}
 	}

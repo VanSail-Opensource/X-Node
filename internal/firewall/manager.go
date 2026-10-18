@@ -36,4 +36,5 @@ type Manager struct {
 	Runner        host.Runner
 	Backend       Backend
 	UnitPath      string
+	UFWConfigPath string
 }

@@ -176,6 +176,9 @@ func watchdogDiagnostics(ctx context.Context, runner host.Runner, tx firewall.Pe
 }
 
 func afterReboot(ctx context.Context, r host.Runner) error {
+	if err := ownershipChecks(ctx, r, true); err != nil {
+		return err
+	}
 	if _, err := r.Run(ctx, "nft", "list", "table", "inet", "x_node"); err != nil {
 		return fmt.Errorf("native boot policy missing: %w", err)
 	}
@@ -204,5 +207,5 @@ func afterReboot(ctx context.Context, r host.Runner) error {
 	if _, err = r.Run(ctx, "nft", "list", "table", "inet", "fixture_original"); err != nil {
 		return fmt.Errorf("uninstall lost original rules: %w", err)
 	}
-	return nil
+	return ownershipChecks(ctx, r, false)
 }

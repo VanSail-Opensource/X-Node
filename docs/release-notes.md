@@ -1,3 +1,23 @@
+# X-Node v2.0.7
+
+Fixes self-upgrade deadlock by keeping status reads independent of the installer
+and submitting self-restarts without waiting for the service stop job. Both
+signed agent and CLI binaries are replaced together. Validated pending listener
+configuration survives an occupied port and restart, with bounded retries and
+joined activation shutdown. Successful activation includes firewall setup.
+
+Takes control of existing nftables/UFW ownership with durable service/config
+backups. Confirmation enables nftables, disables and masks competing UFW, and
+restores the confirmed native policy after reboot. Watchdog rollback and uninstall
+restore original enforcement and service state. Hosted disposable Debian and
+Ubuntu cases cover already-on/disabled nftables, enabled UFW, packet handling,
+reboot, rollback and uninstall. Production checks remain Linux/capability based.
+
+Includes v2.0.6 sampled byte-activity counts, authenticated uncounted transit legs,
+master-resolved silent source GeoIP drops, managed domain blocks, and completion
+based geosite refresh intervals. Signed-upgrade compatibility now retains those
+capabilities for both accepted and pending desired configuration.
+
 # X-Node v2.0.5
 
 Separates firewall detection from durable, master-authorized nftables bans.

@@ -38,6 +38,17 @@ func (m *Manager) Confirm(ctx context.Context, id string) error {
 	if pending {
 		return errors.New("binary upgrade must be confirmed before firewall migration")
 	}
+	if !p.Ownership {
+		if err = m.prepareServices(ctx, &p); err != nil {
+			return err
+		}
+		if err = writeRecord(m.path(), p); err != nil {
+			return err
+		}
+		if err = m.takeControl(ctx, p); err != nil {
+			return errors.Join(err, m.recover(ctx, &p, true))
+		}
+	}
 	if p.Engine == 0 {
 		if err = m.backupUnits(&p); err != nil {
 			return err
@@ -51,6 +62,9 @@ func (m *Manager) Confirm(ctx context.Context, id string) error {
 		}
 	}
 	if err = m.installBoot(ctx); err != nil {
+		return errors.Join(err, m.recover(ctx, &p, true))
+	}
+	if err = m.enableNFTService(ctx, p.Services); err != nil {
 		return errors.Join(err, m.recover(ctx, &p, true))
 	}
 	if err = m.persistForwarding(p.Pending); err != nil {

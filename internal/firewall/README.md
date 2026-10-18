@@ -1,6 +1,6 @@
 # Host firewall
 
-This module owns the complete Debian host firewall. The agent's serialized jobs
+This module owns the complete Linux host firewall. The agent's serialized jobs
 call `Manager.Apply`, `Confirm`, `EnableConfirmedDNS`, and `Migrate`. The local
 `xnodectl` commands call `RollbackID`, `RestoreFile`, and `RestoreOriginal`.
 
@@ -35,7 +35,8 @@ record. An independent 45-second systemd timer runs `xnodectl firewall-rollback`
 its service retries failed recovery. The master confirms the transaction ID after
 checking connectivity. Reusing the current ID with different inputs fails.
 
-Known atomic rejections restore metadata/sysctls without replaying the snapshot.
+Known atomic rejections restore metadata/sysctls; service-state recovery also
+replays the snapshot after restoring owners, because service actions can change rules.
 Cancellation or an ambiguous missing acknowledgment triggers full snapshot
 recovery using a separate cancellation-independent context. Recovery leaves the
 transaction pending if restoration fails, so the watchdog can retry. Late
@@ -55,6 +56,18 @@ dependency drop-in. Previous files are restored if migration fails. Binary
 upgrades must be confirmed before persistent migration. Cached startup migrates
 the previously confirmed policy without changing its redirect intent. The
 `native_firewall_v1` capability prevents subsequent unsafe binary downgrades.
+
+`ownership.go` and `service_state.go` snapshot nftables/UFW service ownership
+before mutation. After atomic policy installation, takeover masks UFW and
+explicitly disables its rules, including CLI-enabled enforcement with an
+inactive oneshot unit. Confirmation enables/starts nftables with the managed
+comment-only boot file; `x-node-firewall.service` runs after nftables and UFW.
+An independent rollback restores service/config state before replaying the full
+kernel snapshot, so a service start/stop cannot overwrite recovered rules.
+Original ownership remains available for uninstall; repeated unmanaged restores
+are inert. `host_firewall_ownership_v1` prevents downgrades that lose this recovery
+contract. Portable hosted coverage lives in `ownership_test.go` with its runner
+in `ownership_fixtures_test.go`.
 
 Boot restoration and agent startup recover unconfirmed transactions and reconcile
 the confirmed policy through Go, with DNS redirection disabled. Legacy DNS output chains are reconciled empty, even for cached redirect intent.

@@ -1,4 +1,4 @@
-// host-fixture is only executed in a marked disposable Debian 13 VM.
+// host-fixture is only executed in marked disposable Debian/Ubuntu VMs.
 package main
 
 import (
@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/VanSail-Opensource/X-Node/internal/firewall"
-	"github.com/VanSail-Opensource/X-Node/internal/host"
 	"github.com/VanSail-Opensource/X-Node/internal/protocol"
 	"os"
 	"os/exec"
@@ -15,11 +14,8 @@ import (
 )
 
 func main() {
-	if e := host.CheckDebian(); e != nil {
+	if e := checkDisposableHost(); e != nil {
 		fail(e)
-	}
-	if _, e := os.Stat("/etc/x-node-fixture-vm"); e != nil {
-		fail(fmt.Errorf("host integration requires a marked disposable VM"))
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
 	defer cancel()
@@ -41,6 +37,13 @@ func main() {
 		}
 		fmt.Println("Native firewall reboot restoration and uninstall recovery passed")
 		return
+	}
+	mode := "nftables-off"
+	if len(os.Args) == 3 && os.Args[1] == "--ownership" {
+		mode = os.Args[2]
+	}
+	if err := ownershipBaseline(ctx, runner, mode); err != nil {
+		fail(err)
 	}
 	if e := topology(ctx, runner); e != nil {
 		fail(e)
@@ -65,6 +68,9 @@ func main() {
 		fail(e)
 	}
 	if e = m.Confirm(ctx, pending.ID); e != nil {
+		fail(e)
+	}
+	if e = ownershipChecks(ctx, runner, true); e != nil {
 		fail(e)
 	}
 	if _, e = runner.Run(ctx, "nft", "-c", "-f", "/etc/nftables.conf"); e != nil {
@@ -115,6 +121,6 @@ func main() {
 	if _, e = runner.Run(ctx, "systemctl", "stop", "x-node.service"); e != nil {
 		fail(e)
 	}
-	fmt.Println("Debian 13 binary, systemd, nftables confirmation/rollback and forwarding checks passed")
+	fmt.Println("Disposable host binary, systemd, nftables/UFW takeover, confirmation/rollback and forwarding checks passed")
 }
 func fail(e error) { fmt.Fprintln(os.Stderr, e.Error()); os.Exit(1) }

@@ -1,6 +1,6 @@
-# Disposable Debian host checks
+# Disposable Linux host checks
 
-This binary refuses to run outside Debian 13 or without
+This binary refuses to run outside Debian 13 / Ubuntu 24.04 or without
 `/etc/x-node-fixture-vm`. `scripts/debian-vm.sh` creates that marker only inside an
 ephemeral VM, installs the fixture in `/usr/local/libexec`, and invokes it across
 a real reboot. The developer host's firewall is never modified.
@@ -23,6 +23,12 @@ Dependencies are the installed agent/CLI binaries, iproute2, nftables, systemd,
 Python 3, and the same Go DNS/nftables libraries as the agent. Extend packet or
 kernel assertions in the corresponding small source files; preserve the VM guard
 and the two-phase reboot contract.
+
+`ownership.go` retains the exact disposable marker/platform guard, prepares
+already-on nftables, disabled nftables, or Ubuntu UFW baselines, and checks
+takeover, reboot and uninstall ownership. The CI matrix runs all three cases
+in separate disposable VMs. The VM script verifies the official Debian SHA512
+or Ubuntu SHA256 image checksum before boot; no privileged fixture runs locally.
 
 `firewall_control.go` validates real NFLOG reporting without autonomous bans,
 master-authorized nftables restrictions, repeated-hit refresh, exact IPv6

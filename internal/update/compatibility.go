@@ -25,6 +25,12 @@ func (m *Manager) requiredCapabilities() ([]string, error) {
 		return nil, err
 	}
 	controlRequired := false
+	ownershipRequired := false
+	if _, e := os.Stat(filepath.Join(filepath.Dir(m.Dir), "firewall", "original-services.json")); e == nil {
+		ownershipRequired = true
+	} else if !os.IsNotExist(e) {
+		return nil, e
+	}
 	if _, e := os.Stat(filepath.Join(filepath.Dir(m.Dir), "firewall", "controlled-v1")); e == nil {
 		controlRequired = true
 	} else if !os.IsNotExist(e) {
@@ -39,6 +45,9 @@ func (m *Manager) requiredCapabilities() ([]string, error) {
 		if controlRequired {
 			caps = append(caps, "firewall_control_v1")
 		}
+		if ownershipRequired {
+			caps = append(caps, "host_firewall_ownership_v1")
+		}
 		return caps, nil
 	}
 	if err != nil {
@@ -51,10 +60,14 @@ func (m *Manager) requiredCapabilities() ([]string, error) {
 	required := map[string]bool{}
 	required["firewall_control_v1"] = controlRequired
 	required["native_firewall_v1"] = nativeFirewall
+	required["host_firewall_ownership_v1"] = ownershipRequired
 	if len(data.Users) > 0 {
 		required["volatile_connection_controls_v1"] = true
 	}
 	for _, user := range data.Users {
+		if len(user.TransitCredentials) > 0 {
+			required["transit_credentials_v1"] = true
+		}
 		if user.AccountingPeriod != "" {
 			required["traffic_periods_v1"] = true
 			required["traffic_period_barriers_v1"] = true
@@ -74,17 +87,34 @@ func (m *Manager) requiredCapabilities() ([]string, error) {
 			required["traffic_periods_v1"] = true
 		}
 	}
-	if data.Config != nil && len(data.Config.MemberOutbounds) > 0 {
-		required["member_outbound_guards"] = true
-	}
-	if data.Config != nil {
-		if data.Config.Firewall.MasterControlled {
+	for _, config := range []*protocol.Config{data.Config, data.DesiredConfig} {
+		if config == nil {
+			continue
+		}
+		if len(config.MemberOutbounds) > 0 {
+			required["member_outbound_guards"] = true
+		}
+		if config.Firewall.SourceGeoIP != nil {
+			required["source_geoip_firewall_v1"] = true
+		}
+		if len(config.BlockedDomains) > 0 {
+			required["shared_domain_blocks_v1"] = true
+		}
+		var native struct {
+			Geodata struct {
+				IntervalHours *int `json:"interval_hours"`
+			} `json:"geodata"`
+		}
+		if json.Unmarshal(config.Xray, &native) == nil && native.Geodata.IntervalHours != nil {
+			required["geodata_interval_v1"] = true
+		}
+		if config.Firewall.MasterControlled {
 			required["firewall_control_v1"] = true
 		}
-		if data.Config.DNS.Redirect {
+		if config.DNS.Redirect {
 			required["xray_scoped_dns_v1"] = true
 		}
-		tags, err := protocol.AuxiliaryInboundTags(data.Config.Xray)
+		tags, err := protocol.AuxiliaryInboundTags(config.Xray)
 		if err != nil {
 			return nil, err
 		}
@@ -93,7 +123,7 @@ func (m *Manager) requiredCapabilities() ([]string, error) {
 		}
 	}
 	var out []string
-	for _, key := range []string{"traffic_periods_v1", "traffic_period_barriers_v1", "authorization_expiry", "member_outbound_guards", "volatile_connection_controls_v1", "native_auxiliary_inbounds_v1", "native_firewall_v1", "xray_scoped_dns_v1", "firewall_control_v1"} {
+	for _, key := range []string{"traffic_periods_v1", "traffic_period_barriers_v1", "authorization_expiry", "member_outbound_guards", "volatile_connection_controls_v1", "native_auxiliary_inbounds_v1", "native_firewall_v1", "xray_scoped_dns_v1", "firewall_control_v1", "host_firewall_ownership_v1", "transit_credentials_v1", "source_geoip_firewall_v1", "shared_domain_blocks_v1", "geodata_interval_v1"} {
 		if required[key] {
 			out = append(out, key)
 		}

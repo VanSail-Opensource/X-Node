@@ -99,7 +99,8 @@ UNIT
 cat >/etc/systemd/system/x-node-firewall.service <<'UNIT'
 [Unit]
 Description=Restore confirmed X-Node firewall policy
-After=local-fs.target systemd-sysctl.service nftables.service
+After=local-fs.target systemd-sysctl.service nftables.service ufw.service
+Wants=nftables.service
 Before=x-node.service
 ConditionPathExists=/var/lib/x-node/firewall/policy.json
 [Service]

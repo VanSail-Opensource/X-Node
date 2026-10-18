@@ -5,6 +5,8 @@ agent and CLI, journals their replacement, and arms an independent rollback
 timer before changing either executable. Mutation uses the process mutex and
 host file lock. `compatibility.go` and `firewall_compatibility.go` reject binaries
 that cannot retain current accounting, authorization or firewall state.
+Host firewall service takeover additionally requires `host_firewall_ownership_v1`
+when its original-service recovery journal is present.
 
 Transaction observers read the atomically replaced journal without joining the
 installer. Self-restarts use `systemctl --no-block`: waiting for the service job

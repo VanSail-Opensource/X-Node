@@ -59,7 +59,7 @@ func (g *Guard) Run(ctx context.Context, send func(protocol.Message, bool) bool)
 			if !time.Now().Before(nextReport) {
 				if policy := g.policy.Load(); policy != nil && policy.MasterControlled {
 					status := g.statusLocked()
-					send(protocol.New("firewall.events", "", 0, protocol.FirewallEvents{State: &status, InstanceID: g.state.EventNamespace, Events: g.pendingEvents(512), Dropped: g.dropped.Load(), KernelReady: g.kernelReady.Load()}), true)
+					send(protocol.New("firewall.events", "", 0, protocol.FirewallEvents{State: &status, InstanceID: g.state.EventNamespace, Events: g.pendingEvents(protocol.MaxFirewallEventsPerFrame), Dropped: g.dropped.Load(), KernelReady: g.kernelReady.Load()}), true)
 				}
 				nextReport = time.Now().Add(5 * time.Second)
 			}

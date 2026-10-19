@@ -137,7 +137,7 @@ replays remaining lifetimes before the agent starts.
 for threshold windows, command authority, shortening, replay, torn tails,
 compaction, source references, stale generations and exact IPv6 exemptions.
 
-`guard_runtime.go` keeps observation processing active while native inventories stage. Per-namespace monotonic event IDs and master versions reject replay and stale state; dynamic restrictions and source generations use separate kernel revisions. Existing agent/renderer lifecycle files retain their native-core orchestration; new firewall responsibilities are isolated here.
+`guard_runtime.go` keeps observation processing active while native inventories stage. Per-namespace monotonic event IDs and master versions reject replay and stale state; event reports use the protocol's shared 256-event batch limit and remain queued until acknowledged. Dynamic restrictions and source generations use separate kernel revisions. Existing agent/renderer lifecycle files retain their native-core orchestration; new firewall responsibilities are isolated here.
 
 `geoip_linux.go` compiles master-resolved IPv4/IPv6 prefix intervals into silent source drops scoped to non-REALITY listeners. Drops run before stateful accepts and detector hooks, never use NFLOG, and participate in the same atomic reconciliation, confirmation and rollback as the rest of the policy. Empty sets retire old country restrictions.
 

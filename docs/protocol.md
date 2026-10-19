@@ -179,7 +179,9 @@ Agents advertise `firewall_control_v1`. A supporting master sets
 `firewall.master_controlled`; older masters receive no new event frames.
 `firewall.events` carries a stable `instance_id`, ordered event IDs, timestamps,
 IP/rule/count evidence and live kernel status. Masters acknowledge committed IDs
-with `firewall.events.ack`. Detection never inserts a blacklist entry.
+with `firewall.events.ack`. Each report contains at most 256 durable events;
+agents retain and resend the remainder until acknowledged. Detection never
+inserts a blacklist entry.
 
 Commands `firewall.bans.sync`, `firewall.bans.update` and `firewall.bans.get` use
 the existing command executor. Every mutation requires a positive master

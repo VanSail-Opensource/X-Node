@@ -2,6 +2,7 @@ package firewall
 
 import (
 	"context"
+	"fmt"
 	"net/netip"
 	"sync"
 	"testing"
@@ -115,6 +116,27 @@ func TestDetectionRequiresMasterCommandAndRefreshDoesNotReport(t *testing.T) {
 		t.Fatal("short ban expiry suppressed a new threshold window")
 	}
 }
+
+func TestPendingFirewallEventsUseSharedProtocolBatchLimit(t *testing.T) {
+	g := &Guard{state: banState{Events: map[string]protocol.FirewallEvent{}}, eventOrder: []string{}}
+	for i := 1; i <= protocol.MaxFirewallEventsPerFrame+1; i++ {
+		id := fmt.Sprintf("event-%03d", i)
+		g.state.Events[id] = protocol.FirewallEvent{ID: id, Kind: "detected"}
+		g.eventOrder = append(g.eventOrder, id)
+	}
+	first := g.pendingEvents(protocol.MaxFirewallEventsPerFrame)
+	if len(first) != protocol.MaxFirewallEventsPerFrame {
+		t.Fatalf("first batch size = %d, want %d", len(first), protocol.MaxFirewallEventsPerFrame)
+	}
+	for _, event := range first {
+		delete(g.state.Events, event.ID)
+	}
+	second := g.pendingEvents(protocol.MaxFirewallEventsPerFrame)
+	if len(second) != 1 || second[0].ID != "event-257" {
+		t.Fatalf("remaining batch = %#v, want event-257", second)
+	}
+}
+
 func TestRuleWindowAndPrivateAddresses(t *testing.T) {
 	g, _ := guardFixture(t)
 	p := policy()

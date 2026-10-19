@@ -4,6 +4,8 @@
 exemptions, compact source generations and versioned updates. `firewall_state.go`
 defines live status. The `firewall_control_v1` capability and `master_controlled`
 policy flag negotiate reports; no detector is authorized to create a blacklist.
+Reports share the `MaxFirewallEventsPerFrame` limit of 256 events, and country
+transfers use `GeoIPPrefixesPerChunk` to bound each staged command.
 
 `transit.go` defines bounded master-only peer credentials on managed users. `native_policies.go` and `source_listeners.go` validate resolved source-IP firewall generations and shared domain selectors; IP geodata is never accepted by agent routing or DNS. New fields require `transit_credentials_v1`, `source_geoip_firewall_v1`, and `shared_domain_blocks_v1`; activity semantics advertise `sampled_activity_v1`.
 

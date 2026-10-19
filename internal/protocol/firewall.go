@@ -6,6 +6,9 @@ import (
 	"time"
 )
 
+// MaxFirewallEventsPerFrame bounds durable event batches shared by masters and agents.
+const MaxFirewallEventsPerFrame = 256
+
 var FirewallRuleNames = []string{"closed_port", "invalid_packet", "syn_flood", "icmp_probe", "xray_tcp_probe", "xray_invalid", "xray_auth_failure"}
 
 type FirewallRule struct {

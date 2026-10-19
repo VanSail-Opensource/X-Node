@@ -1,5 +1,8 @@
 package protocol
 
+// GeoIPPrefixesPerChunk bounds each master-to-agent country transfer frame.
+const GeoIPPrefixesPerChunk = 256
+
 // GeoIPChunk stages master-resolved country ranges independently of config frames.
 // Probe only checks an immutable generation and never advances its chunk cursor.
 type GeoIPChunk struct {

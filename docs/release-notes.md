@@ -1,3 +1,9 @@
+# X-Node v2.0.9
+
+Firewall event frames now share a 256-event limit with the master protocol.
+Remaining durable reports stay queued until the master commits and acknowledges
+their IDs, preventing accumulated observations from being rejected indefinitely.
+
 # X-Node v2.0.8
 
 Upgrade recovery now records a durable transaction exposed by `update.status`

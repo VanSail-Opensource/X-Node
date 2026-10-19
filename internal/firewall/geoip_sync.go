@@ -13,7 +13,7 @@ import (
 
 // SyncGeoIP keeps bulk country ranges out of desired config and telemetry copies.
 func (g *Guard) SyncGeoIP(ctx context.Context, chunk protocol.GeoIPChunk) (bool, error) {
-	if !protocol.ValidName(chunk.Generation) || chunk.Index < 0 || chunk.Index > 10000 || len(chunk.Prefixes) > 256 {
+	if !protocol.ValidName(chunk.Generation) || chunk.Index < 0 || chunk.Index > 10000 || len(chunk.Prefixes) > protocol.GeoIPPrefixesPerChunk {
 		return false, errors.New("invalid country range chunk")
 	}
 	path := sourcePath(g.dir, "country", chunk.Generation)

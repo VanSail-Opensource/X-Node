@@ -568,7 +568,7 @@ func (a *Agent) handle(ctx context.Context, m protocol.Message) {
 		a.Client.Send(protocol.New("state.accepted", m.ID, m.Revision, map[string]uint64{"authorization_revision": m.Revision}), true)
 	case "firewall.events.ack":
 		var ack protocol.FirewallEventAck
-		if e := protocol.Decode(m.Data, &ack); e != nil || len(ack.IDs) > 512 {
+		if e := protocol.Decode(m.Data, &ack); e != nil || len(ack.IDs) > protocol.MaxFirewallEventsPerFrame {
 			fail(errors.New("invalid firewall event acknowledgment"))
 		} else {
 			a.Guard.Acknowledge(ack.IDs)

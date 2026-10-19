@@ -18,6 +18,9 @@ func TestCountryRangesAreStagedOutsideConfiguration(t *testing.T) {
 	if ready, err := g.SyncGeoIP(ctx, chunk); err != nil || ready {
 		t.Fatal("partial country generation published", err)
 	}
+	if ready, err := g.SyncGeoIP(ctx, chunk); err != nil || ready {
+		t.Fatal("duplicate country chunk changed staging state", err)
+	}
 	chunk.Index = 1
 	chunk.Final = true
 	chunk.Prefixes = []string{"8.8.8.128/25"}
@@ -26,6 +29,10 @@ func TestCountryRangesAreStagedOutsideConfiguration(t *testing.T) {
 	}
 	if ready, err := g.SyncGeoIP(ctx, protocol.GeoIPChunk{Generation: "country", Probe: true}); err != nil || !ready {
 		t.Fatal("country probe changed generation", err)
+	}
+	tooLarge := make([]string, protocol.GeoIPPrefixesPerChunk+1)
+	if _, err := g.SyncGeoIP(ctx, protocol.GeoIPChunk{Generation: "oversized", Prefixes: tooLarge}); err == nil {
+		t.Fatal("oversized country chunk was accepted")
 	}
 	if got, err := rangeContains(sourcePath(g.dir, "country", "country"), netip.MustParseAddr("8.8.8.1")); err != nil || !got {
 		t.Fatal("country ranges lost", err)

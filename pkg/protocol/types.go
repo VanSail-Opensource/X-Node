@@ -9,6 +9,8 @@ import (
 
 const Version = wire.Version
 const MaxFrameBytes = wire.MaxFrameBytes
+const MaxFirewallEventsPerFrame = wire.MaxFirewallEventsPerFrame
+const GeoIPPrefixesPerChunk = wire.GeoIPPrefixesPerChunk
 
 type Message = wire.Message
 type Config = wire.Config

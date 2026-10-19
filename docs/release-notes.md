@@ -10,15 +10,15 @@ acceptance and execution deadlines; on `activation_commands_v1` agents,
 `runtime.reload` and `geodata.refresh` complete only after validated activation
 and otherwise retain the previous runtime.
 
-Country ranges and CIDR exemptions stream to bounded private storage: at most 256
-prefixes per chunk, fixed-width range files merged on write, a 512 MiB bulk
-ceiling plus a 16 MiB filesystem reserve, and 512-element nftables set
-transactions. Dynamic bans, traffic barriers and firewall confirmation reserve an
-urgent utility slot during bulk synchronization. Overlapping CIDR exemptions
-compile to timed disjoint intervals without extending a shorter grant, while
-exact member-IP grants keep their scope. Masters must require
-`source_geoip_stream_v1`, `disk_firewall_sources_v1` and
-`firewall_cidr_exemptions_v1` before enabling those paths.
+Country ranges now stream into bounded private storage: at most 256 prefixes per
+chunk, fixed-width range files merged while streaming, a 512 MiB bulk ceiling
+plus a 16 MiB filesystem reserve, and 512-element nftables set transactions.
+Dynamic bans, traffic barriers and firewall confirmation reserve an urgent
+utility slot during bulk synchronization. Overlapping CIDR exemptions compile to
+timed disjoint intervals without extending a shorter grant, while exact
+member-IP grants keep their scope. Masters must require `source_geoip_stream_v1`,
+`disk_firewall_sources_v1` and `firewall_cidr_exemptions_v1` before enabling
+those paths.
 
 Certificate profiles may omit a domain for administrator-owned local PEM files
 under `node_file_certificates_v1`, with each read bounded to one MiB. Certificate

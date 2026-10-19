@@ -7,7 +7,7 @@ call `Manager.Apply`, `Confirm`, `EnableConfirmedDNS`, and `Migrate`. The local
 ## Native engine
 
 `Backend` is the injectable kernel boundary. Its Linux implementation compiles
-`protocol.FirewallPolicy` into typed google/nftables v0.3.0 chains, rules, named
+`protocol.FirewallPolicy` into typed google/nftables chains, rules, named
 counters, interval address sets, port sets, and dynamic timeout sets. Native
 Netlink is local kernel I/O; it does not make external API requests.
 

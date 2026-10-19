@@ -5,7 +5,7 @@ go 1.27.2
 require (
 	aead.dev/minisign v0.3.0
 	github.com/caddyserver/certmagic v0.25.6
-	github.com/google/nftables v0.3.0
+	github.com/google/nftables v0.3.1-0.20260430172505-f9b52ed2ba65
 	github.com/gorilla/websocket v1.5.3
 	github.com/libdns/alidns v1.0.7
 	github.com/libdns/azure v0.5.0
@@ -28,7 +28,7 @@ require (
 	github.com/libdns/porkbun v1.1.0
 	github.com/libdns/route53 v1.6.2
 	github.com/libdns/tencentcloud v1.4.3
-	github.com/mdlayher/netlink v1.7.3-0.20250113171957-fbb4dce95f42
+	github.com/mdlayher/netlink v1.8.1-0.20251028132421-dcc6cab9a6eb
 	github.com/miekg/dns v1.1.73
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/shirou/gopsutil/v4 v4.26.9
@@ -123,7 +123,7 @@ require (
 	github.com/libp2p/go-netroute v0.2.1 // indirect
 	github.com/linode/linodego v1.69.1 // indirect
 	github.com/lufia/plan9stats v0.0.0-20211012122336-39d0f177ccd0 // indirect
-	github.com/mdlayher/socket v0.5.0 // indirect
+	github.com/mdlayher/socket v0.5.1 // indirect
 	github.com/mholt/acmez/v3 v3.1.7 // indirect
 	github.com/netlify/open-api/v2 v2.60.0 // indirect
 	github.com/oklog/ulid/v2 v2.1.2 // indirect

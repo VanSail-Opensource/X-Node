@@ -8,4 +8,4 @@ Komari-agent (MIT) informed the Debian metrics inventory and collection approach
 
 Go module dependencies retain their respective licenses, including CertMagic (Apache-2.0), libdns/provider libraries, Gorilla WebSocket (BSD-2-Clause), gopsutil (BSD-3-Clause), Minisign (MIT) and Go supplementary libraries (BSD-3-Clause). Release source includes go.mod/go.sum for the exact dependency inventory.
 
-The firewall's typed rule/set and incremental reconciliation design was informed by ngrok/firewall_toolkit (MIT). Its source and managers are not incorporated. The native backend uses google/nftables v0.3.0 (Apache-2.0), mdlayher/netlink (MIT), and netipx (BSD-3-Clause); their licenses remain with the respective authors.
+The firewall's typed rule/set and incremental reconciliation design was informed by ngrok/firewall_toolkit (MIT). Its source and managers are not incorporated. The native backend uses google/nftables (Apache-2.0), mdlayher/netlink (MIT), and netipx (BSD-3-Clause); their licenses remain with the respective authors.

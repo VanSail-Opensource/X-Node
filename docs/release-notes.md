@@ -33,7 +33,7 @@ fixing `unknown(2566)` failures on hosts that emit multiple netlink notification
 per batch. Abandoned certificate, firewall, geodata and update artifacts are
 removed while active and rollback dependencies are preserved. Upgrades validate
 required persisted or staged capabilities against both replacement and rollback
-binaries. Hosted Debian and Ubuntu coverage adds low-disk recovery, boot firewall
+binaries. Hosted Debian coverage adds low-disk recovery, boot firewall
 restoration and urgent controls during bulk synchronization.
 
 # X-Node v2.0.7

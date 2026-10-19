@@ -180,7 +180,33 @@ func watchdogDiagnostics(ctx context.Context, runner host.Runner, tx firewall.Pe
 	return details.String()
 }
 
+func bootDiagnostics(ctx context.Context, runner host.Runner) string {
+	checks := [][]string{
+		{"systemctl", "show", "x-node-firewall.service", "--property=ActiveState,SubState,Result,ExecMainStatus"},
+		{"journalctl", "-u", "x-node-firewall.service", "--no-pager", "-n", "60"},
+		{"cat", "/var/lib/x-node/firewall/pending.json"},
+		{"nft", "list", "set", "inet", "x_node", "banned_v4"},
+	}
+	var details strings.Builder
+	for _, args := range checks {
+		output, err := runner.Run(ctx, args[0], args[1:]...)
+		fmt.Fprintf(&details, "%s: %s", strings.Join(args, " "), strings.TrimSpace(string(output)))
+		if err != nil {
+			fmt.Fprintf(&details, " (%v)", err)
+		}
+		details.WriteString("; ")
+	}
+	return details.String()
+}
+
 func afterReboot(ctx context.Context, r host.Runner) error {
+	// SSH can become reachable before multi-user.target finishes. Wait for the
+	// oneshot firewall restore instead of racing its UFW takeover and ban replay.
+	startCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	defer cancel()
+	if _, err := r.Run(startCtx, "systemctl", "start", "x-node-firewall.service"); err != nil {
+		return fmt.Errorf("boot firewall restore failed: %w: %s", err, bootDiagnostics(ctx, r))
+	}
 	if err := ownershipChecks(ctx, r, true); err != nil {
 		return err
 	}

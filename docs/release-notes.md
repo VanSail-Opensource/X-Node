@@ -1,3 +1,41 @@
+# X-Node v2.0.8
+
+Upgrade recovery now records a durable transaction exposed by `update.status`
+under `update_transaction_v1`. Lock contention is bounded to five seconds and
+honors cancellation, disposable downloads are cleaned under transaction
+ownership, and corrupt or unreadable state fails closed instead of appearing
+idle. A failed result-journal write makes a completed mutation uncertain and
+replays the recorded outcome without executing it twice. Commands have explicit
+acceptance and execution deadlines; on `activation_commands_v1` agents,
+`runtime.reload` and `geodata.refresh` complete only after validated activation
+and otherwise retain the previous runtime.
+
+Country ranges and CIDR exemptions stream to bounded private storage: at most 256
+prefixes per chunk, fixed-width range files merged on write, a 512 MiB bulk
+ceiling plus a 16 MiB filesystem reserve, and 512-element nftables set
+transactions. Dynamic bans, traffic barriers and firewall confirmation reserve an
+urgent utility slot during bulk synchronization. Overlapping CIDR exemptions
+compile to timed disjoint intervals without extending a shorter grant, while
+exact member-IP grants keep their scope. Masters must require
+`source_geoip_stream_v1`, `disk_firewall_sources_v1` and
+`firewall_cidr_exemptions_v1` before enabling those paths.
+
+Certificate profiles may omit a domain for administrator-owned local PEM files
+under `node_file_certificates_v1`, with each read bounded to one MiB. Certificate
+and geodata preparation stage candidates and publish them only after activation;
+cleanup retains active and previous generations, removes at most 64 abandoned
+cache or download directories per pass, and never deletes administrator-owned
+inputs. A geosite miss may trigger one verified refresh instead of downloading on
+every retry.
+
+Pins google/nftables so commit flushes consume coalesced rule echo replies,
+fixing `unknown(2566)` failures on hosts that emit multiple netlink notifications
+per batch. Abandoned certificate, firewall, geodata and update artifacts are
+removed while active and rollback dependencies are preserved. Upgrades validate
+required persisted or staged capabilities against both replacement and rollback
+binaries. Hosted Debian and Ubuntu coverage adds low-disk recovery, boot firewall
+restoration and urgent controls during bulk synchronization.
+
 # X-Node v2.0.7
 
 Fixes self-upgrade deadlock by keeping status reads independent of the installer

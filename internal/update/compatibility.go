@@ -6,6 +6,7 @@ import (
 	"github.com/VanSail-Opensource/X-Node/internal/protocol"
 	"os"
 	"path/filepath"
+	"slices"
 
 	"github.com/VanSail-Opensource/X-Node/internal/state"
 )
@@ -15,7 +16,18 @@ func (m *Manager) Pending() bool {
 	// The transaction is atomically replaced; do not join the installer here.
 	// Pending is called from the main loop and reconnect hello during shutdown.
 	transaction, err := m.read()
-	return err == nil && transaction.Status == "pending"
+	if os.IsNotExist(err) {
+		return false
+	}
+	if err != nil {
+		return true
+	}
+	switch transaction.Status {
+	case "confirmed", "rolled_back", "failed":
+		return false
+	default:
+		return true
+	}
 }
 
 // requiredCapabilities prevents downgrades from silently ignoring cached policy or journals.
@@ -161,11 +173,12 @@ func (m *Manager) requiredCapabilities() ([]string, error) {
 		}
 	}
 	var out []string
-	for _, key := range []string{"traffic_periods_v1", "traffic_period_barriers_v1", "authorization_expiry", "member_outbound_guards", "volatile_connection_controls_v1", "native_auxiliary_inbounds_v1", "native_firewall_v1", "xray_scoped_dns_v1", "firewall_control_v1", "host_firewall_ownership_v1", "xtables_compat_snapshot_v1", "transit_credentials_v1", "source_geoip_firewall_v1", "shared_domain_blocks_v1", "geodata_interval_v1"} {
-		if required[key] {
+	for key, enabled := range required {
+		if enabled {
 			out = append(out, key)
 		}
 	}
+	slices.Sort(out)
 	return out, nil
 }
 

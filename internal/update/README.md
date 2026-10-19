@@ -26,3 +26,15 @@ which reads the installed agent's version. It never reuses an obsolete installed
 CLI's platform gate or compares the upgrade target against the staged CLI itself.
 
 `locking.go` bounds process/file-lock contention to five seconds and honors cancellation. All service work is submitted after both locks exit. The timer executes the newly installed CLI. Old-host mitigation is documented in `../../docs/upgrade-recovery.md`.
+
+Compatibility checks enumerate every detected persisted capability, including
+staged configurations. `persisted_compatibility_test.go` guards disk sources,
+CIDR exemptions, streamed country generations and domain-free file certificates
+against unsafe replacement or rollback binaries.
+
+`cleanup.go` removes disposable `.new` downloads under transaction ownership on
+install exit and confirmation/startup. Installed binaries, both `.old` rollback
+dependencies and private journals remain protected. Corrupt transactions fail
+closed before installation or cleanup.
+Unreadable transactions report unavailable and retain the pending compatibility
+fence; status inspection never converts corrupt recovery state into idle.

@@ -17,6 +17,9 @@ import (
 )
 
 func Prepare(ctx context.Context, dir string, p Policy, hashes map[string]string, client *http.Client, refresh bool) (string, error) {
+	if err := pruneAbandonedStages(ctx, dir, time.Now()); err != nil {
+		return "", err
+	}
 	if len(p.Assets) == 0 {
 		return Resolve(dir), nil
 	}

@@ -69,7 +69,9 @@ done
 if ! "$ready"; then cat "$run_dir/console.log"; exit 1; fi
 scp -i "$run_dir/ssh-key" -P 10022 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null dist/x-node-linux-amd64 dist/xnodectl-linux-amd64 dist/host-fixture deploy/x-node.service deploy/x-node-firewall.service fixture@127.0.0.1:/tmp/
 ssh "${ssh_args[@]}" fixture@127.0.0.1 'sudo install -m 0755 /tmp/x-node-linux-amd64 /usr/local/bin/x-node && sudo install -m 0755 /tmp/xnodectl-linux-amd64 /usr/local/bin/xnodectl && sudo install -m 0644 /tmp/x-node.service /etc/systemd/system/x-node.service && sudo install -m 0644 /tmp/x-node-firewall.service /etc/systemd/system/x-node-firewall.service && sudo mkdir -p /etc/x-node /var/lib/x-node && printf "{\"master_url\":\"wss://127.0.0.1:65534/v1/agents/connect\",\"token\":\"disposable-fixture-token\"}" | sudo tee /etc/x-node/bootstrap.json >/dev/null && sudo chmod 0600 /etc/x-node/bootstrap.json && sudo systemctl daemon-reload && sudo install -D -m 0755 /tmp/host-fixture /usr/local/libexec/x-node-host-fixture'
-ssh "${ssh_args[@]}" fixture@127.0.0.1 "sudo /usr/local/libexec/x-node-host-fixture --ownership $ownership"
+large_firewall_checks=0
+if [[ "$distribution" == debian && "$ownership" == nftables-on ]]; then large_firewall_checks=1; fi
+ssh "${ssh_args[@]}" fixture@127.0.0.1 "sudo env XNODE_LARGE_FIREWALL_CHECK=$large_firewall_checks /usr/local/libexec/x-node-host-fixture --ownership $ownership"
 
 # A real reboot verifies restore ordering and that a fresh SSH connection works.
 initial_boot=$(ssh "${ssh_args[@]}" fixture@127.0.0.1 'cat /proc/sys/kernel/random/boot_id')

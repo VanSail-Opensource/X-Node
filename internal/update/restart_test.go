@@ -52,6 +52,20 @@ func TestTransactionLockHonorsCancellation(t *testing.T) {
 	}
 }
 
+func TestUnreadableUpgradeTransactionDoesNotLookIdle(t *testing.T) {
+	m := &Manager{Dir: t.TempDir()}
+	if m.Pending() {
+		t.Fatal("absent transaction reported pending")
+	}
+	if err := os.WriteFile(filepath.Join(m.Dir, "transaction.json"), []byte("interrupted"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	status, ok := m.Status().(map[string]string)
+	if !m.Pending() || !ok || status["status"] != "unavailable" {
+		t.Fatal("corrupt transaction enabled first-adoption or appeared idle", status)
+	}
+}
+
 func TestUpgradeObserversNeverWaitForInstaller(t *testing.T) {
 	m := &Manager{Dir: t.TempDir()}
 	if err := m.write(Transaction{Status: "pending"}); err != nil {

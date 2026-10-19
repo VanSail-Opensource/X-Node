@@ -40,7 +40,7 @@ func (g *Guard) Sync(ctx context.Context, update protocol.FirewallUpdate) error 
 	}
 	if !update.SourcesOnly && update.Version == g.state.MasterVersion && update.SnapshotID == g.state.SnapshotID {
 		if g.dirty {
-			return g.enforce(ctx)
+			return g.enforceMode(ctx, false)
 		}
 		return nil
 	}

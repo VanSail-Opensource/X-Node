@@ -19,7 +19,7 @@ func assetKey(c protocol.Config, p geodata.Policy) string {
 }
 
 // prepareNative is shared by activation and read-only command validation.
-// The caller owns nativeMu; no process-global environment is changed.
+// The caller owns nativeMu; managed paths do not rely on ambient asset settings.
 func (a *Agent) prepareNative(ctx, lifetime context.Context, c protocol.Config, p geodata.Policy) (protocol.Config, string, error) {
 	return a.prepareResolved(ctx, c, p, func(c protocol.Config) (protocol.Config, error) { return a.Certificates.Prepare(lifetime, c) })
 }

@@ -97,6 +97,7 @@ func pruneCertificateDirectories(root string, current, previous map[string]bool)
 	if err != nil {
 		return err
 	}
+	removed := 0
 	for _, entry := range entries {
 		if !entry.IsDir() || len(entry.Name()) != 64 || current[entry.Name()] || previous[entry.Name()] {
 			continue
@@ -110,6 +111,10 @@ func pruneCertificateDirectories(root string, current, previous map[string]bool)
 		}
 		if err := os.RemoveAll(target); err != nil {
 			return err
+		}
+		removed++
+		if removed == 64 {
+			break
 		}
 	}
 	return nil

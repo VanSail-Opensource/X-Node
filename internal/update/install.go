@@ -36,9 +36,21 @@ func (m *Manager) Install(ctx context.Context, id, version string, progress func
 		return result, e
 	}
 	defer unlock()
+	if _, e := m.read(); e != nil && !os.IsNotExist(e) {
+		return result, errors.New("cannot read upgrade transaction")
+	}
 	if t, e := m.read(); e == nil && t.Status == "pending" {
 		return result, errors.New("another upgrade is pending")
 	}
+	m.pruneDownloads()
+	// All returns before restart hold the transaction lock. Installed targets
+	// have already consumed .new files before the explicit unlock below.
+	cleanupPending := true
+	defer func() {
+		if cleanupPending {
+			m.pruneDownloads()
+		}
+	}()
 	base := "https://github.com/" + Repository + "/releases/download/" + result.Version + "/"
 	progress(map[string]string{"stage": "verify_manifest"})
 	manifest, e := m.fetch(ctx, base+"SHA256SUMS", 1<<20)
@@ -112,6 +124,8 @@ func (m *Manager) Install(ctx context.Context, id, version string, progress func
 	for _, target := range targets {
 		if e = os.Rename(target+".new", target); e != nil {
 			rollbackErr := m.restore(ctx, &transaction)
+			m.pruneDownloads()
+			cleanupPending = false
 			unlock()
 			if rollbackErr == nil {
 				rollbackErr = m.restart(ctx)
@@ -119,6 +133,8 @@ func (m *Manager) Install(ctx context.Context, id, version string, progress func
 			return result, errors.Join(e, rollbackErr)
 		}
 	}
+	m.pruneDownloads()
+	cleanupPending = false
 	unlock()
 	progress(map[string]string{"stage": "restart"})
 	if e = m.restart(ctx); e != nil {

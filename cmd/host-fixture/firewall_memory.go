@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"net/netip"
 	"os"
 	"runtime"
 	"strconv"
@@ -100,6 +101,10 @@ func firewallMemoryChecks(ctx context.Context, guard *firewall.Guard) error {
 		if elapsed := time.Since(started); elapsed > 10*time.Second {
 			<-finished
 			return fmt.Errorf("dynamic delivery waited %s for source staging", elapsed)
+		}
+		if banRemaining("banned_v4", netip.MustParseAddr("203.0.113.91")) <= 0 {
+			<-finished
+			return fmt.Errorf("urgent update completed without native enforcement")
 		}
 		if err = <-finished; err != nil {
 			return err

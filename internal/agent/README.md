@@ -25,6 +25,9 @@ attribution and transient read results. Real stream tests live with the runtime.
 `compatibility.go` compares individual capability requirements before adopting
 new state during an unconfirmed upgrade. `compatibility_test.go` covers adding
 utilities or member guards when accounting extensions are already cached.
+The same first-adoption fence covers streamed country assets and domain-free
+node-file certificates, so an unconfirmed binary can still restore its cached
+configuration before accepting a contract its rollback binary cannot read.
 
 The firewall guard owns local kernel observations and compressed ban durability;
 its joined background tasks keep disk/kernel work off the control reader and Xray

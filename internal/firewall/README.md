@@ -164,6 +164,8 @@ snapshots or telemetry copies.
 
 Dynamic snapshots use separate staging and reserved utility admission. A retry
 of an already committed desired version cannot shorten locally extended bans.
+Dynamic replay also bypasses dirty source preparation; interrupted source work
+must never occupy the reserved control slot during a dynamic retry.
 `exemption_ranges_linux.go` compiles overlapping CIDR grants into timed disjoint
 intervals without extending a shorter outer grant. Exact member IP grants retain
 their scope. CIDRs require `firewall_cidr_exemptions_v1` and a compatible rollback
@@ -173,3 +175,13 @@ Hosted portable/race regressions cover million-prefix working memory, recovery,
 references, expiry and retries. The disposable host fixture measures real RSS,
 checks urgent updates during bulk synchronization, and exercises country/CIDR
 sets and independent exemption expiry. These checks do not run on developer hosts.
+
+`stage_retention.go` retires day-old transfer cursors before their data, removing
+at most 64 bulk scratch files per pass under the existing source/host locks.
+Recent cursors protect all chunks; committed and rollback ranges are never stage
+cleanup candidates. Upgrade-pending or uncertain retention states defer cleanup.
+
+Free-space admission inspects the bulk directory's actual filesystem, including
+separate mounts. The Debian/nftables-on hosted VM explicitly enables million-prefix
+RSS/urgent-ban checks and real low-space mount/512 MiB quota recovery fixtures;
+the other ownership/distribution cases retain their existing recovery coverage.

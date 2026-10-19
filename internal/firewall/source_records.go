@@ -77,7 +77,7 @@ func bulkAdmission(dir string, extra int64) error {
 	if size+extra > bulkDiskLimit {
 		return errors.New("firewall bulk disk capacity exceeded")
 	}
-	return bulkFreeSpace(dir, extra)
+	return bulkFreeSpace(filepath.Join(dir, "bulk"), extra)
 }
 func appendSourceRecords(ctx context.Context, dir, path string, prefixes []string) (result error) {
 	if err := bulkAdmission(dir, int64(len(prefixes))*rangeBytes); err != nil {

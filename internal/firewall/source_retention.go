@@ -17,6 +17,9 @@ func (g *Guard) cleanupExpiredSources(ctx context.Context) {
 		return
 	}
 	defer release()
+	if err = g.pruneAbandonedStages(child, time.Now()); err != nil {
+		return
+	}
 	if err = g.cleanupSourceFiles(); err != nil {
 		g.mu.Lock()
 		g.kernelError = "FIREWALL_CLEANUP_PENDING"

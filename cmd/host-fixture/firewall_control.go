@@ -127,6 +127,9 @@ func firewallControlChecks(ctx context.Context, manager *firewall.Manager, polic
 	if err = countryRangeChecks(ctx, guard, manager, policy, runner); err != nil {
 		return err
 	}
+	if err = firewallStorageChecks(ctx, guard, manager.Dir, runner); err != nil {
+		return err
+	}
 	return firewallMemoryChecks(ctx, guard)
 }
 func waitFixture(ctx context.Context, ready func() bool) error {

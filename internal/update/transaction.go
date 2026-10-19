@@ -17,18 +17,23 @@ func (m *Manager) Confirm(ctx context.Context) error {
 	defer unlock()
 	t, e := m.read()
 	if os.IsNotExist(e) {
+		m.pruneDownloads()
 		return nil
 	}
 	if e != nil {
 		return e
 	}
 	if t.Status != "pending" || t.Version != m.Current {
+		if t.Status != "pending" {
+			m.pruneDownloads()
+		}
 		return nil
 	}
 	t.Status = "confirmed"
 	if e = m.write(t); e != nil {
 		return e
 	}
+	m.pruneDownloads()
 	unlock()
 	if t.Unit != "" {
 		_, _ = m.Runner.Run(ctx, "systemctl", "--no-block", "stop", t.Unit+".timer")

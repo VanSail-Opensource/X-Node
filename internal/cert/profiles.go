@@ -29,6 +29,7 @@ type Pool struct {
 	dir              string
 	profiles         map[string]*profile
 	active           map[string]string
+	runtimeKeys      map[string]bool
 	currentMaterial  map[string]bool
 	currentACME      map[string]bool
 	previousMaterial map[string]bool
@@ -45,6 +46,7 @@ func (p *Pool) Prepare(ctx context.Context, c protocol.Config) (protocol.Config,
 	if len(c.Certificates) > 64 {
 		return out, errors.New("too many certificate profiles")
 	}
+	p.discardUnusedCandidates(c)
 	prepared := map[string]bool{}
 	for id, spec := range c.Certificates {
 		cfg, key := profileSettings(c, spec)

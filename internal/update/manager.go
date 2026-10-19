@@ -111,8 +111,11 @@ func (m *Manager) Status() any {
 	// AtomicWrite publishes a complete transaction. Observers must not wait for
 	// the install lock: shutdown and the next hello both need this state.
 	t, e := m.read()
-	if e != nil {
+	if os.IsNotExist(e) {
 		return map[string]string{"status": "idle"}
+	}
+	if e != nil {
+		return map[string]string{"status": "unavailable"}
 	}
 	return t
 }

@@ -9,6 +9,14 @@ func extensionRequirements(config protocol.Config) map[string]bool {
 	required := map[string]bool{}
 	if config.Firewall.SourceGeoIP != nil {
 		required["source_geoip_firewall_v1"] = true
+		if config.Firewall.SourceGeoIP.Reference {
+			required["source_geoip_stream_v1"] = true
+		}
+	}
+	for _, certificate := range config.Certificates {
+		if certificate.Config.CertMode == "file" && certificate.Config.Domain == "" {
+			required["node_file_certificates_v1"] = true
+		}
 	}
 	if len(config.BlockedDomains) > 0 {
 		required["shared_domain_blocks_v1"] = true

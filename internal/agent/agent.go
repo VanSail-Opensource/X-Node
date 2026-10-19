@@ -401,6 +401,7 @@ func (a *Agent) activate(lifetime context.Context, job applyJob) error {
 	if e = a.Runtime.Apply(lifetime, resolved, job.Reload); e != nil {
 		return e
 	}
+	a.Certificates.RetainRuntime(c)
 	if job.Context.Err() != nil {
 		return job.Context.Err()
 	}

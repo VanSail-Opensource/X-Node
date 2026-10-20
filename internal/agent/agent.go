@@ -66,6 +66,7 @@ type Agent struct {
 	applied             chan applied
 	cancelApply         context.CancelFunc
 	applying            atomic.Bool
+	materialPending     bool // actor-owned until the latest activation succeeds
 	bans                chan banEvent
 	previous            state.Traffic
 	previousAccounting  map[string][2]uint64

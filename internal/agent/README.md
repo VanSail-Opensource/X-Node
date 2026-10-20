@@ -47,6 +47,8 @@ Incremental activation uses `activation.go` and the exhaustive consumer planner 
 applied baseline directly; controls during pending activation retain the desired
 native target and cannot report it applied prematurely. `loop.go` keeps control
 and traffic handling independent of `synchronization.go`'s serialized worker.
+Material rechecks remain pending across superseding controls/retries until the
+latest activation succeeds, so a consumed certificate-renewal event is not lost.
 Native preparation returns its actual candidate instead of compiling again.
 `validation_cache.go` rechecks content hashes and retains only a validation proof,
 separate from synthetic certificate material and activation candidates.

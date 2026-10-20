@@ -94,6 +94,7 @@ func (a *Agent) Run(ctx context.Context) error {
 					a.retryDelay = 0
 					a.retryAt = time.Time{}
 					a.desiredCached = true
+					a.materialPending = false
 				}
 			}
 			if done.Error != nil {

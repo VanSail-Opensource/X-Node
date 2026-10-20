@@ -68,7 +68,7 @@ func TestControlsDuringPendingBaselineRetainNativeTarget(t *testing.T) {
 		t.Fatal(err)
 	}
 	a.desired, a.hasDesired = c, true
-	a.applying.Store(true)
+	a.queue(context.Background(), applyJob{Revision: 1, Config: c, RecheckMaterial: true})
 	controls := protocol.New("user.controls", "controls", 2, protocol.UserControls{Users: []protocol.UserControl{{ID: 1, BlockNew: true}}})
 	controls.BaseRevision = 1
 	a.handle(context.Background(), controls)
@@ -76,7 +76,7 @@ func TestControlsDuringPendingBaselineRetainNativeTarget(t *testing.T) {
 		t.Fatal("unapplied baseline falsely acknowledged")
 	}
 	job := <-a.apply
-	if job.Revision != 2 || !job.Config.Users[0].BlockNew || string(job.Config.Xray) != string(c.Xray) {
+	if job.Revision != 2 || !job.RecheckMaterial || !job.Config.Users[0].BlockNew || string(job.Config.Xray) != string(c.Xray) {
 		t.Fatal("pending baseline/control overlay lost")
 	}
 	a.cancelApply()

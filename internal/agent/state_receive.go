@@ -129,7 +129,7 @@ func (a *Agent) handle(ctx context.Context, m protocol.Message) {
 		}
 		a.retryAt = time.Time{}
 		a.retryDelay = 0
-		if m.Type == "user.controls" && !a.applying.Load() && d.ConfigRevision == d.Revision && a.Runtime.Overlay(c) {
+		if m.Type == "user.controls" && !a.materialPending && !a.applying.Load() && d.ConfigRevision == d.Revision && a.Runtime.Overlay(c) {
 			if e = a.Store.Accept(c, m.Revision); e != nil {
 				fail(e)
 				return

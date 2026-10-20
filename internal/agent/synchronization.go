@@ -65,6 +65,8 @@ func (a *Agent) registerSecrets(c protocol.Config) {
 	a.Logs.SetSecrets(values...)
 }
 func (a *Agent) queue(ctx context.Context, job applyJob) {
+	a.materialPending = a.materialPending || job.RecheckMaterial
+	job.RecheckMaterial = a.materialPending
 	finishReload(a.reloadDone, errors.New("configuration superseded"))
 	a.reloadDone = job.Done
 	if a.cancelApply != nil {

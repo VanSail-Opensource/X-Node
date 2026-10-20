@@ -74,6 +74,7 @@ func BenchmarkRoutingApply(b *testing.B) {
 			stats := runtime.Statistics()
 			b.ReportMetric(float64(stats.Rebuilds-1), "rebuilds")
 			b.ReportMetric(float64(stats.ListenerGapMillis), "last-gap-ms")
+			b.ReportMetric(float64(stats.ListenerGapMicros), "last-gap-us")
 		})
 	}
 }

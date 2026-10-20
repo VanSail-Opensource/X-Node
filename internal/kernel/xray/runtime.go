@@ -69,6 +69,7 @@ func (r *Runtime) ApplyPrepared(ctx context.Context, next *Prepared, force bool)
 	defer r.mu.Unlock()
 	r.recordBuilds(next)
 	r.stats.ListenerGapMillis = 0
+	r.stats.ListenerGapMicros = 0
 	c := next.Source
 	if r.instance != nil && !force && hotEligible(r.current, next) {
 		if r.bridge != nil {
@@ -101,6 +102,8 @@ func (r *Runtime) ApplyPrepared(ctx context.Context, next *Prepared, force bool)
 		}
 	}
 	old := r.current
+	// Copying immutable protobufs is preparation; allocate before listeners stop.
+	compiled := proto.Clone(next.Core).(*core.Config)
 	started := time.Now()
 	r.running.Store(false)
 	r.registry.CloseAll()
@@ -108,7 +111,7 @@ func (r *Runtime) ApplyPrepared(ctx context.Context, next *Prepared, force bool)
 		_ = r.instance.Close()
 		r.instance = nil
 	}
-	if err := r.start(ctx, next, c); err != nil {
+	if err := r.start(ctx, next, c, compiled); err != nil {
 		if old != nil {
 			safe := wire.Clone(old.Source)
 			safe.Users = compatibleUsers(c.Users, old.Inbounds)
@@ -122,16 +125,23 @@ func (r *Runtime) ApplyPrepared(ctx context.Context, next *Prepared, force bool)
 	r.stats.MatcherBuilds += uint64(len(next.Router.Rule))
 	r.stats.LastMode = "rebuild"
 	r.stats.ListenerGapMillis = time.Since(started).Milliseconds()
+	r.stats.ListenerGapMicros = time.Since(started).Microseconds()
 	return nil
 }
-func (r *Runtime) start(ctx context.Context, p *Prepared, c wire.Config) error {
+func (r *Runtime) start(ctx context.Context, p *Prepared, c wire.Config, prepared ...*core.Config) error {
 	r.registry.SetInboundEpochs(p.Epochs)
 	bridge := &integration{Registry: r.registry, Observe: r.observe}
 	bridge.setAuxiliary(p.Auxiliary)
 	bridge.BanNanos.Store(int64(c.BanDuration()))
 	child := context.WithValue(ctx, bridgeKey{}, bridge)
 	// Native constructors may normalize protobufs. Preserve cached candidates.
-	inst, err := core.NewWithContext(child, proto.Clone(p.Core).(*core.Config))
+	compiled := p.Core
+	if len(prepared) > 0 {
+		compiled = prepared[0]
+	} else {
+		compiled = proto.Clone(p.Core).(*core.Config)
+	}
+	inst, err := core.NewWithContext(child, compiled)
 	if err != nil {
 		return err
 	}

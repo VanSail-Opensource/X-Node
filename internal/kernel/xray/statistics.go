@@ -7,7 +7,7 @@ type Statistics struct {
 	NativeBuilds, InboundBuilds, OutboundBuilds, RoutingBuilds          uint64
 	MatcherBuilds, HandlerReplacements, Rebuilds, LiveApplies, Overlays uint64
 	LastMode                                                            string
-	ListenerGapMillis                                                   int64
+	ListenerGapMillis, ListenerGapMicros                                int64
 }
 
 func (r *Runtime) Statistics() Statistics {

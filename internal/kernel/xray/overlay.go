@@ -21,5 +21,6 @@ func (r *Runtime) Overlay(c wire.Config) bool {
 	r.stats.Overlays++
 	r.stats.LastMode = "overlay"
 	r.stats.ListenerGapMillis = 0
+	r.stats.ListenerGapMicros = 0
 	return true
 }

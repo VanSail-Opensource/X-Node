@@ -18,7 +18,7 @@ The master server is a separate application. X-Node defines its versioned contra
 - Machine metrics, bounded redacted log reports, peer-proxy speedtests and temporary user bans for classified BitTorrent traffic.
 - Private cached operation and acknowledged traffic replay, signed binary updates and rollback.
 
-Xray is pinned to upstream `v26.10.10` by commit. Upstream marks this tag as prerelease. Managed inbounds support VLESS, VMess, Trojan, Shadowsocks, Hysteria 2, authenticated SOCKS/mixed and HTTP; native outbound configuration remains available. Protocol-specific settings and credentials are validated by the pinned core.
+Xray is pinned to upstream `v26.10.17` by commit. Upstream marks this tag as prerelease. Managed inbounds support VLESS, VMess, Trojan, Shadowsocks, Hysteria 2, authenticated SOCKS/mixed and HTTP; native outbound configuration remains available. Protocol-specific settings and credentials are validated by the pinned core. Supported incremental updates preserve the runtime and unrelated sessions; see [incremental configuration](docs/hot-reload.md).
 
 ## Installation
 

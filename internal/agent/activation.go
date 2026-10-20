@@ -93,7 +93,7 @@ func (a *Agent) activate(lifetime context.Context, job applyJob) error {
 		"prepare_apply_ms", time.Since(started).Milliseconds(), "native_builds", stats.NativeBuilds,
 		"inbound_builds", stats.InboundBuilds, "outbound_builds", stats.OutboundBuilds,
 		"routing_builds", stats.RoutingBuilds, "matcher_builds", stats.MatcherBuilds,
-		"runtime_rebuilds", stats.Rebuilds, "listener_gap_ms", stats.ListenerGapMillis)
+		"runtime_rebuilds", stats.Rebuilds, "listener_gap_ms", stats.ListenerGapMillis, "listener_gap_us", stats.ListenerGapMicros)
 	return nil
 }
 

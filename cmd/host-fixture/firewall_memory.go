@@ -102,7 +102,7 @@ func firewallMemoryChecks(ctx context.Context, guard *firewall.Guard) error {
 			<-finished
 			return fmt.Errorf("dynamic delivery waited %s for source staging", elapsed)
 		}
-		if banRemaining("banned_v4", netip.MustParseAddr("203.0.113.91")) <= 0 {
+		if banRemaining("banned_v4_v2", netip.MustParseAddr("203.0.113.91")) <= 0 {
 			<-finished
 			return fmt.Errorf("urgent update completed without native enforcement")
 		}

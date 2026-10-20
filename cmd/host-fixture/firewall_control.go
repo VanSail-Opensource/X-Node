@@ -94,7 +94,7 @@ func firewallControlChecks(ctx context.Context, manager *firewall.Manager, polic
 			return fmt.Errorf("ban blocked outbound/reply traffic: %w", err)
 		}
 	}
-	if err = waitFixture(ctx, func() bool { return banRemaining("banned_v4", netip.MustParseAddr("198.18.0.2")) > 30*time.Minute }); err != nil {
+	if err = waitFixture(ctx, func() bool { return banRemaining("banned_v4_v2", netip.MustParseAddr("198.18.0.2")) > 30*time.Minute }); err != nil {
 		return fmt.Errorf("repeat hit did not refresh ban: %w", err)
 	}
 	exemption := protocol.FirewallExemption{IP: "2001:db8:1::2", Generation: "vm-exempt", Until: now.Add(time.Minute)}
@@ -121,7 +121,7 @@ func firewallControlChecks(ctx context.Context, manager *firewall.Manager, polic
 	if err = guard.Sync(ctx, protocol.FirewallUpdate{Version: 4, SourcesOnly: true, SnapshotID: "vm-source-persist", Final: true, SourcesComplete: true, Sources: []protocol.FirewallSource{source}}); err != nil {
 		return err
 	}
-	if banRemaining("banned_v4", netip.MustParseAddr("203.0.113.90")) <= 0 {
+	if banRemaining("banned_v4_v2", netip.MustParseAddr("203.0.113.90")) <= 0 {
 		return fmt.Errorf("durable ban was not installed")
 	}
 	if err = countryRangeChecks(ctx, guard, manager, policy, runner); err != nil {

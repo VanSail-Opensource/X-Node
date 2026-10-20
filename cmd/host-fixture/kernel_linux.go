@@ -39,7 +39,7 @@ func ruleHandles(c *nftables.Conn, t *nftables.Table) (map[string]uint64, error)
 func liveStateChecks(ctx context.Context, m *firewall.Manager, p protocol.FirewallPolicy) error {
 	c := &nftables.Conn{}
 	table := &nftables.Table{Name: "x_node", Family: nftables.TableFamilyINet}
-	ban, err := c.GetSetByName(table, "banned_v4")
+	ban, err := c.GetSetByName(table, "banned_v4_v2")
 	if err != nil {
 		return err
 	}
@@ -66,6 +66,9 @@ func liveStateChecks(ctx context.Context, m *firewall.Manager, p protocol.Firewa
 	if err != nil || len(meterBefore) == 0 {
 		return fmt.Errorf("SYN meter missing: %w", err)
 	}
+	if err := legacyBanFixture(c, table); err != nil {
+		return err
+	}
 	p.TCPPorts = append(append([]int(nil), p.TCPPorts...), 8443)
 	tx, err := m.Apply(ctx, "fixture-incremental", p, false)
 	if err != nil {
@@ -73,6 +76,11 @@ func liveStateChecks(ctx context.Context, m *firewall.Manager, p protocol.Firewa
 	}
 	if err = m.Confirm(ctx, tx.ID); err != nil {
 		return err
+	}
+	for _, name := range []string{"banned_v4", "banned_v6_64"} {
+		if _, err := c.GetSetByName(table, name); err == nil {
+			return fmt.Errorf("legacy ban set survived migration")
+		}
 	}
 	after, err := ruleHandles(c, table)
 	if err != nil {
@@ -185,7 +193,7 @@ func bootDiagnostics(ctx context.Context, runner host.Runner) string {
 		{"systemctl", "show", "x-node-firewall.service", "--property=ActiveState,SubState,Result,ExecMainStatus"},
 		{"journalctl", "-u", "x-node-firewall.service", "--no-pager", "-n", "60"},
 		{"cat", "/var/lib/x-node/firewall/pending.json"},
-		{"nft", "list", "set", "inet", "x_node", "banned_v4"},
+		{"nft", "list", "set", "inet", "x_node", "banned_v4_v2"},
 	}
 	var details strings.Builder
 	for _, args := range checks {
@@ -226,7 +234,7 @@ func afterReboot(ctx context.Context, r host.Runner) error {
 	if len(rules) != 0 {
 		return fmt.Errorf("boot enabled DNS before resolver readiness")
 	}
-	if banRemaining("banned_v4", netip.MustParseAddr("203.0.113.90")) <= 0 {
+	if banRemaining("banned_v4_v2", netip.MustParseAddr("203.0.113.90")) <= 0 {
 		return fmt.Errorf("reboot lost a durable firewall ban")
 	}
 	if _, err = r.Run(ctx, "xnodectl", "uninstall"); err != nil {

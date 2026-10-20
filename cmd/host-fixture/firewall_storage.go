@@ -39,7 +39,7 @@ func firewallStorageChecks(ctx context.Context, guard *firewall.Guard, dir strin
 	if err := guard.Sync(ctx, update); err == nil {
 		return fmt.Errorf("low-disk source admission unexpectedly succeeded")
 	}
-	if guard.Status().SourceGenerations["vm-storage"] != "" || banRemaining("banned_v4", netip.MustParseAddr("203.0.113.90")) <= 0 {
+	if guard.Status().SourceGenerations["vm-storage"] != "" || banRemaining("banned_v4_v2", netip.MustParseAddr("203.0.113.90")) <= 0 {
 		return fmt.Errorf("low-disk admission changed current enforcement")
 	}
 	if _, err := runner.Run(ctx, "umount", bulk); err != nil {
@@ -58,7 +58,7 @@ func firewallStorageChecks(ctx context.Context, guard *firewall.Guard, dir strin
 		return err
 	}
 	defer os.Remove(filler)
-	truncateErr := f.Truncate(512 << 20)
+	truncateErr := f.Truncate(2 << 30)
 	closeErr := f.Close()
 	if truncateErr != nil || closeErr != nil {
 		return fmt.Errorf("prepare storage-cap fixture: %w", errors.Join(truncateErr, closeErr))
@@ -66,11 +66,11 @@ func firewallStorageChecks(ctx context.Context, guard *firewall.Guard, dir strin
 	update.SnapshotID = "vm-storage-cap"
 	update.Sources[0].Generation = "vm-storage-rejected"
 	if err = guard.Sync(ctx, update); err == nil || guard.Status().SourceGenerations["vm-storage"] != "vm-storage" {
-		return fmt.Errorf("512 MiB cap replaced current source enforcement")
+		return fmt.Errorf("2 GiB cap replaced current source enforcement")
 	}
 	if err = os.Remove(filler); err != nil {
 		return err
 	}
-	fmt.Println("Firewall low-disk recovery and 512 MiB admission cap passed")
+	fmt.Println("Firewall low-disk recovery and 2 GiB admission cap passed")
 	return guard.Sync(ctx, protocol.FirewallUpdate{SourcesOnly: true, Version: 4, SnapshotID: "vm-storage-remove", Final: true, RemoveSources: []string{"vm-storage"}})
 }

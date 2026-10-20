@@ -2,6 +2,8 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/VanSail-Opensource/X-Node/internal/dns"
 	"github.com/VanSail-Opensource/X-Node/internal/geodata"
@@ -15,6 +17,24 @@ func (a *Agent) ensureAssets(ctx context.Context, c protocol.Config, p geodata.P
 	defer a.geoMu.Unlock()
 	if ctx.Err() != nil {
 		return "", ctx.Err()
+	}
+	// Laziness avoids constructing an unused core, not validating its selector.
+	if p.Outbound != "" {
+		var native struct {
+			Outbounds []struct {
+				Tag string `json:"tag"`
+			} `json:"outbounds"`
+		}
+		if err := json.Unmarshal(c.Xray, &native); err != nil {
+			return "", err
+		}
+		found := false
+		for _, out := range native.Outbounds {
+			found = found || out.Tag == p.Outbound
+		}
+		if !found {
+			return "", errors.New("unknown asset download outbound")
+		}
 	}
 	client, closeClient := lazyAssetClient(ctx, c, p)
 	defer closeClient()

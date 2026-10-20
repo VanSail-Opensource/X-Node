@@ -82,3 +82,11 @@ func TestValidationProofUsesContentAndNeverSeedsActivation(t *testing.T) {
 		t.Fatal("changed proof or synthetic isolation lost")
 	}
 }
+
+func TestCachedAssetsStillValidateSelectedOutbound(t *testing.T) {
+	a := &Agent{Dir: t.TempDir()}
+	c := protocol.Config{Xray: json.RawMessage(`{"inbounds":[],"outbounds":[{"tag":"direct","protocol":"freedom"}]}`)}
+	if _, err := a.ensureAssets(context.Background(), c, geodata.Policy{Outbound: "missing"}, false); err == nil {
+		t.Fatal("cached/no-op download accepted unknown outbound")
+	}
+}

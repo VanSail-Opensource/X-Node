@@ -84,6 +84,9 @@ func buildSections(p, previous *Prepared) error {
 		p.Counts = BuildCounts{1, len(c.InboundConfigs), len(c.OutboundConfigs), 1}
 		return err
 	}
+	if err = conf.PostProcessConfigureFile(&c); err != nil {
+		return err
+	}
 	coreConfig := &core.Config{}
 	if previous.StaticHash == p.StaticHash {
 		for _, app := range previous.Core.App {

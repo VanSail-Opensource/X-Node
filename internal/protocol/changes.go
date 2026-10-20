@@ -45,14 +45,24 @@ func nativeIdentity(c Config) map[string]any {
 	}
 	users := make([]any, 0, len(c.Users))
 	for _, u := range c.Users {
-		users = append(users, []any{u.ID, u.UUID, u.Credentials, u.TransitCredentials, u.InboundTags})
+		raw, _ := json.Marshal(u)
+		var identity map[string]any
+		decoder := json.NewDecoder(bytes.NewReader(raw))
+		decoder.UseNumber()
+		_ = decoder.Decode(&identity)
+		for _, key := range []string{"active_ip_limit", "connection_limit", "speed_limit_mbps", "burst_speed_limit_mbps", "speed_limit_after_seconds", "speed_limit_reset_seconds", "block_new", "accounting_period", "valid_until"} {
+			delete(identity, key)
+		}
+		users = append(users, identity)
 	}
 	fields["users"] = users
 	if native, ok := fields["xray"].(map[string]any); ok {
 		delete(native, "geodata")
 	}
 	// Ban duration changes update the dispatch bridge, not Xray configuration.
-	fields["torrent"] = map[string]any{"enabled": c.Torrent.Enabled}
+	if torrent, ok := fields["torrent"].(map[string]any); ok {
+		delete(torrent, "ban_seconds")
+	}
 	return fields
 }
 

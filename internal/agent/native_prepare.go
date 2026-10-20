@@ -14,22 +14,27 @@ import (
 )
 
 func assetKey(c protocol.Config, p geodata.Policy) string {
+	p.IntervalHours, p.Cron = nil, ""
 	raw, _ := json.Marshal([]any{p, c.AssetHashes})
 	return string(raw)
 }
 
 // prepareNative is shared by activation and read-only command validation.
 // The caller owns nativeMu; managed paths do not rely on ambient asset settings.
-func (a *Agent) prepareNative(ctx, lifetime context.Context, c protocol.Config, p geodata.Policy) (*xray.Prepared, string, error) {
-	return a.prepareResolved(ctx, c, p, true, func(c protocol.Config) (protocol.Config, error) { return a.Certificates.Prepare(lifetime, c) })
+func (a *Agent) prepareNative(ctx, lifetime context.Context, c protocol.Config, p geodata.Policy, recheck ...bool) (*xray.Prepared, string, error) {
+	verify := len(recheck) > 0 && recheck[0]
+	return a.prepareResolved(ctx, c, p, true, verify, func(c protocol.Config) (protocol.Config, error) { return a.Certificates.Prepare(lifetime, c) })
 }
 func (a *Agent) validateNative(ctx context.Context, c protocol.Config, p geodata.Policy) error {
+	if err := a.checkCountryGeneration(ctx, c); err != nil {
+		return err
+	}
 	key, keyErr := a.validationIdentity(c, p)
 	if keyErr == nil && a.validationValid && a.validationKey == key {
 		return nil
 	}
 	err := cert.ValidateProfiles(ctx, c, func(resolved protocol.Config) error {
-		_, _, err := a.prepareResolved(ctx, c, p, false, func(protocol.Config) (protocol.Config, error) { return resolved, nil })
+		_, _, err := a.prepareResolved(ctx, c, p, false, true, func(protocol.Config) (protocol.Config, error) { return resolved, nil })
 		return err
 	})
 	if err == nil {
@@ -39,18 +44,12 @@ func (a *Agent) validateNative(ctx context.Context, c protocol.Config, p geodata
 	}
 	return err
 }
-func (a *Agent) prepareResolved(ctx context.Context, c protocol.Config, p geodata.Policy, activation bool, prepare func(protocol.Config) (protocol.Config, error)) (*xray.Prepared, string, error) {
-	if policy := c.Firewall.SourceGeoIP; policy != nil && policy.Reference {
-		ready, err := a.Guard.SyncGeoIP(ctx, protocol.GeoIPChunk{Generation: policy.Generation, Probe: true})
-		if err != nil {
-			return nil, "", err
-		}
-		if !ready {
-			return nil, "", errors.New("country range generation is not staged")
-		}
+func (a *Agent) prepareResolved(ctx context.Context, c protocol.Config, p geodata.Policy, activation, verify bool, prepare func(protocol.Config) (protocol.Config, error)) (*xray.Prepared, string, error) {
+	if err := a.checkCountryGeneration(ctx, c); err != nil {
+		return nil, "", err
 	}
 	target := a.geoCandidate
-	usingCandidate := target != "" && a.geoCandidateKey == assetKey(c, p)
+	usingCandidate := activation && !verify && target != "" && a.geoCandidateKey == assetKey(c, p)
 	var err error
 	if !usingCandidate {
 		target, err = a.ensureAssets(ctx, c, p, false)
@@ -107,6 +106,19 @@ func (a *Agent) prepareResolved(ctx context.Context, c protocol.Config, p geodat
 		a.nativePrepared = prepared
 	}
 	return prepared, target, nil
+}
+
+func (a *Agent) checkCountryGeneration(ctx context.Context, c protocol.Config) error {
+	if policy := c.Firewall.SourceGeoIP; policy != nil && policy.Reference {
+		ready, err := a.Guard.SyncGeoIP(ctx, protocol.GeoIPChunk{Generation: policy.Generation, Probe: true})
+		if err != nil {
+			return err
+		}
+		if !ready {
+			return errors.New("country range generation is not staged")
+		}
+	}
+	return nil
 }
 
 // Validation artifacts are deliberately separate from real activation material.

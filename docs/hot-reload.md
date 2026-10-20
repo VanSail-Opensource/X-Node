@@ -11,7 +11,9 @@ Signed binaries are built only in release delivery.
 - [x] Apply registry, utility, firewall and supported routing changes separately.
 - [x] Preserve unchanged listeners and scoped accounting/revocation barriers.
 - [x] Add hosted real-stream, invalidation and compilation-count regressions.
-- [ ] Verify hosted Quality, signed artifacts and compatible panel delivery.
+
+Release acceptance requires hosted Quality, signed artifacts and the compatible
+panel pin. Their terminal results are recorded with the delivered release.
 
 ## Constraints
 

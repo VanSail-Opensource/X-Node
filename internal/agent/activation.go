@@ -41,7 +41,7 @@ func (a *Agent) activate(lifetime context.Context, job applyJob) error {
 			}
 			a.geoCandidate, a.geoCandidateKey = target, assetKey(c, p)
 		}
-		candidate, dir, err := a.prepareNative(job.Context, lifetime, c, p)
+		candidate, dir, err := a.prepareNative(job.Context, lifetime, c, p, job.Reload)
 		if err != nil {
 			return err
 		}
@@ -78,7 +78,8 @@ func (a *Agent) activate(lifetime context.Context, job applyJob) error {
 	if err = a.Store.Accept(c, job.Revision); err != nil {
 		return err
 	}
-	a.geoCandidate, a.geoCandidateKey = "", ""
+	// Keep the verified immutable generation available to account/rule edits;
+	// explicit validation/reload and scheduled refresh still recheck its bytes.
 	if native {
 		a.Certificates.Commit(c)
 	}

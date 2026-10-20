@@ -152,7 +152,7 @@ The old snapshot stays readable by the rollback binary until upgrade confirmatio
 
 `bulk_lock.go`, `source_cleanup.go` and `source_retention.go` serialize writers and
 remove scratch/unused generations. Bulk storage, including staging/runs, has a
-512 MiB ceiling and a 16 MiB filesystem reserve. `memory_admission_linux.go`
+2 GiB ceiling and a 16 MiB filesystem reserve. `memory_admission_linux.go`
 requires kernel-set staging headroom; admission errors preserve active rules.
 `range_sets_linux.go` populates unreferenced sets in 512-element transactions.
 
@@ -183,5 +183,28 @@ cleanup candidates. Upgrade-pending or uncertain retention states defer cleanup.
 
 Free-space admission inspects the bulk directory's actual filesystem, including
 separate mounts. The Debian/nftables-on hosted VM explicitly enables million-prefix
-RSS/urgent-ban checks and real low-space mount/512 MiB quota recovery fixtures;
+RSS/urgent-ban checks and real low-space mount/2 GiB quota recovery fixtures;
 the other ownership/distribution cases retain their existing recovery coverage.
+
+## Capacity and hot-path retries (v2.0.10)
+
+Policy reconciliation creates `banned_v4_v2`/`banned_v6_64_v2` with 1,048,576
+entries each, switches rules, then deletes unreferenced legacy sets in the same
+atomic transaction. Startup restores durable bans. Master admission caps one
+million restrictions; source refreshes reserve at most 48,576 additional entries.
+Enforcement selects master bans before source refreshes, then later deadlines,
+with deterministic ties and dropped accounting. `ban_capacity.go` owns these
+limits and the 1-second to 1-minute enforcement retry delay. Explicit master and
+source commands bypass the periodic deadline; success clears it.
+
+Only blacklist observations consult `source_lookup.go`. Sorted source IDs make
+attribution deterministic. A revision owns at most 32 MiB of resident ranges,
+4 MiB of sparse indexes, bounded last-block caches, and cached file handles/sizes.
+Repeated hits reuse blocks; generation changes and shutdown close handles.
+Bulk sorting uses one MiB plus bounded readers, handles ten million IP/CIDR
+records without expansion, and reserves up to 2 GiB disk for staging, output,
+and rollback. Free-space failures retain the active generation. The 256 MiB
+inventory-processing budget excludes kernel set allocations and independent
+Xray/session and dynamic-master-state workloads. Hosted `source_scale_test.go`
+checks ten million mixed host/CIDR records and peak heap; capacity/retry/lookup
+regressions run in hosted Quality, never as local automated suites.

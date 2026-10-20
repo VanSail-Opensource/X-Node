@@ -22,7 +22,7 @@ func (g *Guard) syncSources(ctx context.Context, update protocol.FirewallUpdate)
 	if err := validateUpdate(update); err != nil {
 		return err
 	}
-	if !protocol.ValidName(update.SnapshotID) || update.Index < 0 || update.Index > 10000 {
+	if !protocol.ValidName(update.SnapshotID) || update.Index < 0 || update.Index > maxSourcePrefixes/256+1 {
 		return errors.New("invalid source snapshot")
 	}
 	if g.sourceUpgradePending() {
@@ -119,6 +119,14 @@ func (g *Guard) syncSources(ctx context.Context, update protocol.FirewallUpdate)
 	for _, id := range stage.Remove {
 		delete(next, id)
 	}
+	total := 0
+	for _, source := range next {
+		total += source.PrefixCount
+	}
+	if total > maxSourcePrefixes {
+		g.mu.Unlock()
+		return errors.New("source prefix capacity exceeded")
+	}
 	g.state.Sources = next
 	g.state.SourceMasterVersion = update.Version
 	g.state.SourceRevision++
@@ -133,6 +141,7 @@ func (g *Guard) syncSources(ctx context.Context, update protocol.FirewallUpdate)
 		g.mu.Unlock()
 		return err
 	}
+	g.closeSourceLookups()
 	g.dirty, g.sourcesDirty = true, true
 	g.mu.Unlock()
 	if err := g.clearSourceStage(); err != nil {

@@ -41,6 +41,12 @@ func (g *Guard) applyRecord(record journalRecord) {
 		g.state.SnapshotID = record.SnapshotID
 	}
 	for _, ban := range record.Bans {
+		if old, ok := g.state.Bans[ban.Prefix]; ok && old.Source != "" {
+			g.sourceBanCount--
+		}
+		if ban.Source != "" {
+			g.sourceBanCount++
+		}
 		g.state.Bans[ban.Prefix] = ban
 	}
 	for _, item := range record.Exemptions {
@@ -56,6 +62,9 @@ func (g *Guard) applyRecord(record journalRecord) {
 		g.state.Events[event.ID] = event
 	}
 	for _, prefix := range record.Remove {
+		if g.state.Bans[prefix].Source != "" {
+			g.sourceBanCount--
+		}
 		delete(g.state.Bans, prefix)
 		g.resetAt[prefix] = time.Now().UTC()
 	}

@@ -15,7 +15,8 @@ type banBackend interface {
 }
 
 func (g *Guard) enforce(ctx context.Context) error { return g.enforceMode(ctx, true) }
-func (g *Guard) enforceMode(ctx context.Context, withSources bool) error {
+func (g *Guard) enforceMode(ctx context.Context, withSources bool) (result error) {
+	defer func() { g.enforcementResult(result, time.Now()) }()
 	policy := g.policy.Load()
 	if policy == nil || !policy.Enabled {
 		g.dirty = false
@@ -31,6 +32,9 @@ func (g *Guard) enforceMode(ctx context.Context, withSources bool) error {
 			bans = append(bans, ban)
 		}
 	}
+	var dropped uint64
+	bans, dropped = boundedBans(bans, banSetSize)
+	g.dropped.Add(dropped)
 	for _, exemption := range g.state.Exemptions {
 		if exemption.Until.After(now) {
 			exemptions = append(exemptions, exemption)
@@ -65,6 +69,7 @@ type stagedBanBackend interface {
 }
 
 func (m *Manager) updateBans(ctx context.Context, version, sourceVersion uint64, bans []protocol.FirewallBan, exemptions []protocol.FirewallExemption, sources []protocol.FirewallSource, replaceSources bool) error {
+	bans, _ = boundedBans(bans, banSetSize)
 	backend := m.backend()
 	staged, canStage := backend.(stagedBanBackend)
 	var targets map[string]string
@@ -149,5 +154,6 @@ func (m *Manager) restoreBans(ctx context.Context, policy protocol.FirewallPolic
 		}
 	}
 	_ = backend
+	bans, _ = boundedBans(bans, banSetSize)
 	return m.updateBans(ctx, guard.state.Revision, guard.state.SourceRevision, bans, exemptions, sources, true)
 }

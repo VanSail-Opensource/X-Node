@@ -38,16 +38,16 @@ func (nativeBackend) ApplyBans(ctx context.Context, bans []protocol.FirewallBan,
 	for _, set := range sets {
 		byName[set.Name] = set
 	}
-	desired := map[string][]nftables.SetElement{"banned_v4": {}, "banned_v6_64": {}, "exempt_v4": {}, "exempt_v6": {}}
+	desired := map[string][]nftables.SetElement{banSetV4: {}, banSetV6: {}, "exempt_v4": {}, "exempt_v6": {}}
 	now := time.Now()
 	for _, ban := range bans {
 		prefix, err := protocol.FirewallPrefix(ban.Prefix)
 		if err != nil {
 			return err
 		}
-		name := "banned_v4"
+		name := banSetV4
 		if prefix.Addr().Is6() {
-			name = "banned_v6_64"
+			name = banSetV6
 		}
 		remaining := ban.Until.Sub(now)
 		if remaining <= 0 {

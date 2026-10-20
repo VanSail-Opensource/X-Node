@@ -49,14 +49,18 @@ func compile(p protocol.FirewallPolicy, redirect bool, ssh []int) (*policyPlan, 
 		v6   bool
 		ttl  time.Duration
 	}{
-		{"banned_v4", false, 72 * time.Hour}, {"banned_v6_64", true, 72 * time.Hour},
+		{banSetV4, false, 72 * time.Hour}, {banSetV6, true, 72 * time.Hour},
 		{"syn_v4", false, time.Minute}, {"syn_v6", true, time.Minute},
 	} {
 		key := nftables.TypeIPAddr
 		if pair.v6 {
 			key = nftables.TypeIP6Addr
 		}
-		b.sets = append(b.sets, setSpec{set: &nftables.Set{Table: b.table, Name: pair.name, KeyType: key, Dynamic: true, HasTimeout: true, Timeout: pair.ttl, Size: 65535}})
+		size := uint32(65535)
+		if pair.name == banSetV4 || pair.name == banSetV6 {
+			size = banSetSize
+		}
+		b.sets = append(b.sets, setSpec{set: &nftables.Set{Table: b.table, Name: pair.name, KeyType: key, Dynamic: true, HasTimeout: true, Timeout: pair.ttl, Size: size}})
 	}
 	b.banSets()
 	b.protection(p.Protect)

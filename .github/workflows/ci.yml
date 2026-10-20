@@ -28,6 +28,11 @@ jobs:
       - name: Race and real-kernel regressions
         # Xray's VLESS TLS splice paths use uintptr-based field offsets that checkptr rejects.
         run: go test -race -gcflags='github.com/xtls/xray-core/proxy/vless/...=-d=checkptr=0' -count=1 -coverprofile=coverage.out ./...
+      - name: Source inventory RSS budget
+        run: |
+          go test -c -o /tmp/firewall-scale ./internal/firewall
+          /usr/bin/time -f %M -o /tmp/firewall-rss /tmp/firewall-scale -test.run ^TestTenMillionSourceRecordsBoundedMemory$ -test.v
+          test "$(cat /tmp/firewall-rss)" -le 262144
       - name: Static analysis
         run: go vet ./...
       - name: API schemas

@@ -11,6 +11,7 @@ func (g *Guard) Run(ctx context.Context, send func(protocol.Message, bool) bool)
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 	var workers sync.WaitGroup
+	defer func() { g.mu.Lock(); g.closeSourceLookups(); g.mu.Unlock() }()
 	defer workers.Wait()
 	nextReport := time.Time{}
 	nextCleanup := time.Now().Add(time.Minute)
@@ -34,7 +35,7 @@ func (g *Guard) Run(ctx context.Context, send func(protocol.Message, bool) bool)
 			if err == nil {
 				err = g.expire(time.Now().UTC())
 			}
-			if err == nil && (g.dirty || g.sourcesDirty) && !g.applying {
+			if err == nil && (g.dirty || g.sourcesDirty) && !g.applying && g.enforcementDue(time.Now()) {
 				g.applying = true
 				workers.Add(1)
 				go func() {

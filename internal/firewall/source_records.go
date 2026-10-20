@@ -15,7 +15,10 @@ import (
 	"go4.org/netipx"
 )
 
-const bulkDiskLimit = 512 << 20
+// Ten million fixed-width records need 330 MB. Reserve staging, sorted
+// output and a retained rollback generation without loading them into memory.
+const bulkDiskLimit = 2 << 30
+const maxSourcePrefixes = 10_000_000
 const rangeBytes = 33
 
 type diskRange [rangeBytes]byte

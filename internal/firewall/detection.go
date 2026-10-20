@@ -29,11 +29,15 @@ func (g *Guard) exempt(ip netip.Addr, now time.Time) bool {
 	return false
 }
 func (g *Guard) sourceBan(ip netip.Addr, now time.Time) (protocol.FirewallBan, bool) {
-	for id, source := range g.state.Sources {
+	g.rebuildSourceLookups()
+	for i := range g.lookups {
+		lookup := &g.lookups[i]
+		id := lookup.id
+		source := g.state.Sources[id]
 		if !source.Until.After(now) || source.Expired {
 			continue
 		}
-		contained, err := rangeContains(sourcePath(g.dir, id, source.Generation), ip)
+		contained, err := lookup.contains(ip)
 		if err != nil {
 			g.kernelError = "FIREWALL_SOURCE_UNAVAILABLE"
 			continue
@@ -67,12 +71,16 @@ func (g *Guard) processHits(now time.Time) error {
 		if !exists {
 			ban, exists = g.state.Bans[prefix.String()]
 		}
-		if !exists || !ban.Until.After(hit.at) {
+		if hit.rule == "blacklist" && (!exists || !ban.Until.After(hit.at)) {
 			ban, exists = g.sourceBan(hit.ip, hit.at)
 		}
 		if exists && ban.Until.After(hit.at) {
 			until := hit.at.Add(time.Duration(ban.RefreshSeconds) * time.Second)
 			if until.After(ban.Until) {
+				if _, stored := g.state.Bans[ban.Prefix]; !stored && ban.Source != "" && g.sourceBanCount+len(updates) >= sourceBanLimit {
+					g.dropped.Add(1)
+					continue
+				}
 				ban.Until = until
 				updates[ban.Prefix] = ban
 			}

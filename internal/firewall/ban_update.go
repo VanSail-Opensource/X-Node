@@ -40,6 +40,7 @@ func (g *Guard) Update(ctx context.Context, update protocol.FirewallUpdate) erro
 	for i := range record.Bans {
 		prefix, _ := protocol.FirewallPrefix(record.Bans[i].Prefix)
 		record.Bans[i].Prefix = prefix.String()
+		record.Bans[i].Source = ""
 	}
 	for i := range record.Exemptions {
 		key, _ := protocol.ExemptionKey(record.Exemptions[i].IP)
@@ -55,6 +56,9 @@ func (g *Guard) Update(ctx context.Context, update protocol.FirewallUpdate) erro
 			return err
 		}
 		record.RemoveExemptions[i] = key
+	}
+	if err := g.admitMasterBans(record); err != nil {
+		return err
 	}
 	if err := g.markExemptionFormat(record.Exemptions); err != nil {
 		return err

@@ -47,9 +47,9 @@ func (b *policyPlan) banSets() {
 	b.chain("blacklist", nil, nil, "", false)
 	b.preserveRules = map[string]bool{}
 	for _, v6 := range []bool{false, true} {
-		suffix, key, ban, lan, refresh := "v4", nftables.TypeIPAddr, "banned_v4", "lan_v4", "refresh_v4"
+		suffix, key, ban, lan, refresh := "v4", nftables.TypeIPAddr, banSetV4, "lan_v4", "refresh_v4"
 		if v6 {
-			suffix, key, ban, lan, refresh = "v6", nftables.TypeIP6Addr, "banned_v6_64", "lan_v6", "refresh_v6"
+			suffix, key, ban, lan, refresh = "v6", nftables.TypeIP6Addr, banSetV6, "lan_v6", "refresh_v6"
 		}
 		b.sets = append(b.sets, setSpec{set: &nftables.Set{Table: b.table, Name: "exempt_" + suffix, KeyType: key, HasTimeout: true, Timeout: 72 * time.Hour, Dynamic: true, Size: 1 << 20}, preserve: true})
 		b.sets = append(b.sets, setSpec{set: &nftables.Set{Table: b.table, Name: "exempt_prefix_" + suffix, KeyType: key, Interval: true, HasTimeout: true, Timeout: 72 * time.Hour}, preserve: true})

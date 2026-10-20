@@ -1,3 +1,15 @@
+# X-Node v2.0.10
+
+Raises versioned dynamic ban sets to 1,048,576 entries and atomically retires
+legacy sets after rule migration. Master restrictions take priority over bounded
+source refreshes. Persistent kernel failures back off from one second to one
+minute; explicit commands still retry immediately.
+
+Blacklist attribution uses bounded resident or sparse indexes and cached file
+handles and blocks. Other observations skip source files. Source processing
+supports ten million compact IP/CIDR records with a bounded working set and a
+2 GiB disk ceiling covering staging and rollback generations.
+
 # X-Node v2.0.9
 
 Firewall event frames now share a 256-event limit with the master protocol.

@@ -51,6 +51,7 @@ func (g *Guard) commitSnapshot(id string, version uint64) error {
 		for _, ban := range chunk.Bans {
 			prefix, _ := protocol.FirewallPrefix(ban.Prefix)
 			ban.Prefix = prefix.String()
+			ban.Source = ""
 			if old, ok := g.state.Bans[ban.Prefix]; ok && old.Generation == ban.Generation && old.Until.After(ban.Until) {
 				ban.Until = old.Until
 			}
@@ -61,13 +62,15 @@ func (g *Guard) commitSnapshot(id string, version uint64) error {
 			exemption.IP = key
 			next.Exemptions[exemption.IP] = exemption
 		}
-		if len(next.Bans) > 1000000 || len(next.Exemptions) > 100000 {
+		if len(next.Bans) > masterBanLimit || len(next.Exemptions) > 100000 {
 			return errors.New("dynamic snapshot capacity exceeded")
 		}
 	}
+	localCount := 0
 	for prefix, ban := range g.state.Bans {
 		if source, ok := next.Sources[ban.Source]; ok && source.Generation == ban.Generation && ban.Until.After(time.Now()) {
-			if _, exists := next.Bans[prefix]; !exists {
+			if _, exists := next.Bans[prefix]; !exists && localCount < sourceBanLimit {
+				localCount++
 				next.Bans[prefix] = ban
 			}
 		}
@@ -86,11 +89,13 @@ func (g *Guard) commitSnapshot(id string, version uint64) error {
 	}
 	previous := g.state
 	g.state = next
+	g.recountSourceBans()
 	g.rebuildExemptionMasks()
 	g.dirty = true
 	if err = g.compact(); err != nil {
 		if g.state.JournalEpoch == next.JournalEpoch {
 			g.state = previous
+			g.recountSourceBans()
 			g.rebuildExemptionMasks()
 		}
 		return err

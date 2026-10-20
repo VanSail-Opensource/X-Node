@@ -29,6 +29,14 @@ func (g *Guard) stageSource(ctx context.Context, stage *sourceStage, source prot
 	if len(stage.Sources) >= 128 && !exists {
 		return errors.New("source capacity exceeded")
 	}
+	total := len(source.Prefixes)
+	for _, staged := range stage.Sources {
+		total += staged.PrefixCount
+	}
+	if total > maxSourcePrefixes {
+		return errors.New("source prefix capacity exceeded")
+	}
+	old.PrefixCount += len(source.Prefixes)
 	path := sourcePath(g.dir, source.ID, source.Generation) + ".staging"
 	if err := appendSourceRecords(ctx, g.dir, path, source.Prefixes); err != nil {
 		return err

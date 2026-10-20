@@ -53,31 +53,36 @@ type hitWindow struct {
 // Hot inbound paths only enqueue bounded observations; all filesystem/kernel
 // work runs outside Xray payload handling and the control socket reader.
 type Guard struct {
-	sourceMu       sync.Mutex
-	mu             sync.Mutex
-	dir            string
-	state          banState
-	manager        *Manager
-	policy         atomic.Pointer[protocol.FirewallPolicy]
-	hits           chan observedHit
-	acks           chan []string
-	kernelReady    atomic.Bool
-	dropped        atomic.Uint64
-	exemptionMasks map[int]bool
-	resetAt        map[string]time.Time
-	eventOrder     []string
-	eventStart     int
-	windows        map[string]hitWindow
-	dirty          bool
-	sourcesDirty   bool
-	pendingJournal *journalRecord
-	legacySources  bool
-	retainBulk     bool
-	haveSnapshot   bool
-	journalBytes   int64
-	applying       bool
-	kernelError    string
-	compacted      time.Time
+	enforceRetryAt    time.Time
+	enforceRetryDelay time.Duration
+	lookupRevision    uint64
+	lookups           []sourceLookup
+	sourceBanCount    int
+	sourceMu          sync.Mutex
+	mu                sync.Mutex
+	dir               string
+	state             banState
+	manager           *Manager
+	policy            atomic.Pointer[protocol.FirewallPolicy]
+	hits              chan observedHit
+	acks              chan []string
+	kernelReady       atomic.Bool
+	dropped           atomic.Uint64
+	exemptionMasks    map[int]bool
+	resetAt           map[string]time.Time
+	eventOrder        []string
+	eventStart        int
+	windows           map[string]hitWindow
+	dirty             bool
+	sourcesDirty      bool
+	pendingJournal    *journalRecord
+	legacySources     bool
+	retainBulk        bool
+	haveSnapshot      bool
+	journalBytes      int64
+	applying          bool
+	kernelError       string
+	compacted         time.Time
 }
 
 func emptyBans() banState {
@@ -106,6 +111,7 @@ func OpenGuard(dir string, manager *Manager) (*Guard, error) {
 	if err := g.prepareStoredSources(); err != nil {
 		return nil, err
 	}
+	g.recountSourceBans()
 	g.rebuildExemptionMasks()
 	if g.legacySources && !g.sourceUpgradePending() {
 		if err := g.compact(); err != nil {

@@ -119,3 +119,21 @@ func (b *policyPlan) reconcileChains(c *nftables.Conn, exists bool) error {
 func sameChain(a, b *nftables.Chain) bool {
 	return a.Type == b.Type && reflect.DeepEqual(a.Hooknum, b.Hooknum) && reflect.DeepEqual(a.Priority, b.Priority) && reflect.DeepEqual(a.Policy, b.Policy)
 }
+
+// Chains have already switched to v2 in the same buffered transaction.
+func (b *policyPlan) removeLegacyBanSets(c *nftables.Conn, exists bool) error {
+	if !exists {
+		return nil
+	}
+	sets, err := c.GetSets(b.table)
+	if err != nil {
+		return err
+	}
+	for _, set := range sets {
+		if legacyBanSet(set.Name) {
+			c.DelSet(set)
+		}
+	}
+	return nil
+}
+func legacyBanSet(name string) bool { return name == "banned_v4" || name == "banned_v6_64" }

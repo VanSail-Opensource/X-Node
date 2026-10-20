@@ -93,6 +93,9 @@ func reconcileNative(ctx context.Context, p protocol.FirewallPolicy, redirect bo
 	if err := plan.reconcileChains(c, exists); err != nil {
 		return fmt.Errorf("firewall chains: %w", err)
 	}
+	if err := plan.removeLegacyBanSets(c, exists); err != nil {
+		return err
+	}
 	if err := ctx.Err(); err != nil {
 		return err
 	}

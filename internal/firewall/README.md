@@ -208,3 +208,7 @@ inventory-processing budget excludes kernel set allocations and independent
 Xray/session and dynamic-master-state workloads. Hosted `source_scale_test.go`
 checks ten million mixed host/CIDR records and peak heap; capacity/retry/lookup
 regressions run in hosted Quality, never as local automated suites.
+
+Startup also trims older durable master/source overflow before enforcing and
+commits the compacted snapshot once. `ban_capacity_restore_test.go` covers
+upgrade/reopen durability, master preservation and later-deadline retention.

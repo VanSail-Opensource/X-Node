@@ -1,3 +1,10 @@
+# X-Node v2.0.11
+
+Applies the dynamic/source ban storage budgets when upgrading old durable state,
+retaining master restrictions and later-expiring entries. Startup commits the
+trimmed snapshot before enforcement, so old source-refresh overflow cannot remain
+resident indefinitely. Includes all v2.0.10 capacity, backoff and indexed lookup fixes.
+
 # X-Node v2.0.10
 
 Raises versioned dynamic ban sets to 1,048,576 entries and atomically retires

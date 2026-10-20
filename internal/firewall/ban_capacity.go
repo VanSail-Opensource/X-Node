@@ -83,3 +83,33 @@ func (g *Guard) recountSourceBans() {
 }
 
 func (g *Guard) enforcementDue(now time.Time) bool { return !now.Before(g.enforceRetryAt) }
+
+// Old releases did not bound locally refreshed bans. Trim persisted state once
+// on startup as well as enforcing admission limits for new commands and hits.
+func trimStoredBans(bans map[string]protocol.FirewallBan, source bool, limit int) uint64 {
+	count := 0
+	for _, ban := range bans {
+		if (ban.Source != "") == source {
+			count++
+		}
+	}
+	if count <= limit {
+		return 0
+	}
+	items := make([]protocol.FirewallBan, 0, count)
+	for _, ban := range bans {
+		if (ban.Source != "") == source {
+			items = append(items, ban)
+		}
+	}
+	sort.Slice(items, func(i, j int) bool {
+		if !items[i].Until.Equal(items[j].Until) {
+			return items[i].Until.After(items[j].Until)
+		}
+		return items[i].Prefix < items[j].Prefix
+	})
+	for _, ban := range items[limit:] {
+		delete(bans, ban.Prefix)
+	}
+	return uint64(count - limit)
+}

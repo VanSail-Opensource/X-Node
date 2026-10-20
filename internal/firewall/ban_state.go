@@ -111,6 +111,13 @@ func OpenGuard(dir string, manager *Manager) (*Guard, error) {
 	if err := g.prepareStoredSources(); err != nil {
 		return nil, err
 	}
+	trimmed := trimStoredBans(g.state.Bans, false, masterBanLimit) + trimStoredBans(g.state.Bans, true, sourceBanLimit)
+	if trimmed > 0 {
+		g.dropped.Add(trimmed)
+		if err := g.compact(); err != nil {
+			return nil, err
+		}
+	}
 	g.recountSourceBans()
 	g.rebuildExemptionMasks()
 	if g.legacySources && !g.sourceUpgradePending() {

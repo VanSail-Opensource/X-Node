@@ -58,6 +58,7 @@ type Registry struct {
 	activity       activitySnapshot
 	closedActivity map[int]map[string]int
 	resources      int
+	outboundFences map[string]int
 }
 type Lease struct {
 	Info                                     Connection
@@ -71,6 +72,7 @@ type Lease struct {
 	finished                                 chan struct{}
 	finishOnce                               sync.Once
 	identity                                 string
+	outbounds                                map[string]bool
 	transit                                  bool
 	bytes                                    atomic.Uint64
 	sampledBytes                             uint64

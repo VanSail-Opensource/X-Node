@@ -11,6 +11,7 @@ import (
 	"github.com/VanSail-Opensource/X-Node/internal/nlog"
 	"github.com/VanSail-Opensource/X-Node/internal/protocol"
 	"github.com/VanSail-Opensource/X-Node/internal/transport"
+	"github.com/xtls/xray-core/core"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -28,7 +29,7 @@ func main() {
 	check := flag.String("check-config", "", "validate remote configuration JSON shape")
 	flag.Parse()
 	if *show {
-		_ = json.NewEncoder(os.Stdout).Encode(map[string]any{"version": version, "build_time": buildTime, "commit": commit, "xray": "v26.10.10", "capabilities": agent.Capabilities})
+		_ = json.NewEncoder(os.Stdout).Encode(map[string]any{"version": version, "build_time": buildTime, "commit": commit, "xray": "v" + core.Version(), "capabilities": agent.Capabilities})
 		return
 	}
 	if *check != "" {

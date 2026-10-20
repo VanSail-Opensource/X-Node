@@ -5,9 +5,7 @@ import (
 	"fmt"
 	"github.com/VanSail-Opensource/X-Node/internal/dns"
 	"github.com/VanSail-Opensource/X-Node/internal/geodata"
-	"github.com/VanSail-Opensource/X-Node/internal/kernel/xray"
 	"github.com/VanSail-Opensource/X-Node/internal/protocol"
-	"net/http"
 	"path/filepath"
 	"time"
 )
@@ -18,15 +16,8 @@ func (a *Agent) ensureAssets(ctx context.Context, c protocol.Config, p geodata.P
 	if ctx.Err() != nil {
 		return "", ctx.Err()
 	}
-	var client *http.Client
-	if p.Outbound != "" {
-		proxy, close, e := xray.DownloadClient(ctx, c.Xray, p.Outbound)
-		if e != nil {
-			return "", e
-		}
-		defer close()
-		client = proxy
-	}
+	client, closeClient := lazyAssetClient(ctx, c, p)
+	defer closeClient()
 	return geodata.Prepare(ctx, filepath.Join(a.Dir, "geodata"), p, c.AssetHashes, client, refresh)
 }
 func (a *Agent) scheduleUtilities(ctx context.Context, now time.Time) {

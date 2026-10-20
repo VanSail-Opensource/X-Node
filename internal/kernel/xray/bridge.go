@@ -41,6 +41,9 @@ func init() {
 	}))
 }
 func (m *managedManager) AddHandler(ctx context.Context, h outbound.Handler) error {
+	if _, ok := h.(*managedOutbound); ok {
+		return m.Manager.AddHandler(ctx, h)
+	}
 	return m.Manager.AddHandler(ctx, &managedOutbound{Handler: h, bridge: m.bridge})
 }
 
@@ -56,7 +59,12 @@ func (h *managedOutbound) Dispatch(ctx context.Context, link *transport.Link) {
 		h.Handler.Dispatch(ctx, link)
 		return
 	}
-	if ctx.Value(leaseKey{}) != nil {
+	if lease, ok := ctx.Value(leaseKey{}).(*sessions.Lease); ok {
+		if !lease.TrackOutbound(h.Tag()) {
+			common.Interrupt(link.Reader)
+			_ = common.Close(link.Writer)
+			return
+		}
 		h.Handler.Dispatch(ctx, link)
 		return
 	} // Chained outbounds share one reservation.
@@ -90,6 +98,9 @@ func (h *managedOutbound) Dispatch(ctx context.Context, link *transport.Link) {
 		return
 	}
 	defer func() { lease.Close(); lease.Finish() }()
+	if !lease.TrackOutbound(h.Tag()) {
+		return
+	}
 	child = context.WithValue(child, leaseKey{}, lease)
 	if h.Tag() == "_xnode_torrent" {
 		h.bridge.Registry.Ban(id, time.Now().Add(time.Duration(h.bridge.BanNanos.Load())))

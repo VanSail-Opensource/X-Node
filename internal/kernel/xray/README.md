@@ -36,3 +36,16 @@ real managed TCP probe in hosted Quality.
 `transit.go` expands owner-scoped peer accounts with separate credential generations and managed authentication labels. `domain_blocks.go` inserts the master domain block rule before all native/system rules with a reserved block outbound. Agent validation refuses unresolved IP geodata and mixed REALITY/source-filter sockets before listener activation.
 
 `reload_test.go` verifies forced reload validates before stopping the serving runtime and rebuilds unchanged native documents. The optional reload flag on `Runtime.Apply` retains account-only updates and activation fallback.
+
+Incremental configuration is described in repository path `docs/hot-reload.md`. `sections.go` retains immutable static,
+inbound, outbound and routing protobufs. Effective listener identities include
+certificate bytes and never include global routing. `live.go` stages public
+outbound handlers and quiesces only affected registry flows; `routing_update.go`
+uses native rule replacement or a safe suffix append. Unsupported immutable,
+default-outbound, mux/chain and observer changes reconstruct after preparation.
+`statistics.go` exposes memory-only build/rebuild counters for hosted regressions.
+`client_prepared.go` caches one immutable client configuration, never a live core.
+
+`live_stream_test.go`, `outbound_stream_test.go` and `sections_test.go` cover real
+TCP/mux/UDP continuity, scoped outbound replacement and section/matcher work.
+The hosted benchmark compares cold/cached preparation and forced/live application.

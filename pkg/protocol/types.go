@@ -14,6 +14,11 @@ const GeoIPPrefixesPerChunk = wire.GeoIPPrefixesPerChunk
 
 type Message = wire.Message
 type Config = wire.Config
+type Changes = wire.Changes
+
+func Classify(old, next Config) Changes { return wire.Classify(old, next) }
+func NativeIdentity(c Config) []byte    { return wire.NativeIdentity(c) }
+
 type User = wire.User
 type TransitCredential = wire.TransitCredential
 type UserControl = wire.UserControl

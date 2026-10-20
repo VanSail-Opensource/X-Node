@@ -36,9 +36,11 @@ func (a *Agent) command(ctx context.Context, m protocol.Message) error {
 		return nil
 	}
 	var configuration protocol.Config
-	switch request.Name {
-	case "ddns.run", "firewall.apply":
-		configuration, _ = a.Store.Configuration()
+	switch protocol.ClassifyAction(request.Name) {
+	case protocol.UtilityAction, protocol.FirewallAction:
+		if request.Name == "ddns.run" || request.Name == "firewall.apply" {
+			configuration, _ = a.Store.Configuration()
+		}
 	}
 	start := a.Jobs.Start
 	switch request.Name {

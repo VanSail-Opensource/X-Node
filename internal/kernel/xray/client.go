@@ -1,14 +1,12 @@
 package xray
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"github.com/VanSail-Opensource/X-Node/internal/nlog"
 	xnet "github.com/xtls/xray-core/common/net"
 	"github.com/xtls/xray-core/core"
-	confserial "github.com/xtls/xray-core/infra/conf/serial"
 	"net"
 	"net/http"
 	"time"
@@ -28,8 +26,7 @@ func HTTPClient(ctx context.Context, outbounds []any, tag string) (*http.Client,
 		return nil, nil, errors.New("unknown probe/download outbound")
 	}
 	root := map[string]any{"log": map[string]any{"loglevel": "none", "access": "none", "error": "none"}, "outbounds": outbounds, "routing": map[string]any{"rules": []any{map[string]any{"type": "field", "network": "tcp,udp", "outboundTag": tag}}}}
-	b, _ := json.Marshal(root)
-	pb, e := confserial.LoadJSONConfig(bytes.NewReader(b))
+	pb, e := prepareClient(root)
 	if e != nil {
 		return nil, nil, errors.New("invalid client outbound")
 	}

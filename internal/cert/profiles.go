@@ -1,6 +1,7 @@
 package cert
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"crypto/x509"
@@ -9,6 +10,7 @@ import (
 	"errors"
 	"github.com/VanSail-Opensource/X-Node/internal/protocol"
 	"github.com/VanSail-Opensource/X-Node/internal/state"
+	"os"
 	"path/filepath"
 	"sync"
 	"time"
@@ -81,10 +83,10 @@ func (p *Pool) Prepare(ctx context.Context, c protocol.Config) (protocol.Config,
 		hash := sha256.Sum256(pair)
 		dir := filepath.Join(p.dir, "material", hex.EncodeToString(hash[:]))
 		certFile, keyFile := filepath.Join(dir, "cert.pem"), filepath.Join(dir, "key.pem")
-		if err := state.AtomicWrite(certFile, material.CertPEM, 0600); err != nil {
+		if err := writeMaterial(certFile, material.CertPEM); err != nil {
 			return out, err
 		}
-		if err := state.AtomicWrite(keyFile, material.KeyPEM, 0600); err != nil {
+		if err := writeMaterial(keyFile, material.KeyPEM); err != nil {
 			return out, err
 		}
 		spec.Config.CertFile = certFile
@@ -92,6 +94,13 @@ func (p *Pool) Prepare(ctx context.Context, c protocol.Config) (protocol.Config,
 		out.Certificates[id] = spec
 	}
 	return out, nil
+}
+
+func writeMaterial(path string, material []byte) error {
+	if stored, err := os.ReadFile(path); err == nil && bytes.Equal(stored, material) {
+		return nil
+	}
+	return state.AtomicWrite(path, material, 0600)
 }
 func (p *Pool) Commit(c protocol.Config) {
 	p.mu.Lock()

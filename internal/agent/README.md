@@ -41,3 +41,14 @@ the existing utility executor. Read-only firewall status never enters job histor
 `commands.go` dispatches protocol commands with execution deadlines; `command_connections.go` owns ephemeral connection/IP controls. `command_reload.go` waits for actor-owned activation, propagates supersession and keeps traffic acknowledgments available. `command_reload_test.go` covers queued versus completed activation. Immediate read-only `update.status` and `jobs.list` replies remain independent of occupied utility slots.
 
 `job_result_test.go` covers failed result-journal writes: completed mutations become uncertain and their in-process replay retains that outcome without repeating execution. Running IDs are bound to command names and remain visible in recovery inspection.
+
+Incremental activation uses `activation.go` and the exhaustive consumer planner in
+`internal/protocol/changes.go`/`actions.go`. Controls can acknowledge an already
+applied baseline directly; controls during pending activation retain the desired
+native target and cannot report it applied prematurely. `loop.go` keeps control
+and traffic handling independent of `synchronization.go`'s serialized worker.
+Native preparation returns its actual candidate instead of compiling again.
+`validation_cache.go` rechecks content hashes and retains only a validation proof,
+separate from synthetic certificate material and activation candidates.
+`asset_client.go` delays proxy-core creation until an actual download is needed.
+See `docs/hot-reload.md` for consumer boundaries and fallback behavior.

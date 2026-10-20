@@ -1,3 +1,16 @@
+# X-Node v2.0.12
+
+Includes the merged Xray v26.10.17 upgrade and derives reported core versions from
+that dependency. Supported routing/account/outbound updates retain the serving
+core and unrelated streams. Effective listener epochs exclude global routing.
+
+Native section and validation caches avoid repeated compilation. Controls,
+utility and firewall-only changes bypass Xray preparation; identical firewall
+policies retain their durable confirmation/rollback identity. Explicit reloads
+and unsupported core changes retain validated reconstruction and current
+revocation/accounting semantics. Hosted comparison artifacts document work and
+listener interruption; see `docs/hot-reload.md` for exact boundaries.
+
 # X-Node v2.0.11
 
 Applies the dynamic/source ban storage budgets when upgrading old durable state,

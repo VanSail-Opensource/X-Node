@@ -82,11 +82,16 @@ reboot_deadline=$((SECONDS + 240))
 for attempt in $(seq 1 90); do
     # SSH starts before confirmed firewall restore/UFW takeover completes. An
     # early connection can be lost during that policy transition; wait until
-    # both units are active before opening the verification session itself.
-    current_boot=$(timeout 8s ssh "${ssh_args[@]}" fixture@127.0.0.1 'systemctl is-active --quiet x-node-firewall.service && systemctl is-active --quiet x-node.service && cat /proc/sys/kernel/random/boot_id' 2>/dev/null || true)
+    # the oneshot completed and the agent has a PID before verification itself.
+    current_boot=$(timeout 8s ssh "${ssh_args[@]}" fixture@127.0.0.1 'sudo /usr/local/libexec/x-node-host-fixture --boot-ready' 2>/dev/null || true)
     if (( SECONDS >= reboot_deadline )); then break; fi
     if [[ -n "$current_boot" && "$current_boot" != "$initial_boot" ]]; then rebooted=true; break; fi
     sleep 2
 done
-if ! "$rebooted"; then echo 'Host did not return with a new boot identity and active firewall/agent units within four minutes.' >&2; cat "$run_dir/console.log"; exit 1; fi
+if ! "$rebooted"; then
+    echo 'Host did not return with a new boot identity, completed firewall restore and agent PID within four minutes.' >&2
+    timeout 15s ssh "${ssh_args[@]}" fixture@127.0.0.1 'systemctl show x-node-firewall.service x-node.service --property=ActiveState,SubState,Result,MainPID,ExecMainStatus,ExecMainStartTimestampMonotonic,ExecMainExitTimestampMonotonic; sudo journalctl -b -u x-node-firewall.service -u x-node.service --no-pager -n 60' || true
+    cat "$run_dir/console.log"
+    exit 1
+fi
 ssh "${ssh_args[@]}" fixture@127.0.0.1 'sudo /usr/local/libexec/x-node-host-fixture --after-reboot'

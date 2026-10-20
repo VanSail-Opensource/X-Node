@@ -26,6 +26,14 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 12*time.Minute)
 	defer cancel()
 	runner := fixtureRunner{}
+	if len(os.Args) > 1 && os.Args[1] == "--boot-ready" {
+		boot, err := rebootReady(ctx, runner)
+		if err != nil {
+			fail(err)
+		}
+		fmt.Println(boot)
+		return
+	}
 	if len(os.Args) > 1 && os.Args[1] == "--abandon" {
 		m := &firewall.Manager{Dir: "/var/lib/x-node/firewall", ConfigPath: "/etc/nftables.conf", Executable: "/usr/local/bin/xnodectl", Runner: runner, RecoveryTimeout: recoveryTimeout}
 		tx, err := m.Apply(ctx, "fixture-real-watchdog", protocol.FirewallPolicy{Enabled: true, Protect: true, MasterControlled: true, TCPPorts: []int{22, 443, 9443, 60001}, UDPPorts: []int{443, 9443}, Forward: forwardingPolicy()}, false)

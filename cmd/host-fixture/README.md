@@ -56,7 +56,11 @@ policy apply must atomically retire the rules and both old sets while preserving
 current rule handles, bans and counters. Host assertions use v2 ban sets and
 the updated 2 GiB bulk storage admission ceiling.
 
-Reboot readiness requires a changed boot ID plus active firewall and agent
-units before the verification SSH session opens. This avoids racing a successful
+Reboot readiness requires a changed boot ID, successful completed firewall
+execution, and an agent MainPID before the verification SSH session opens.
+`startup.go` implements the read-only `--boot-ready` probe; `startup_test.go`
+checks completed/inactive, retained, never-started, running and failed oneshots.
+The fixture agent deliberately has no desired master configuration, so its
+Type=notify unit may still be activating; no operational readiness is inferred. This avoids racing a successful
 early SSH banner against confirmed firewall/UFW restoration. The four-minute
 deadline, full post-reboot assertions and production watchdog timing are retained.

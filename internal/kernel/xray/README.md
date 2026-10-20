@@ -49,3 +49,6 @@ default-outbound, mux/chain and observer changes reconstruct after preparation.
 `live_stream_test.go`, `outbound_stream_test.go` and `sections_test.go` cover real
 TCP/mux/UDP continuity, scoped outbound replacement and section/matcher work.
 The hosted benchmark compares cold/cached preparation and forced/live application.
+`balancer_reload_test.go` verifies public selector forwarding and live balancer
+changes. The managed manager serializes upstream selector-cache access with
+handler additions/removals.

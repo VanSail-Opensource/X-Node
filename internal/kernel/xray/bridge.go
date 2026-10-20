@@ -4,6 +4,7 @@ import (
 	"context"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -28,7 +29,8 @@ type integration struct {
 }
 type managedManager struct {
 	outbound.Manager
-	bridge *integration
+	bridge      *integration
+	selectionMu sync.RWMutex
 }
 
 func init() {
@@ -41,10 +43,30 @@ func init() {
 	}))
 }
 func (m *managedManager) AddHandler(ctx context.Context, h outbound.Handler) error {
+	m.selectionMu.Lock()
+	defer m.selectionMu.Unlock()
 	if _, ok := h.(*managedOutbound); ok {
 		return m.Manager.AddHandler(ctx, h)
 	}
 	return m.Manager.AddHandler(ctx, &managedOutbound{Handler: h, bridge: m.bridge})
+}
+
+// Select preserves the public balancer interface. Serialize the upstream tag
+// cache with additions/removals, including lookups made by live balancers.
+func (m *managedManager) Select(selectors []string) []string {
+	m.selectionMu.RLock()
+	defer m.selectionMu.RUnlock()
+	selector, ok := m.Manager.(outbound.HandlerSelector)
+	if !ok {
+		return nil
+	}
+	return selector.Select(selectors)
+}
+
+func (m *managedManager) RemoveHandler(ctx context.Context, tag string) error {
+	m.selectionMu.Lock()
+	defer m.selectionMu.Unlock()
+	return m.Manager.RemoveHandler(ctx, tag)
 }
 
 type managedOutbound struct {

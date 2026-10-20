@@ -55,3 +55,8 @@ The VM harness bounds reboot SSH channels and probes independently of connection
 policy apply must atomically retire the rules and both old sets while preserving
 current rule handles, bans and counters. Host assertions use v2 ban sets and
 the updated 2 GiB bulk storage admission ceiling.
+
+Reboot readiness requires a changed boot ID plus active firewall and agent
+units before the verification SSH session opens. This avoids racing a successful
+early SSH banner against confirmed firewall/UFW restoration. The four-minute
+deadline, full post-reboot assertions and production watchdog timing are retained.

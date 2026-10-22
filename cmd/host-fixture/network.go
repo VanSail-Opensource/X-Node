@@ -108,6 +108,19 @@ s.connect((sys.argv[1],int(sys.argv[2])));s.sendall(b'x-node-fixture')
 assert s.recv(128)==b'x-node-fixture'
 `
 
+const closedProbe = `import socket,sys
+family=socket.AF_INET6 if ':' in sys.argv[1] else socket.AF_INET
+kind=socket.SOCK_STREAM if sys.argv[3]=='tcp' else socket.SOCK_DGRAM
+s=socket.socket(family,kind);s.settimeout(2)
+try:
+ s.connect((sys.argv[1],int(sys.argv[2])));s.sendall(b'x-node-closed');s.recv(128)
+except socket.timeout:
+ sys.exit(0)
+except OSError as error:
+ raise SystemExit('closed service returned an error response: '+str(error))
+raise SystemExit('closed service returned traffic')
+`
+
 func packetChecks(ctx context.Context, r host.Runner) error {
 	stop, err := startEcho(ctx, "", "9443")
 	if err != nil {
@@ -134,8 +147,12 @@ func packetChecks(ctx context.Context, r host.Runner) error {
 		return err
 	}
 	defer stopClosed()
-	if _, err := r.Run(ctx, "ip", "netns", "exec", "xnode-client", "python3", "-c", echoProbe, "198.18.0.1", "9444", "tcp"); err == nil {
-		return fmt.Errorf("closed TCP port was reachable")
+	for _, addr := range []string{"198.18.0.1", "2001:db8:1::1"} {
+		for _, network := range []string{"tcp", "udp"} {
+			if _, err := r.Run(ctx, "ip", "netns", "exec", "xnode-client", "python3", "-c", closedProbe, addr, "9444", network); err != nil {
+				return fmt.Errorf("closed %s %s was not silently dropped: %w", network, addr, err)
+			}
+		}
 	}
 	return nil
 }

@@ -57,6 +57,57 @@ func TestSetDeltaDoesNotFlushUnchangedElements(t *testing.T) {
 		t.Fatal("incorrect incremental delta")
 	}
 }
+
+func TestReportingAndProtectedSourcesRetainPortBoundaries(t *testing.T) {
+	for _, protect := range []bool{false, true} {
+		p := policy()
+		p.Protect = protect
+		plan, err := compile(p, false, []int{22})
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, chain := range plan.chains {
+			if chain.Name == "input" && (chain.Policy == nil || *chain.Policy != nftables.ChainPolicyDrop) {
+				t.Fatal("reporting opened input")
+			}
+		}
+		for _, chain := range []string{"blocked", "blocked_v4", "blocked_v6"} {
+			for _, rule := range plan.rules[chain] {
+				for _, e := range rule.Exprs {
+					if v, ok := e.(*expr.Verdict); ok && v.Kind == expr.VerdictAccept {
+						t.Fatal("closed traffic accepted", protect, chain)
+					}
+				}
+			}
+		}
+		for _, rule := range plan.rules["input"] {
+			if !strings.Contains(string(rule.UserData), ":trusted-") {
+				continue
+			}
+			ports := false
+			for _, e := range rule.Exprs {
+				if lookup, ok := e.(*expr.Lookup); ok && (lookup.SetName == "tcp_ports" || lookup.SetName == "udp_ports") {
+					ports = true
+				}
+			}
+			if !ports {
+				t.Fatal("source exemption bypassed port ACL")
+			}
+		}
+		for _, rules := range plan.rules {
+			for _, rule := range rules {
+				for _, e := range rule.Exprs {
+					if _, reject := e.(*expr.Reject); reject {
+						t.Fatal("firewall rejection response retained")
+					}
+					if set, ok := e.(*expr.Dynset); ok && (set.SetName == banSetV4 || set.SetName == banSetV6) {
+						t.Fatal("detection created a local ban")
+					}
+				}
+			}
+		}
+	}
+}
 func TestBootUnitMatchesDeployment(t *testing.T) {
 	b, err := os.ReadFile("../../deploy/x-node-firewall.service")
 	if err != nil {

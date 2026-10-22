@@ -5,6 +5,7 @@ import (
 	"github.com/VanSail-Opensource/X-Node/internal/protocol"
 	"github.com/google/nftables"
 	"github.com/google/nftables/expr"
+	"golang.org/x/sys/unix"
 	"time"
 )
 
@@ -32,11 +33,11 @@ func compile(p protocol.FirewallPolicy, redirect bool, ssh []int) (*policyPlan, 
 	for _, name := range []string{"ban_v6", "blocked_v4", "blocked_v6", "blocked", "refresh_v4", "refresh_v6"} {
 		b.chain(name, nil, nil, "", false)
 	}
-	b.chain("input", nftables.ChainHookInput, nftables.ChainPriorityFilter, nftables.ChainTypeFilter, !p.Protect || !p.MasterControlled)
+	b.chain("input", nftables.ChainHookInput, nftables.ChainPriorityFilter, nftables.ChainTypeFilter, true)
 	b.chain("output", nftables.ChainHookOutput, nftables.ChainPriorityFilter, nftables.ChainTypeFilter, false)
 	b.chain("dns_output", nftables.ChainHookOutput, nftables.ChainPriorityRef(-110), nftables.ChainTypeNAT, false)
 	b.chain("prerouting", nftables.ChainHookPrerouting, nftables.ChainPriorityNATDest, nftables.ChainTypeNAT, false)
-	b.chain("forward", nftables.ChainHookForward, nftables.ChainPriorityFilter, nftables.ChainTypeFilter, len(p.Forward) > 0 && (!p.Protect || !p.MasterControlled))
+	b.chain("forward", nftables.ChainHookForward, nftables.ChainPriorityFilter, nftables.ChainTypeFilter, len(p.Forward) > 0)
 	b.chain("postrouting", nftables.ChainHookPostrouting, nftables.ChainPriorityNATSource, nftables.ChainTypeNAT, false)
 	if err := b.staticSets(p, ssh); err != nil {
 		return nil, err
@@ -91,7 +92,9 @@ func (b *policyPlan) input() {
 		if v6 {
 			name = "trusted_v6"
 		}
-		b.add("input", fmt.Sprintf("trusted-source-%t", v6), sourceSet(v6, name, false, false), accept())
+		// Trusted sources bypass detection on open services, never the port ACL.
+		b.add("input", fmt.Sprintf("trusted-tcp-%t", v6), sourceSet(v6, name, false, false), portSet(unix.IPPROTO_TCP, "tcp_ports", false), accept())
+		b.add("input", fmt.Sprintf("trusted-udp-%t", v6), sourceSet(v6, name, false, false), portSet(unix.IPPROTO_UDP, "udp_ports", false), accept())
 	}
 	b.add("input", "blacklists", direction(false, false), jump("blacklist"))
 	for i, raw := range []string{"127.0.0.0/8", "::1/128"} {

@@ -18,9 +18,11 @@ func (b *policyPlan) protection(_ bool) {
 			chain, lan, refresh = "blocked_v6", "lan_v6", "refresh_v6"
 		}
 		action := drop()
-		if b.policy.Protect && b.policy.MasterControlled {
-			action = accept()
+		trusted := "trusted_v4"
+		if v6 {
+			trusted = "trusted_v6"
 		}
+		b.add(chain, "trusted", sourceSet(v6, trusted, false, false), action)
 		b.add(chain, "not-new", ctState(expr.CtStateBitNEW, true), action)
 		b.add(chain, "not-original", direction(false, true), action)
 		b.add(chain, "lan-exempt", sourceSet(v6, lan, false, false), action)
@@ -32,9 +34,6 @@ func (b *policyPlan) protection(_ bool) {
 		b.add(refresh, "drop", counter("blacklist_drops"), drop())
 	}
 	action := drop()
-	if b.policy.Protect && b.policy.MasterControlled {
-		action = accept()
-	}
 	b.add("blocked", "drop", action)
 }
 

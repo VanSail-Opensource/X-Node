@@ -219,3 +219,8 @@ Replacement removes stale shared-IP protection while preserving another member's
 active entry. Geolocation rules stay ahead of member ban bypass. `detection.go`
 sends bounded journaled count deltas below thresholds; the master owns windows
 and bans. Disabled probe protection silently drops matching/closed-port traffic.
+
+Master reporting never opens closed services: packet filtering is distinct from
+a persistent source ban. Protected sources bypass bans and detection only on
+configured open services/forwards; they do not bypass port boundaries. Source
+inventory matches remain report-only until a master ban in protection mode.

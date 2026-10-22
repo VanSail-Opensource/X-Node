@@ -93,7 +93,7 @@ func main() {
 	if e = m.RestoreFile(ctx); e != nil {
 		fail(e)
 	}
-	if e = packetChecks(ctx, runner); e != nil {
+	if e = probeModeChecks(ctx, m, policy, runner); e != nil {
 		fail(e)
 	}
 	if e = liveStateChecks(ctx, m, policy); e != nil {

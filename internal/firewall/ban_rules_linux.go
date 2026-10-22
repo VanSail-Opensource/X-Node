@@ -12,7 +12,9 @@ const nfLogGroup = 100
 // nft's text parser treats jump/goto as terminal statements. Keep the eventual
 // drop in its own rule so complete ruleset snapshots remain replayable.
 func (b *policyPlan) eventDrop(rule string) expressions {
-	if b.policy.Protect && b.policy.MasterControlled {
+	// Source inventory matches are observations until a master ban arrives.
+	// Invalid packets and closed services still receive per-packet filtering.
+	if rule == "source_match" && b.policy.Protect && b.policy.MasterControlled {
 		return b.event(rule)
 	}
 	event := b.event(rule)
@@ -66,6 +68,7 @@ func (b *policyPlan) banSets() {
 		b.add("source_match_"+suffix, "return", verdict(expr.VerdictReturn, ""))
 		b.preserveRules["source_lookup_"+suffix] = true
 		b.add("blacklist", "exempt-"+suffix, sourceSet(v6, "exempt_"+suffix, false, false), verdict(expr.VerdictReturn, ""))
+		b.add("blacklist", "trusted-"+suffix, sourceSet(v6, "trusted_"+suffix, false, false), verdict(expr.VerdictReturn, ""))
 		b.add("blacklist", "exempt-prefix-"+suffix, sourceSet(v6, "exempt_prefix_"+suffix, false, false), verdict(expr.VerdictReturn, ""))
 		b.add("blacklist", "lan-"+suffix, sourceSet(v6, lan, false, false), verdict(expr.VerdictReturn, ""))
 		b.add("blacklist", "banned-"+suffix, sourceSet(v6, ban, false, v6), goTo(refresh))

@@ -64,3 +64,8 @@ The fixture agent deliberately has no desired master configuration, so its
 Type=notify unit may still be activating; no operational readiness is inferred. This avoids racing a successful
 early SSH banner against confirmed firewall/UFW restoration. The four-minute
 deadline, full post-reboot assertions and production watchdog timing are retained.
+
+`protected_sources_linux.go` checks both probe modes with ordinary/protected
+IPv4/IPv6 sources. Open services and configured forwarding remain reachable;
+listening closed TCP/UDP services must time out without a reply or rejection.
+These checks run only in hosted disposable VMs.

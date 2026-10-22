@@ -50,7 +50,7 @@ func nativeIdentity(c Config) map[string]any {
 		decoder := json.NewDecoder(bytes.NewReader(raw))
 		decoder.UseNumber()
 		_ = decoder.Decode(&identity)
-		for _, key := range []string{"replaces_id", "active_ip_limit", "connection_limit", "speed_limit_mbps", "burst_speed_limit_mbps", "speed_limit_after_seconds", "speed_limit_reset_seconds", "block_new", "accounting_period", "valid_until"} {
+		for _, key := range []string{"whitelist_enabled", "whitelisted_ips", "replaces_id", "active_ip_limit", "connection_limit", "speed_limit_mbps", "burst_speed_limit_mbps", "speed_limit_after_seconds", "speed_limit_reset_seconds", "block_new", "accounting_period", "valid_until"} {
 			delete(identity, key)
 		}
 		users = append(users, identity)

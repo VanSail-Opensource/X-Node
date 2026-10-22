@@ -52,3 +52,7 @@ The hosted benchmark compares cold/cached preparation and forced/live applicatio
 `balancer_reload_test.go` verifies public selector forwarding and live balancer
 changes. The managed manager serializes upstream selector-cache access with
 handler additions/removals.
+
+`reload_benchmark_test.go` compares unchanged normal reload to the previous
+forced behavior. `live_stream_test.go` checks unchanged TCP/mux sessions across
+repeated normal reload, using the same runtime application path as the agent.

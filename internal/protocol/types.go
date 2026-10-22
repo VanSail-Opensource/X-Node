@@ -64,9 +64,11 @@ func Parse(b []byte) (Message, error) {
 }
 
 type User struct {
-	ID         int    `json:"id"`
-	ReplacesID int    `json:"replaces_id,omitempty"`
-	UUID       string `json:"uuid,omitempty"`
+	ID               int      `json:"id"`
+	ReplacesID       int      `json:"replaces_id,omitempty"`
+	WhitelistEnabled bool     `json:"whitelist_enabled,omitempty"`
+	WhitelistedIPs   []string `json:"whitelisted_ips,omitempty"`
+	UUID             string   `json:"uuid,omitempty"`
 	// Native client/account properties, keyed by inbound tag. Email and level are managed.
 	Credentials            map[string]json.RawMessage `json:"credentials,omitempty"`
 	TransitCredentials     []TransitCredential        `json:"transit_credentials,omitempty"`

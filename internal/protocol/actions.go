@@ -16,7 +16,8 @@ const (
 )
 
 var actionEffects = map[string]ActionEffect{
-	"firewall.geoip.sync": FirewallAction, "firewall.bans.sync": FirewallAction,
+	"firewall.protected.sync": FirewallAction,
+	"firewall.geoip.sync":     FirewallAction, "firewall.bans.sync": FirewallAction,
 	"firewall.bans.update": FirewallAction, "firewall.bans.get": ObserveAction,
 	"firewall.status": ObserveAction, "firewall.confirm": FirewallAction, "firewall.apply": FirewallAction,
 	"connections.list": ObserveAction, "connections.close": RegistryAction,

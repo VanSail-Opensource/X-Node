@@ -2,6 +2,7 @@ package firewall
 
 import (
 	"net/netip"
+	"strings"
 	"time"
 
 	"github.com/VanSail-Opensource/X-Node/internal/protocol"
@@ -9,6 +10,9 @@ import (
 )
 
 func (g *Guard) exempt(ip netip.Addr, now time.Time) bool {
+	if g.nodeIPs[ip.String()] || g.memberIPs[ip.String()].After(now) {
+		return true
+	}
 	if g.state.Exemptions[ip.String()].Until.After(now) {
 		return true
 	}
@@ -49,13 +53,14 @@ func (g *Guard) sourceBan(ip netip.Addr, now time.Time) (protocol.FirewallBan, b
 	}
 	return protocol.FirewallBan{}, false
 }
+
+// processHits journals bounded deltas below any threshold. Only the master
+// aggregates detection windows and creates bans; agents never extend them.
 func (g *Guard) processHits(now time.Time) error {
 	policy := g.policy.Load()
-	if policy == nil {
+	if policy == nil || !policy.Protect || !policy.MasterControlled {
 		return nil
 	}
-	updates := map[string]protocol.FirewallBan{}
-	record := journalRecord{}
 	for range 4096 {
 		var hit observedHit
 		select {
@@ -63,32 +68,17 @@ func (g *Guard) processHits(now time.Time) error {
 		default:
 			goto drained
 		}
-		if g.exempt(hit.ip, hit.at) {
-			continue
-		}
-		prefix, _ := protocol.FirewallPrefix(hit.ip.String())
-		ban, exists := updates[prefix.String()]
-		if !exists {
-			ban, exists = g.state.Bans[prefix.String()]
-		}
-		if hit.rule == "blacklist" && (!exists || !ban.Until.After(hit.at)) {
-			ban, exists = g.sourceBan(hit.ip, hit.at)
-		}
-		if exists && ban.Until.After(hit.at) {
-			until := hit.at.Add(time.Duration(ban.RefreshSeconds) * time.Second)
-			if until.After(ban.Until) {
-				if _, stored := g.state.Bans[ban.Prefix]; !stored && ban.Source != "" && g.sourceBanCount+len(updates) >= sourceBanLimit {
-					g.dropped.Add(1)
-					continue
-				}
-				ban.Until = until
-				updates[ban.Prefix] = ban
-			}
+		if hit.rule == "blacklist" || g.exempt(hit.ip, hit.at) {
 			continue
 		}
 		rule, enabled := policy.Rule(hit.rule)
 		if !enabled {
 			continue
+		}
+		if hit.rule == "source_match" {
+			if _, found := g.sourceBan(hit.ip, hit.at); !found {
+				continue
+			}
 		}
 		key := hit.ip.String() + "|" + hit.rule
 		window, known := g.windows[key]
@@ -96,29 +86,41 @@ func (g *Guard) processHits(now time.Time) error {
 			g.dropped.Add(1)
 			continue
 		}
-		if !known || window.first.Before(g.resetAt[prefix.String()]) || !hit.at.Before(window.first.Add(time.Duration(rule.WindowSeconds)*time.Second)) {
-			window = hitWindow{prefix: prefix.String(), first: hit.at, until: hit.at.Add(time.Duration(rule.WindowSeconds) * time.Second)}
+		if known && !hit.at.Before(window.until) {
+			g.dropped.Add(window.count)
+			known = false
+		}
+		if !known {
+			window = hitWindow{prefix: hit.ip.String(), first: hit.at, until: hit.at.Add(time.Duration(rule.WindowSeconds) * time.Second)}
 		}
 		window.count++
-		if !window.reported && window.count >= uint64(rule.Threshold) && len(g.state.Events)+len(record.Events) < 4096 {
-			record.Events = append(record.Events, protocol.FirewallEvent{ID: state.ID(), Kind: "detected", IP: hit.ip.String(), Rule: hit.rule, Count: window.count, FirstSeen: window.first, Time: hit.at})
-			window.reported = true
-		}
+		window.last = hit.at
 		g.windows[key] = window
 	}
 drained:
-	for _, ban := range updates {
-		record.Bans = append(record.Bans, ban)
-	}
+	record := journalRecord{}
+	keys := make([]string, 0)
 	for key, window := range g.windows {
-		if !window.until.After(now) || g.state.Bans[window.prefix].Until.After(now) {
+		if len(record.Events)+len(g.state.Events) >= 4096 {
+			break
+		}
+		if window.count == 0 {
+			continue
+		}
+		split := strings.LastIndexByte(key, '|')
+		record.Events = append(record.Events, protocol.FirewallEvent{Kind: "detected", IP: window.prefix, Rule: key[split+1:], Count: window.count, FirstSeen: window.first, Time: window.last})
+		keys = append(keys, key)
+	}
+	if len(record.Events) == 0 {
+		return nil
+	}
+	err := g.appendJournal(record)
+	if err == nil || g.pendingJournal != nil {
+		for _, key := range keys {
 			delete(g.windows, key)
 		}
 	}
-	if len(record.Bans) == 0 && len(record.Events) == 0 {
-		return nil
-	}
-	return g.appendJournal(record)
+	return err
 }
 
 func (g *Guard) expire(now time.Time) error {

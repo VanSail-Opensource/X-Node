@@ -17,17 +17,25 @@ func (b *policyPlan) protection(_ bool) {
 		if v6 {
 			chain, lan, refresh = "blocked_v6", "lan_v6", "refresh_v6"
 		}
-		b.add(chain, "not-new", ctState(expr.CtStateBitNEW, true), drop())
-		b.add(chain, "not-original", direction(false, true), drop())
-		b.add(chain, "lan-exempt", sourceSet(v6, lan, false, false), drop())
+		action := drop()
+		if b.policy.Protect && b.policy.MasterControlled {
+			action = accept()
+		}
+		b.add(chain, "not-new", ctState(expr.CtStateBitNEW, true), action)
+		b.add(chain, "not-original", direction(false, true), action)
+		b.add(chain, "lan-exempt", sourceSet(v6, lan, false, false), action)
 		b.add(chain, "blocked-count", counter("blocked_requests"))
 		b.add(chain, "report", b.event("closed_port"))
-		b.add(chain, "drop", drop())
+		b.add(chain, "drop", action)
 		b.add("blocked", fmt.Sprintf("family-%t", v6), family(v6), goTo(chain))
 		b.add(refresh, "report", b.event("blacklist"))
 		b.add(refresh, "drop", counter("blacklist_drops"), drop())
 	}
-	b.add("blocked", "drop", drop())
+	action := drop()
+	if b.policy.Protect && b.policy.MasterControlled {
+		action = accept()
+	}
+	b.add("blocked", "drop", action)
 }
 
 func (b *policyPlan) ipv6Link() {
@@ -45,7 +53,7 @@ func (b *policyPlan) ipv6Link() {
 	b.add("input", "dhcpv6-link", address("fe80::/10", false, false), port(unix.IPPROTO_UDP, 547, false), port(unix.IPPROTO_UDP, 546, true), valid, accept())
 }
 
-func (b *policyPlan) networkEssentials(protected bool) {
+func (b *policyPlan) networkEssentials(_ bool) {
 	for _, kind := range []byte{3, 11, 12} {
 		b.add("input", fmt.Sprintf("icmp-error-%d", kind), icmp(false, kind), accept())
 	}
@@ -66,7 +74,7 @@ func (b *policyPlan) networkEssentials(protected bool) {
 		b.add("input", fmt.Sprintf("lan-tcp-%t", v6), sourceSet(v6, lan, false, false), portSet(unix.IPPROTO_TCP, "tcp_ports", false), ctState(expr.CtStateBitNEW, false), accept())
 	}
 	b.add("input", "udp-closed", portSet(unix.IPPROTO_UDP, "udp_ports", true), goTo("blocked"))
-	if _, enabled := b.policy.Rule("syn_flood"); protected && enabled {
+	if _, enabled := b.policy.Rule("syn_flood"); enabled {
 		for _, v6 := range []bool{false, true} {
 			name := "syn_v4"
 			if v6 {
@@ -79,7 +87,7 @@ func (b *policyPlan) networkEssentials(protected bool) {
 				action = goTo("ban_v6")
 			}
 			b.add("input", fmt.Sprintf("syn-limit-%t", v6), match, dynamic(v6, false, name, unix.NFT_DYNSET_OP_UPDATE, 0, limit), counter("syn_limited"), action)
-			b.add("input", fmt.Sprintf("syn-overflow-%t", v6), match, sourceSet(v6, name, true, false), drop())
+			b.add("input", fmt.Sprintf("syn-overflow-%t", v6), match, sourceSet(v6, name, true, false), b.eventDrop("syn_flood"))
 		}
 	}
 	b.add("input", "tcp-open", portSet(unix.IPPROTO_TCP, "tcp_ports", false), ctState(expr.CtStateBitNEW, false), accept())

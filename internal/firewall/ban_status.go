@@ -26,7 +26,7 @@ func (g *Guard) statusLocked() GuardStatus {
 	}
 	now := time.Now()
 	for _, ban := range g.state.Bans {
-		if ban.Until.After(now) {
+		if ban.Until.After(now) && !(result.DetectionEnabled && ban.Source != "") {
 			result.ActiveBans++
 		}
 	}

@@ -493,6 +493,15 @@
           "valid_until": {
             "format": "date-time",
             "type": "string"
+          },
+          "whitelist_enabled": {
+            "type": "boolean"
+          },
+          "whitelisted_ips": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           }
         },
         "required": [

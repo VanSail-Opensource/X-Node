@@ -54,3 +54,11 @@ Native preparation returns its actual candidate instead of compiling again.
 separate from synthetic certificate material and activation candidates.
 `asset_client.go` delays proxy-core creation until an actual download is needed.
 See `docs/hot-reload.md` for consumer boundaries and fallback behavior.
+
+Normal `command_reload.go` requests set only `RecheckMaterial`; the actor retains
+this intent through superseding controls until successful activation. Only an
+explicit typed force sets `ForceRebuild`. `activation.go` rechecks asset/certificate
+material and uses the existing prepared incremental runtime path. Hosted
+`activation_test.go` covers normal/forced reload counters and whitelist/firewall
+updates without native rebuilding. Traffic capture/ACK and authorization paths
+remain owned by the actor while activation runs in the serialized worker.

@@ -76,8 +76,8 @@ func TestSourceRefreshCapAndNonBlacklistBypass(t *testing.T) {
 	}
 	g.sourceBanCount = sourceBanLimit
 	processHits(t, g, "8.8.8.8", "blacklist", 1, now)
-	if !g.state.Bans[ban.Prefix].Until.After(ban.Until) {
-		t.Fatal("cap blocked existing refresh")
+	if !g.state.Bans[ban.Prefix].Until.Equal(ban.Until) {
+		t.Fatal("agent extended a master deadline")
 	}
 	// A second source IP is contained, but cannot allocate another local ban.
 	g.mu.Lock()
@@ -91,8 +91,8 @@ func TestSourceRefreshCapAndNonBlacklistBypass(t *testing.T) {
 	g.state.Sources["feed"] = sourceState{FirewallSource: protocol.FirewallSource{ID: "feed", Generation: "one", Until: now.Add(time.Hour), RefreshSeconds: 7200}}
 	g.mu.Unlock()
 	before := g.dropped.Load()
-	processHits(t, g, "8.8.4.4", "blacklist", 1, now)
-	if _, ok := g.state.Bans["8.8.4.4/32"]; ok || g.dropped.Load() != before+1 {
-		t.Fatal("source ban cap ignored")
+	processHits(t, g, "8.8.4.4", "source_match", 1, now)
+	if _, ok := g.state.Bans["8.8.4.4/32"]; ok || g.dropped.Load() != before {
+		t.Fatal("source observation allocated a local ban")
 	}
 }

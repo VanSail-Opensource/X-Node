@@ -11,7 +11,9 @@ type reloadRequest struct {
 	Done          chan error
 	Context       context.Context
 	RefreshAssets bool
+	Force         bool
 }
+type reloadOptions struct{ RefreshAssets, Force bool }
 
 func finishReload(done chan error, err error) {
 	if done != nil {
@@ -24,17 +26,20 @@ func finishReload(done chan error, err error) {
 
 // Waiting utility jobs never block the actor or traffic acknowledgments. The
 // actor owns supersession, and publishes completion after the activation result.
-func (a *Agent) reloadRuntime(ctx context.Context, id string, refresh ...bool) (any, error) {
+func (a *Agent) reloadRuntime(ctx context.Context, id string, options ...reloadOptions) (any, error) {
 	name := "runtime.reload"
-	refreshAssets := len(refresh) > 0 && refresh[0]
-	if refreshAssets {
+	settings := reloadOptions{}
+	if len(options) > 0 {
+		settings = options[0]
+	}
+	if settings.RefreshAssets {
 		name = "geodata.refresh"
 	}
 	child, cancel := context.WithTimeout(ctx, protocol.CommandTimeout(name))
 	defer cancel()
 	done := make(chan error, 1)
 	select {
-	case a.notify <- reloadRequest{ID: id, Done: done, Context: child, RefreshAssets: refreshAssets}:
+	case a.notify <- reloadRequest{ID: id, Done: done, Context: child, RefreshAssets: settings.RefreshAssets, Force: settings.Force}:
 	case <-child.Done():
 		return nil, child.Err()
 	}

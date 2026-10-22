@@ -14,6 +14,9 @@ func TestReloadWaitsForActivationAndPropagatesFailure(t *testing.T) {
 	finished := make(chan error, 1)
 	go func() { _, err := a.reloadRuntime(ctx, "reload"); finished <- err }()
 	request := <-a.notify
+	if request.Force || request.RefreshAssets {
+		t.Fatal("ordinary reload requested forced recovery")
+	}
 	select {
 	case <-finished:
 		t.Fatal("queued reload was reported complete")
@@ -26,6 +29,23 @@ func TestReloadWaitsForActivationAndPropagatesFailure(t *testing.T) {
 	}
 	if request.Context.Err() == nil {
 		t.Fatal("completed reload context was retained")
+	}
+}
+
+func TestForcedRecoveryIsExplicit(t *testing.T) {
+	a := &Agent{notify: make(chan reloadRequest, 1)}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	finished := make(chan error, 1)
+	go func() { _, err := a.reloadRuntime(ctx, "forced", reloadOptions{Force: true}); finished <- err }()
+	request := <-a.notify
+	if !request.Force || request.RefreshAssets {
+		t.Fatal("forced recovery option lost")
+	}
+	failure := errors.New("superseded")
+	finishReload(request.Done, failure)
+	if err := <-finished; !errors.Is(err, failure) {
+		t.Fatal(err)
 	}
 }
 

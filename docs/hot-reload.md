@@ -23,8 +23,9 @@ memory-only, and synthetic validation material never becomes an activation
 candidate. Core construction mutates the global system dialer, so the serving
 instance is never accompanied by a second complete candidate instance.
 
-Explicit `runtime.reload` reconstructs the runtime after external dependencies
-are checked. Configuration reconciliation and unchanged geodata refresh do not
+Normal `runtime.reload` rechecks external dependencies and uses incremental
+application. Only changed immutable core components require reconstruction.
+`runtime.reload` with `{"force":true}` explicitly requests recovery reconstruction. Configuration reconciliation and unchanged geodata refresh do not
 implicitly request a forced reconstruction. Production fleet updates are separate
 from code/release delivery.
 
@@ -47,7 +48,8 @@ from code/release delivery.
 | DNS/other static core fields, routing strategy/script | Native component build and runtime reconstruction |
 | Unchanged resend/reconnect | Reuse active sections; absent/unhealthy runtime reconstructs |
 | config.validate, client previews/probes | Separate validation/client candidate; no serving listener changes |
-| runtime.reload, binary install/rollback | Explicit reconstruction/restart, with prepared configuration reuse |
+| runtime.reload | Recheck material, reuse native sections and unchanged listeners; `force` requests reconstruction |
+| Binary install/rollback | Explicit process restart |
 
 The classifier begins with all configuration fields, removing only known
 non-core fields. Unknown future fields therefore require native preparation.
@@ -73,3 +75,8 @@ Hosted Quality publishes `reload-benchmark` with cold/cached preparation at 1 an
 1000 users and live/forced rule application. Logs report application mode, actual
 native/section/matcher builders, reconstruction count and listener-gap duration.
 The gap is measured around stop/start only; preparation happens while serving.
+
+The `incremental_reload_v1` capability negotiates these reload semantics. Whitelist
+and firewall-only changes update admission/guards without native preparation.
+Hosted `BenchmarkRuntimeReload` compares normal reload against the prior forced
+behavior, with timing, allocations, reconstruction count and listener-gap data.

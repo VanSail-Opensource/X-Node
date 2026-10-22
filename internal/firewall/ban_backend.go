@@ -28,6 +28,9 @@ func (g *Guard) enforceMode(ctx context.Context, withSources bool) (result error
 	sources := []protocol.FirewallSource{}
 	now := time.Now()
 	for _, ban := range g.state.Bans {
+		if policy.Protect && ban.Source != "" {
+			continue
+		}
 		if ban.Until.After(now) {
 			bans = append(bans, ban)
 		}
@@ -139,6 +142,9 @@ func (m *Manager) restoreBans(ctx context.Context, policy protocol.FirewallPolic
 	sources := []protocol.FirewallSource{}
 	now := time.Now()
 	for _, ban := range guard.state.Bans {
+		if policy.Protect && ban.Source != "" {
+			continue
+		}
 		if ban.Until.After(now) {
 			bans = append(bans, ban)
 		}

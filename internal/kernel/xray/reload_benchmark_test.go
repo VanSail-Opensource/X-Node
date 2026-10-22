@@ -78,3 +78,29 @@ func BenchmarkRoutingApply(b *testing.B) {
 		})
 	}
 }
+
+// force=true reproduces the previous runtime.reload behavior as its baseline.
+func BenchmarkRuntimeReload(b *testing.B) {
+	for _, force := range []bool{false, true} {
+		b.Run(fmt.Sprintf("force=%t", force), func(b *testing.B) {
+			c := benchmarkConfig(b, 1)
+			registry := sessions.New()
+			registry.SetUsers(c.Users)
+			runtime := New(registry)
+			defer runtime.Stop()
+			if err := runtime.Apply(context.Background(), c); err != nil {
+				b.Fatal(err)
+			}
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				if err := runtime.Apply(context.Background(), c, force); err != nil {
+					b.Fatal(err)
+				}
+			}
+			b.StopTimer()
+			stats := runtime.Statistics()
+			b.ReportMetric(float64(stats.Rebuilds-1), "rebuilds")
+			b.ReportMetric(float64(stats.ListenerGapMicros), "last-gap-us")
+		})
+	}
+}

@@ -107,6 +107,9 @@ func (m *Manager) requiredCapabilities() ([]string, error) {
 		required["volatile_connection_controls_v1"] = true
 	}
 	for _, user := range data.Users {
+		if user.WhitelistEnabled || len(user.WhitelistedIPs) > 0 {
+			required["member_source_whitelist_v1"] = true
+		}
 		if user.ReplacesID != 0 {
 			required["telegram_identity_rekey_v1"] = true
 		}
@@ -135,6 +138,9 @@ func (m *Manager) requiredCapabilities() ([]string, error) {
 	for _, config := range []*protocol.Config{data.Config, data.DesiredConfig} {
 		if config != nil {
 			for _, user := range config.Users {
+				if user.WhitelistEnabled || len(user.WhitelistedIPs) > 0 {
+					required["member_source_whitelist_v1"] = true
+				}
 				if user.ReplacesID != 0 {
 					required["telegram_identity_rekey_v1"] = true
 				}
@@ -142,6 +148,9 @@ func (m *Manager) requiredCapabilities() ([]string, error) {
 		}
 		if config == nil {
 			continue
+		}
+		if config.Firewall.Enabled && config.Firewall.MasterControlled {
+			required["firewall_master_observation_v1"] = true
 		}
 		if len(config.MemberOutbounds) > 0 {
 			required["member_outbound_guards"] = true

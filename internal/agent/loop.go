@@ -107,7 +107,7 @@ func (a *Agent) Run(ctx context.Context) error {
 			if request.Context.Err() != nil {
 				finishReload(request.Done, request.Context.Err())
 			} else if a.hasDesired {
-				a.queue(request.Context, applyJob{ID: request.ID, Revision: a.Store.Revision(), Config: a.desired, Cached: a.desiredCached, Reload: !request.RefreshAssets && request.ID != "geodata-refresh", RefreshAssets: request.RefreshAssets, RecheckMaterial: true, Done: request.Done})
+				a.queue(request.Context, applyJob{ID: request.ID, Revision: a.Store.Revision(), Config: a.desired, Cached: a.desiredCached, ForceRebuild: request.Force, RefreshAssets: request.RefreshAssets, RecheckMaterial: true, Done: request.Done})
 			} else {
 				finishReload(request.Done, errors.New("full baseline required before reload"))
 			}

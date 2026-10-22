@@ -1,3 +1,18 @@
+# X-Node v2.0.13
+
+Adds credential-bound Telegram identity rekeys and exact-IP member whitelist
+admission, including revocation of existing sessions after address removal.
+Managed-node and member source protection are reconciled before acknowledgment.
+Probe-disabled rules silently drop matching traffic. Probe-enabled agents send
+bounded count deltas for master aggregation and enforce only master bans.
+
+Normal reload rechecks external material and applies incremental changes while
+retaining unchanged listeners and sessions. Explicit forced recovery remains
+available. Whitelist and firewall updates avoid native rebuilding. Hosted reload
+benchmarks compare normal operation against the previous forced baseline.
+New extensions are capability-gated; authorization and accounting barriers remain
+in force throughout preparation, supersession and activation.
+
 # X-Node v2.0.12
 
 Includes the merged Xray v26.10.17 upgrade and derives reported core versions from

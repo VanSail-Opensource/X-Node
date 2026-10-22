@@ -21,3 +21,6 @@ unchanged inventories.
 `GeoIPChunk` and optional SourceGeoIPPolicy.reference support capability-gated country uploads outside configuration frames. ExemptionPrefix/ExemptionKey canonicalize IP/CIDR grants while retaining exact IPv6 /128 semantics separately from /64 ban granularity.
 
 `CommandTimeout(name)` exposes the native execution deadline shared by master and agent. Delivery acceptance is bounded separately to 30 seconds.
+
+`types.go` also exports `RuntimeReloadArgs` for capability-gated normal reload
+and explicit forced recovery, without introducing another command transport.

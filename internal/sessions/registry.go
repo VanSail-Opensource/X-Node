@@ -84,6 +84,8 @@ func New() *Registry {
 	return &Registry{prefix: state.ID(), users: map[int]*userState{}, connections: map[string]*Lease{}, bans: map[int]time.Time{}, rejects: map[string]uint64{}, epochs: map[string]string{}, ipBlocks: map[string]protocol.IPBlock{}}
 }
 func sameIdentity(a, b protocol.User) bool {
+	a.WhitelistEnabled, b.WhitelistEnabled = false, false
+	a.WhitelistedIPs, b.WhitelistedIPs = nil, nil
 	a.ID, b.ID = 0, 0
 	a.ReplacesID, b.ReplacesID = 0, 0
 	a.TransitCredentials, b.TransitCredentials = nil, nil
@@ -142,7 +144,7 @@ func (r *Registry) SetUsers(users []protocol.User) {
 	var close []*Lease
 	for _, l := range r.connections {
 		p, ok := policies[l.Info.UserID]
-		if !ok || !sameIdentity(l.user.policy, p) || !eligible(p, l.Info.InboundTag) || !r.validIdentity(p, l.identity, l.Info.InboundTag) {
+		if !ok || !sameIdentity(l.user.policy, p) || !eligible(p, l.Info.InboundTag) || !r.validIdentity(p, l.identity, l.Info.InboundTag) || !l.transit && !sourceAllowed(p, l.Info.SourceIP) {
 			close = append(close, l)
 		}
 	}
@@ -271,6 +273,8 @@ func (r *Registry) acquire(ctx context.Context, id int, identity, tag, ip, desti
 		reason = "block_new"
 	case u.policy.BlockNew && !transit:
 		reason = "block_new"
+	case !transit && !sourceAllowed(u.policy, ip):
+		reason = "source_not_whitelisted"
 	case r.bans[id].After(time.Now()):
 		reason = "torrent_ban"
 	case r.blockedIP(id, ip, time.Now()):

@@ -68,3 +68,6 @@ type TelemetryReport = wire.TelemetryReport
 
 func ExemptionPrefix(raw string) (netip.Prefix, error) { return wire.ExemptionPrefix(raw) }
 func ExemptionKey(raw string) (string, error)          { return wire.ExemptionKey(raw) }
+
+// RuntimeReloadArgs selects incremental material recheck or explicit recovery.
+type RuntimeReloadArgs = wire.RuntimeReloadArgs

@@ -26,6 +26,9 @@ func extensionRequirements(config protocol.Config) map[string]bool {
 	}
 	if config.Firewall.MasterControlled {
 		required["firewall_control_v1"] = true
+		if config.Firewall.Enabled {
+			required["firewall_master_observation_v1"] = true
+		}
 	}
 	if config.DNS.Redirect {
 		required["xray_scoped_dns_v1"] = true
@@ -37,6 +40,9 @@ func extensionRequirements(config protocol.Config) map[string]bool {
 		required["member_outbound_guards"] = true
 	}
 	for _, user := range config.Users {
+		if user.WhitelistEnabled || len(user.WhitelistedIPs) > 0 {
+			required["member_source_whitelist_v1"] = true
+		}
 		if user.ReplacesID != 0 {
 			required["telegram_identity_rekey_v1"] = true
 		}

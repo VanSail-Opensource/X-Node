@@ -44,7 +44,7 @@ func (a *Agent) command(ctx context.Context, m protocol.Message) error {
 	}
 	start := a.Jobs.Start
 	switch request.Name {
-	case "traffic.flush", "firewall.confirm", "firewall.bans.update":
+	case "traffic.flush", "firewall.confirm", "firewall.bans.update", "firewall.protected.sync":
 		start = a.Jobs.StartControl
 	case "firewall.bans.sync":
 		var chunk struct {
@@ -82,9 +82,13 @@ func (a *Agent) command(ctx context.Context, m protocol.Message) error {
 		case "certificates.get":
 			return a.Certificates.Status(), nil
 		case "runtime.reload":
-			return a.reloadRuntime(ctx, m.ID)
+			var settings protocol.RuntimeReloadArgs
+			if err := protocol.Decode(args, &settings); err != nil {
+				return nil, err
+			}
+			return a.reloadRuntime(ctx, m.ID, reloadOptions{Force: settings.Force})
 		case "geodata.refresh":
-			return a.reloadRuntime(ctx, m.ID, true)
+			return a.reloadRuntime(ctx, m.ID, reloadOptions{RefreshAssets: true})
 		case "ddns.run":
 			var p struct {
 				ID string `json:"job_id"`
@@ -128,6 +132,17 @@ func (a *Agent) command(ctx context.Context, m protocol.Message) error {
 			return map[string]bool{"ready": ready}, err
 		case "firewall.bans.get":
 			return a.Guard.Status(), nil
+		case "firewall.protected.sync":
+			var input struct {
+				IPs []string `json:"ips"`
+			}
+			if err := protocol.Decode(args, &input); err != nil {
+				return nil, err
+			}
+			if err := a.Guard.ProtectNodes(ctx, input.IPs); err != nil {
+				return nil, err
+			}
+			return map[string]bool{"applied": true}, nil
 		case "firewall.status":
 			return a.Firewall.Status(), nil
 		case "firewall.confirm":

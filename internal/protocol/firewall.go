@@ -9,7 +9,7 @@ import (
 // MaxFirewallEventsPerFrame bounds durable event batches shared by masters and agents.
 const MaxFirewallEventsPerFrame = 256
 
-var FirewallRuleNames = []string{"closed_port", "invalid_packet", "syn_flood", "icmp_probe", "xray_tcp_probe", "xray_invalid", "xray_auth_failure"}
+var FirewallRuleNames = []string{"closed_port", "invalid_packet", "syn_flood", "icmp_probe", "xray_tcp_probe", "xray_invalid", "xray_auth_failure", "source_match"}
 
 type FirewallRule struct {
 	Enabled       bool `json:"enabled"`
@@ -18,7 +18,7 @@ type FirewallRule struct {
 }
 
 func (p FirewallPolicy) Rule(name string) (FirewallRule, bool) {
-	if !p.Enabled || !p.Protect {
+	if !p.Enabled {
 		return FirewallRule{}, false
 	}
 	known := false

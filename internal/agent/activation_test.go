@@ -52,11 +52,46 @@ func TestControlsAndAuxiliarySettingsBypassNativeActivation(t *testing.T) {
 	c.Telemetry.SampleSeconds = 5
 	c.Updates.Enabled = false
 	c.Torrent.BanSeconds = 120
+	c.Users[0].WhitelistEnabled = true
+	c.Users[0].WhitelistedIPs = []string{"8.8.8.8"}
+	c.Firewall.Protect = true // Disabled firewall: registry/policy update needs no native build.
 	a.Client.Incoming <- protocol.New("state.sync", "auxiliary", 3, c)
 	await(t, func() bool { return a.Store.Snapshot().ConfigRevision == 3 && !a.applying.Load() })
 	after := a.Runtime.Statistics()
 	if before.NativeBuilds != after.NativeBuilds || before.InboundBuilds != after.InboundBuilds || before.MatcherBuilds != after.MatcherBuilds || before.Rebuilds != after.Rebuilds {
 		t.Fatalf("unrelated native work: before=%+v after=%+v", before, after)
+	}
+}
+
+func TestNormalReloadRechecksWithoutReconstructionAndForceStillRecovers(t *testing.T) {
+	a, c := activationFixture(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- a.Run(ctx) }()
+	defer func() {
+		cancel()
+		if err := <-done; err != nil {
+			t.Error(err)
+		}
+	}()
+	a.Client.Incoming <- protocol.New("state.sync", "initial", 1, c)
+	await(t, func() bool { return a.Store.Snapshot().ConfigRevision == 1 && !a.applying.Load() })
+	before := a.Runtime.Statistics()
+	for i := 0; i < 3; i++ {
+		if _, err := a.reloadRuntime(ctx, fmt.Sprint("normal-", i)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	after := a.Runtime.Statistics()
+	if after.Rebuilds != before.Rebuilds || after.InboundBuilds != before.InboundBuilds || after.NativeBuilds != before.NativeBuilds || after.LiveApplies < before.LiveApplies+3 {
+		t.Fatalf("normal reload reconstructed: before=%+v after=%+v", before, after)
+	}
+	if _, err := a.reloadRuntime(ctx, "forced", reloadOptions{Force: true}); err != nil {
+		t.Fatal(err)
+	}
+	forced := a.Runtime.Statistics()
+	if forced.Rebuilds != after.Rebuilds+1 || !a.Runtime.Ready() {
+		t.Fatalf("forced recovery not applied: %+v", forced)
 	}
 }
 

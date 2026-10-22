@@ -18,9 +18,16 @@ func (b *policyPlan) nat(forwards []protocol.Forward, redirect bool) {
 	if len(forwards) == 0 {
 		return
 	}
+	for _, v6 := range []bool{false, true} {
+		set := "trusted_v4"
+		if v6 {
+			set = "trusted_v6"
+		}
+		b.add("forward", fmt.Sprintf("trusted-source-%t", v6), sourceSet(v6, set, false, false), accept())
+	}
 	b.add("forward", "inbound-blacklist", direction(false, false), dnat(), jump("blacklist"))
 	b.add("forward", "established", ctState(6, false), accept())
-	b.add("forward", "invalid", ctState(expr.CtStateBitINVALID, false), drop())
+	b.add("forward", "invalid", ctState(expr.CtStateBitINVALID, false), b.eventDrop("invalid_packet"))
 	seen := map[string]bool{}
 	for _, f := range forwards {
 		target := netip.MustParseAddr(f.TargetIP)

@@ -47,12 +47,15 @@ type hitWindow struct {
 	count    uint64
 	reported bool
 	until    time.Time
+	last     time.Time
 }
 
 // Guard separates observations from durable, master-authorized restrictions.
 // Hot inbound paths only enqueue bounded observations; all filesystem/kernel
 // work runs outside Xray payload handling and the control socket reader.
 type Guard struct {
+	nodeIPs           map[string]bool
+	memberIPs         map[string]time.Time
 	enforceRetryAt    time.Time
 	enforceRetryDelay time.Duration
 	lookupRevision    uint64
@@ -150,7 +153,7 @@ func (g *Guard) Configure(policy protocol.FirewallPolicy) {
 }
 func (g *Guard) Observe(ip netip.Addr, rule string) {
 	p := g.policy.Load()
-	if p == nil || !p.Enabled || !p.MasterControlled && rule != "blacklist" {
+	if p == nil || !p.Enabled || !p.MasterControlled || !p.Protect {
 		return
 	}
 	if rule != "blacklist" {

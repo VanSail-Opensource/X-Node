@@ -129,9 +129,9 @@ func (nativeBackend) ApplyBans(ctx context.Context, bans []protocol.FirewallBan,
 
 	if replaceSources {
 		for _, v6 := range []bool{false, true} {
-			suffix, refresh := "v4", "refresh_v4"
+			suffix, refresh := "v4", "source_match_v4"
 			if v6 {
-				suffix, refresh = "v6", "refresh_v6"
+				suffix, refresh = "v6", "source_match_v6"
 			}
 			chain := &nftables.Chain{Table: table, Name: "source_lookup_" + suffix}
 			current, e := c.GetRules(table, chain)

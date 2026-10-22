@@ -546,6 +546,15 @@
                   "valid_until": {
                     "format": "date-time",
                     "type": "string"
+                  },
+                  "whitelist_enabled": {
+                    "type": "boolean"
+                  },
+                  "whitelisted_ips": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
                   }
                 },
                 "required": [
@@ -1090,6 +1099,15 @@
                   "valid_until": {
                     "format": "date-time",
                     "type": "string"
+                  },
+                  "whitelist_enabled": {
+                    "type": "boolean"
+                  },
+                  "whitelisted_ips": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
                   }
                 },
                 "required": [
@@ -1221,6 +1239,15 @@
                   "valid_until": {
                     "format": "date-time",
                     "type": "string"
+                  },
+                  "whitelist_enabled": {
+                    "type": "boolean"
+                  },
+                  "whitelisted_ips": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
                   }
                 },
                 "required": [
@@ -1353,6 +1380,15 @@
                   "valid_until": {
                     "format": "date-time",
                     "type": "string"
+                  },
+                  "whitelist_enabled": {
+                    "type": "boolean"
+                  },
+                  "whitelisted_ips": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
                   }
                 },
                 "required": [
@@ -1493,12 +1529,38 @@
         },
         "data": {
           "additionalProperties": false,
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "name": {
+                    "const": "runtime.reload"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "args": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "force": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [],
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          ],
           "properties": {
             "args": {
               "type": "object"
             },
             "name": {
               "enum": [
+                "firewall.protected.sync",
                 "firewall.geoip.sync",
                 "firewall.bans.sync",
                 "firewall.bans.update",

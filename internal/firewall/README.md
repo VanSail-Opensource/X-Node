@@ -212,3 +212,10 @@ regressions run in hosted Quality, never as local automated suites.
 Startup also trims older durable master/source overflow before enforcing and
 commits the compacted snapshot once. `ban_capacity_restore_test.go` covers
 upgrade/reopen durability, master preservation and later-deadline retention.
+
+`protected.go` and `protected_linux.go` project trusted managed-node addresses
+and active member whitelist IPs into memory-only timed kernel exemptions.
+Replacement removes stale shared-IP protection while preserving another member's
+active entry. Geolocation rules stay ahead of member ban bypass. `detection.go`
+sends bounded journaled count deltas below thresholds; the master owns windows
+and bans. Disabled probe protection silently drops matching/closed-port traffic.

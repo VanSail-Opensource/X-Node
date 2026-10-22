@@ -125,9 +125,9 @@ Commands emit `command.accepted`, optional `command.progress`, and `command.resu
 | `users.active_ips` | Optional `user_id`; omission requests current active source addresses for all users |
 | `ips.control` | `source_ip`, optional `user_id`, and `drop`, `block_seconds` or `unblock` |
 | `metrics.get`, `certificates.get`, `jobs.list`, `firewall.status`, `update.check` | Empty object |
-| `runtime.reload` | Empty object; waits for validated runtime reconstruction |
+| `runtime.reload` | `{force?:boolean}`; recheck material and apply incrementally; force requests recovery |
 | `ddns.run` | `job_id` from the accepted configuration |
-| `geodata.refresh` | Empty object; refresh then reconstruct using the new generation |
+| `geodata.refresh` | Empty object; refresh then incrementally apply the verified generation |
 | `speedtest` | `peer_outbound`, HTTPS `download_url`/`upload_url`, optional `max_bytes`/`timeout_seconds` |
 | `firewall.apply` | `policy`, optional `dns_redirect` |
 | `firewall.confirm` | `transaction_id` from `firewall.pending` or the apply result |
@@ -200,10 +200,10 @@ coverage. A source `reference` requires the existing matching generation.
 
 Bans include prefix, generation, absolute `until` and refresh seconds; new commands
 can reset shorter lifetimes. Retries do not extend the original deadline. IPv4
-uses /32 and IPv6 /64; exemptions use exact addresses. Repeat qualifying hits
-extend locally without another detection report. Expiry events retain their
+uses /32 and IPv6 /64; exemptions use exact addresses. Only a newer master
+authorization can extend a ban. Expiry events retain their
 generation so obsolete events cannot clear newer bans. A source-expired event
-means its base deadline and all local extensions have expired.
+means its authorized deadline has expired.
 
 Source inventories use `sources_only` snapshots and a separate source version.
 Dynamic bans and exemptions continue to accept newer deltas while an older source
@@ -216,3 +216,31 @@ generation stages; source commits never overwrite a newer paid exemption.
 `source_geoip_firewall_v1` accepts only master-resolved prefix generations and non-REALITY listener bindings. Agents reject GeoIP downloads and routing/DNS selectors. `shared_domain_blocks_v1` adds a front-of-routing domain block policy. `geodata_interval_v1` permits completion-based `geodata.interval_hours` (0 disables, 1..8760 enables); legacy cron is retained when interval is absent.
 
 Commands have a separate 30-second acceptance deadline. Execution is bounded to 30 seconds by default, two minutes for native validation/reload/update checks and traffic barriers, 90 seconds for speedtests, five minutes for geodata refresh/firewall preparation and ten minutes for installation or bulk range preparation. `runtime.reload` and `geodata.refresh` on agents advertising `activation_commands_v1` complete only after activation, retaining the previous runtime until native preparation succeeds. `update.status` returns the durable transaction (ID, version, previous version, status and deadline); it and `jobs.list` reply without a utility slot. `update_transaction_v1` enables reconciliation after reconnect. Confirm an upgrade only with a matching confirmed transaction plus fresh ready/synchronized telemetry at the current configuration revision. A version string alone is insufficient.
+
+## Whitelists and fleet detection
+
+`member_source_whitelist_v1` adds `whitelist_enabled` and exact `whitelisted_ips`
+to durable user authorization. An enabled empty list denies member ingress.
+Changes close affected existing ingress sessions before acknowledgment. This
+check uses Xray's authenticated source address and trusted-proxy configuration,
+not an untrusted request header. Independently authenticated transit credentials
+bypass member IP checks on subsequent routing hops; expiry, accounting and
+routing revocation still apply. `whitelist_transit_test.go` pins this separation
+and delayed transit classification after a Telegram identity rekey in hosted CI.
+
+`firewall_master_observation_v1` reports bounded IP/rule count deltas without a
+node-local threshold. Event IDs remain durable and retryable until acknowledged;
+masters aggregate across nodes and deduplicate retries. With probe protection
+on, detections pass and only master-issued bans drop traffic. With protection
+off, matching invalid/probe/closed-port traffic drops silently. Normal TCP
+handshakes on open ports remain available. Source inventories follow the same
+mode and never cause autonomous bans in observation mode.
+
+`firewall.protected.sync` replaces exact volatile managed-node addresses through
+the existing executor. They are excluded from detection and all blacklist banks,
+including source inventories. Active user whitelist IPs join the kernel bypass
+until their authorization expiry; removing one owner's exemption preserves any
+other owner's active exemption. Non-Reality geolocation filtering precedes every
+bypass. Protected-address commands and live IP projections are private and do
+not enter durable command history. Whitelist/firewall changes update registry
+and nftables state without reconstructing native Xray.

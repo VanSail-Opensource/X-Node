@@ -64,6 +64,15 @@ func TestRoutingChangesPreserveRealStreamsAndReuseMatchers(t *testing.T) {
 				}
 			}
 			check()
+			for i := 0; i < 3; i++ {
+				if err = runtime.Apply(context.Background(), cfg); err != nil {
+					t.Fatal(err)
+				}
+				check()
+				if runtime.instance != instance || runtime.current.Epochs["in"] != epoch || runtime.Statistics().Rebuilds != 1 {
+					t.Fatal("unchanged reload interrupted serving runtime")
+				}
+			}
 			cfg = editNative(t, cfg, func(r map[string]any) {
 				r["outbounds"] = append(r["outbounds"].([]any), map[string]any{"tag": "blocked", "protocol": "blackhole"})
 				r["routing"] = map[string]any{"rules": []any{map[string]any{"ruleTag": "first", "type": "field", "domain": []string{"full:first.invalid"}, "outboundTag": "blocked"}}}

@@ -32,11 +32,11 @@ func compile(p protocol.FirewallPolicy, redirect bool, ssh []int) (*policyPlan, 
 	for _, name := range []string{"ban_v6", "blocked_v4", "blocked_v6", "blocked", "refresh_v4", "refresh_v6"} {
 		b.chain(name, nil, nil, "", false)
 	}
-	b.chain("input", nftables.ChainHookInput, nftables.ChainPriorityFilter, nftables.ChainTypeFilter, true)
+	b.chain("input", nftables.ChainHookInput, nftables.ChainPriorityFilter, nftables.ChainTypeFilter, !p.Protect || !p.MasterControlled)
 	b.chain("output", nftables.ChainHookOutput, nftables.ChainPriorityFilter, nftables.ChainTypeFilter, false)
 	b.chain("dns_output", nftables.ChainHookOutput, nftables.ChainPriorityRef(-110), nftables.ChainTypeNAT, false)
 	b.chain("prerouting", nftables.ChainHookPrerouting, nftables.ChainPriorityNATDest, nftables.ChainTypeNAT, false)
-	b.chain("forward", nftables.ChainHookForward, nftables.ChainPriorityFilter, nftables.ChainTypeFilter, len(p.Forward) > 0)
+	b.chain("forward", nftables.ChainHookForward, nftables.ChainPriorityFilter, nftables.ChainTypeFilter, len(p.Forward) > 0 && (!p.Protect || !p.MasterControlled))
 	b.chain("postrouting", nftables.ChainHookPostrouting, nftables.ChainPriorityNATSource, nftables.ChainTypeNAT, false)
 	if err := b.staticSets(p, ssh); err != nil {
 		return nil, err
@@ -85,25 +85,32 @@ func (b *policyPlan) add(chain, id string, groups ...expressions) {
 }
 func (b *policyPlan) input() {
 	b.add("input", "loopback", meta(expr.MetaKeyIIFNAME, append([]byte("lo"), make([]byte, 14)...), false), accept())
+	b.geoipDrops()
+	for _, v6 := range []bool{false, true} {
+		name := "trusted_v4"
+		if v6 {
+			name = "trusted_v6"
+		}
+		b.add("input", fmt.Sprintf("trusted-source-%t", v6), sourceSet(v6, name, false, false), accept())
+	}
+	b.add("input", "blacklists", direction(false, false), jump("blacklist"))
 	for i, raw := range []string{"127.0.0.0/8", "::1/128"} {
 		for _, dest := range []bool{false, true} {
-			b.add("input", fmt.Sprintf("spoof-loopback-%d-%t", i, dest), address(raw, dest, false), drop())
+			b.add("input", fmt.Sprintf("spoof-loopback-%d-%t", i, dest), address(raw, dest, false), b.eventDrop("invalid_packet"))
 		}
 	}
 	for i, raw := range []string{"0.0.0.0/8", "224.0.0.0/4", "240.0.0.0/4"} {
-		b.add("input", fmt.Sprintf("spoof-v4-%d", i), address(raw, false, false), drop())
+		b.add("input", fmt.Sprintf("spoof-v4-%d", i), address(raw, false, false), b.eventDrop("invalid_packet"))
 	}
 	// IPv6 link essentials must precede unspecified/multicast rejection.
 	b.ipv6Link()
 	for i, raw := range []string{"::/128", "ff00::/8"} {
-		b.add("input", fmt.Sprintf("spoof-v6-%d", i), address(raw, false, false), drop())
+		b.add("input", fmt.Sprintf("spoof-v6-%d", i), address(raw, false, false), b.eventDrop("invalid_packet"))
 	}
 	b.add("input", "icmp-redirect", icmp(false, 5), b.eventDrop("icmp_probe"))
 	b.add("input", "icmpv6-redirect", icmp(true, 137), b.eventDrop("icmp_probe"))
-	b.geoipDrops()
 	b.add("input", "outbound-reply", direction(true, false), ctState(6, false), counter("outbound_replies"), accept())
 	b.add("input", "invalid", ctState(expr.CtStateBitINVALID|expr.CtStateBitUNTRACKED, false), b.eventDrop("invalid_packet"))
-	b.add("input", "blacklists", direction(false, false), jump("blacklist"))
 	for i, bits := range []byte{3, 6, 5} {
 		b.add("input", fmt.Sprintf("invalid-flags-%d", i), flags(bits, bits, false), b.eventDrop("invalid_packet"))
 	}

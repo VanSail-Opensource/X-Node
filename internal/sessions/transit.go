@@ -16,6 +16,10 @@ func (r *Registry) isTransit(user protocol.User, identity, tag string) bool {
 			return true
 		}
 	}
+	if user.ReplacesID != 0 {
+		user.ID, user.ReplacesID = user.ReplacesID, 0
+		return r.isTransit(user, identity, tag)
+	}
 	return false
 }
 

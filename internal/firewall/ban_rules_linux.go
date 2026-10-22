@@ -12,6 +12,9 @@ const nfLogGroup = 100
 // nft's text parser treats jump/goto as terminal statements. Keep the eventual
 // drop in its own rule so complete ruleset snapshots remain replayable.
 func (b *policyPlan) eventDrop(rule string) expressions {
+	if b.policy.Protect && b.policy.MasterControlled {
+		return b.event(rule)
+	}
 	event := b.event(rule)
 	if len(event) == 0 {
 		return drop()
@@ -27,6 +30,9 @@ func (b *policyPlan) eventDrop(rule string) expressions {
 
 func (b *policyPlan) event(rule string) expressions {
 	if rule != "blacklist" && !b.policy.MasterControlled {
+		return nil
+	}
+	if rule != "blacklist" && !b.policy.Protect {
 		return nil
 	}
 	if rule != "blacklist" {
@@ -52,8 +58,12 @@ func (b *policyPlan) banSets() {
 			suffix, key, ban, lan, refresh = "v6", nftables.TypeIP6Addr, banSetV6, "lan_v6", "refresh_v6"
 		}
 		b.sets = append(b.sets, setSpec{set: &nftables.Set{Table: b.table, Name: "exempt_" + suffix, KeyType: key, HasTimeout: true, Timeout: 72 * time.Hour, Dynamic: true, Size: 1 << 20}, preserve: true})
+		b.sets = append(b.sets, setSpec{set: &nftables.Set{Table: b.table, Name: "trusted_" + suffix, KeyType: key, HasTimeout: true, Timeout: 365 * 24 * time.Hour, Dynamic: true, Size: 1 << 20}, preserve: true})
 		b.sets = append(b.sets, setSpec{set: &nftables.Set{Table: b.table, Name: "exempt_prefix_" + suffix, KeyType: key, Interval: true, HasTimeout: true, Timeout: 72 * time.Hour}, preserve: true})
 		b.chain("source_lookup_"+suffix, nil, nil, "", false)
+		b.chain("source_match_"+suffix, nil, nil, "", false)
+		b.add("source_match_"+suffix, "match", b.eventDrop("source_match"))
+		b.add("source_match_"+suffix, "return", verdict(expr.VerdictReturn, ""))
 		b.preserveRules["source_lookup_"+suffix] = true
 		b.add("blacklist", "exempt-"+suffix, sourceSet(v6, "exempt_"+suffix, false, false), verdict(expr.VerdictReturn, ""))
 		b.add("blacklist", "exempt-prefix-"+suffix, sourceSet(v6, "exempt_prefix_"+suffix, false, false), verdict(expr.VerdictReturn, ""))

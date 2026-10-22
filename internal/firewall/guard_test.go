@@ -63,18 +63,18 @@ func TestDetectionRequiresMasterCommandAndRefreshDoesNotReport(t *testing.T) {
 	g, kernel := guardFixture(t)
 	now := time.Now().UTC()
 	processHits(t, g, "203.0.113.8", "xray_invalid", 2, now)
-	if len(g.state.Events) != 0 || len(g.state.Bans) != 0 {
-		t.Fatal("threshold caused premature action")
+	if len(g.state.Events) != 1 || len(g.state.Bans) != 0 {
+		t.Fatal("below-threshold delta was not reported")
 	}
 	processHits(t, g, "203.0.113.8", "xray_invalid", 1, now.Add(time.Second))
 	events := g.pendingEvents(512)
-	if len(events) != 1 || events[0].Count != 3 || len(g.state.Bans) != 0 {
+	if len(events) != 2 || events[0].Count != 2 || events[1].Count != 1 || len(g.state.Bans) != 0 {
 		t.Fatal("detection did not remain report-only", events)
 	}
 	if len(kernel.bans) != 0 {
 		t.Fatal("detector changed kernel blacklist")
 	}
-	if err := g.appendJournal(journalRecord{Ack: []string{events[0].ID}}); err != nil {
+	if err := g.appendJournal(journalRecord{Ack: []string{events[0].ID, events[1].ID}}); err != nil {
 		t.Fatal(err)
 	}
 	ban := protocol.FirewallBan{Prefix: "203.0.113.8", Generation: "first", Until: now.Add(time.Minute), RefreshSeconds: 300}
@@ -82,8 +82,8 @@ func TestDetectionRequiresMasterCommandAndRefreshDoesNotReport(t *testing.T) {
 		t.Fatal(err)
 	}
 	processHits(t, g, "203.0.113.8", "blacklist", 1, now.Add(2*time.Second))
-	if len(g.state.Events) != 0 || !g.state.Bans["203.0.113.8/32"].Until.After(ban.Until) {
-		t.Fatal("repeat ban hit reported or did not extend")
+	if len(g.state.Events) != 0 || !g.state.Bans["203.0.113.8/32"].Until.Equal(ban.Until) {
+		t.Fatal("agent changed the master deadline or reported a ban hit")
 	}
 	ban.Generation = "shorter"
 	ban.Until = now.Add(10 * time.Second)
@@ -152,11 +152,11 @@ func TestRuleWindowAndPrivateAddresses(t *testing.T) {
 	now := time.Now().UTC()
 	processHits(t, g, "203.0.113.8", "xray_invalid", 1, now)
 	processHits(t, g, "203.0.113.8", "xray_invalid", 1, now.Add(11*time.Second))
-	if len(g.state.Events) != 0 {
-		t.Fatal("hits from expired window combined")
+	if len(g.state.Events) != 2 {
+		t.Fatal("independent deltas were not reported")
 	}
 	processHits(t, g, "203.0.113.8", "xray_invalid", 1, now.Add(12*time.Second))
-	if len(g.state.Events) != 1 {
-		t.Fatal("fresh window did not report")
+	if len(g.state.Events) != 3 {
+		t.Fatal("fresh delta did not report")
 	}
 }

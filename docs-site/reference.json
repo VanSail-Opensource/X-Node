@@ -544,8 +544,19 @@
     },
     {
       "name": "runtime.reload",
-      "description": "Queue reconstruction from the current accepted state.",
-      "body": "## Validated reconstruction\nWaits for runtime activation and readiness. Native preparation validates assets and certificates before replacing the serving runtime. A newer desired configuration supersedes the request. Agents advertise activation_commands_v1 for this completion contract."
+      "description": "Recheck external material and incrementally apply current desired state.",
+      "body": "## Incremental reload\nRequires incremental_reload_v1 and activation_commands_v1. Rechecks certificate and asset material and applies the prepared candidate through the existing incremental runtime. Unchanged listeners and sessions remain running. Immutable core changes reconstruct after successful preparation.\n\n## Forced recovery\nSet force to true to explicitly reconstruct. Completion follows activation and readiness; a newer desired configuration supersedes this request without blocking traffic acknowledgments.",
+      "fields": [
+        [
+          "force",
+          "boolean",
+          "Optional",
+          "Force full recovery reconstruction. Default false."
+        ]
+      ],
+      "args": {
+        "force": false
+      }
     },
     {
       "name": "ddns.run",
@@ -566,7 +577,7 @@
     {
       "name": "geodata.refresh",
       "description": "Refresh verified assets and queue a new runtime generation.",
-      "body": "## Verified generations\nUses native Geodata asset/cron/outbound settings and remotely supplied hashes. Filenames stay in the managed directory. Files are staged, verified and replaced atomically as a generation. Required failure retains the previous valid files.\n\nSuccessful refresh queues reconstruction. Observe readiness for activation. The core's duplicate downloader is suppressed.\n\n## Arguments\nUse an empty object."
+      "body": "## Verified generations\nUses native Geodata asset/cron/outbound settings and remotely supplied hashes. Filenames stay in the managed directory. Files are staged, verified and replaced atomically as a generation. Required failure retains the previous valid files.\n\nSuccessful refresh queues incremental application; immutable core changes reconstruct only when required. Observe readiness for activation. The core's duplicate downloader is suppressed.\n\n## Arguments\nUse an empty object."
     },
     {
       "name": "firewall.status",
@@ -829,6 +840,24 @@
       "args": {
         "generation": "example-country-generation",
         "probe": true
+      }
+    },
+    {
+      "name": "firewall.protected.sync",
+      "description": "Replace volatile trusted managed-node address exclusions.",
+      "body": "## Managed-node protection\nRequires firewall_master_observation_v1. Accepts at most 100000 exact canonical public IPs from trusted node address information. The agent combines this snapshot with its own observed interface addresses and active member whitelist protection. The snapshot remains memory-only and is replaced on reconciliation. Shared CDN ranges are never inferred from subscription hostnames.",
+      "fields": [
+        [
+          "ips",
+          "array",
+          "Required",
+          "Exact public IPv4/IPv6 addresses."
+        ]
+      ],
+      "args": {
+        "ips": [
+          "203.0.113.10"
+        ]
       }
     }
   ]

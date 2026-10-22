@@ -36,29 +36,30 @@ type userState struct {
 	upload, download atomic.Uint64
 }
 type Registry struct {
-	mu             sync.RWMutex
-	prefix         string
-	sequence       uint64
-	users          map[int]*userState
-	connections    map[string]*Lease
-	bans           map[int]time.Time
-	ports          []protocol.PortRange
-	rejects        map[string]uint64
-	paused         bool
-	epochs         map[string]string
-	OnBan          func(int, time.Time)
-	OnReject       func(AdmissionEvent)
-	ipBlocks       map[string]protocol.IPBlock
-	reportIPs      bool
-	accounting     map[accountingKey]*accountingCounters
-	inflight       map[string]*Lease
-	rates          map[int]protocol.UserRate
-	fences         map[int]int
-	periodFences   map[accountingKey]int
-	activity       activitySnapshot
-	closedActivity map[int]map[string]int
-	resources      int
-	outboundFences map[string]int
+	mu              sync.RWMutex
+	prefix          string
+	sequence        uint64
+	users           map[int]*userState
+	identityAliases map[int]int
+	connections     map[string]*Lease
+	bans            map[int]time.Time
+	ports           []protocol.PortRange
+	rejects         map[string]uint64
+	paused          bool
+	epochs          map[string]string
+	OnBan           func(int, time.Time)
+	OnReject        func(AdmissionEvent)
+	ipBlocks        map[string]protocol.IPBlock
+	reportIPs       bool
+	accounting      map[accountingKey]*accountingCounters
+	inflight        map[string]*Lease
+	rates           map[int]protocol.UserRate
+	fences          map[int]int
+	periodFences    map[accountingKey]int
+	activity        activitySnapshot
+	closedActivity  map[int]map[string]int
+	resources       int
+	outboundFences  map[string]int
 }
 type Lease struct {
 	Info                                     Connection
@@ -83,6 +84,8 @@ func New() *Registry {
 	return &Registry{prefix: state.ID(), users: map[int]*userState{}, connections: map[string]*Lease{}, bans: map[int]time.Time{}, rejects: map[string]uint64{}, epochs: map[string]string{}, ipBlocks: map[string]protocol.IPBlock{}}
 }
 func sameIdentity(a, b protocol.User) bool {
+	a.ID, b.ID = 0, 0
+	a.ReplacesID, b.ReplacesID = 0, 0
 	a.TransitCredentials, b.TransitCredentials = nil, nil
 	a.ValidUntil = nil
 	b.ValidUntil = nil
@@ -116,6 +119,13 @@ func eligible(u protocol.User, tag string) bool {
 }
 func (r *Registry) SetUsers(users []protocol.User) {
 	r.mu.Lock()
+	r.rekeyUsers(users)
+	r.identityAliases = map[int]int{}
+	for _, user := range users {
+		if user.ReplacesID != 0 {
+			r.identityAliases[user.ReplacesID] = user.ID
+		}
+	}
 	next := map[int]*userState{}
 	policies := map[int]protocol.User{}
 	for _, p := range users {
@@ -243,6 +253,9 @@ func (r *Registry) acquire(ctx context.Context, id int, identity, tag, ip, desti
 		}
 	}()
 	u := r.users[id]
+	if mapped := r.rekeyIdentity(id, identity, tag); mapped != 0 {
+		id, u = mapped, r.users[mapped]
+	}
 	transit := u != nil && r.isTransit(u.policy, identity, tag)
 	reason := ""
 	switch {

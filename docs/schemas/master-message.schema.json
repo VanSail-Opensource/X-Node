@@ -498,6 +498,9 @@
                     "type": "array",
                     "uniqueItems": true
                   },
+                  "replaces_id": {
+                    "type": "integer"
+                  },
                   "speed_limit_after_seconds": {
                     "minimum": 0,
                     "type": "integer"
@@ -1039,6 +1042,9 @@
                     "type": "array",
                     "uniqueItems": true
                   },
+                  "replaces_id": {
+                    "type": "integer"
+                  },
                   "speed_limit_after_seconds": {
                     "minimum": 0,
                     "type": "integer"
@@ -1170,6 +1176,9 @@
                     },
                     "type": "array"
                   },
+                  "replaces_id": {
+                    "type": "integer"
+                  },
                   "speed_limit_after_seconds": {
                     "type": "integer"
                   },
@@ -1298,6 +1307,9 @@
                       "type": "string"
                     },
                     "type": "array"
+                  },
+                  "replaces_id": {
+                    "type": "integer"
                   },
                   "speed_limit_after_seconds": {
                     "type": "integer"

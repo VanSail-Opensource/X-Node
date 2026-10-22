@@ -445,6 +445,9 @@
             "type": "array",
             "uniqueItems": true
           },
+          "replaces_id": {
+            "type": "integer"
+          },
           "speed_limit_after_seconds": {
             "minimum": 0,
             "type": "integer"

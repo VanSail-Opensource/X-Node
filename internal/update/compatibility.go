@@ -107,6 +107,9 @@ func (m *Manager) requiredCapabilities() ([]string, error) {
 		required["volatile_connection_controls_v1"] = true
 	}
 	for _, user := range data.Users {
+		if user.ReplacesID != 0 {
+			required["telegram_identity_rekey_v1"] = true
+		}
 		if len(user.TransitCredentials) > 0 {
 			required["transit_credentials_v1"] = true
 		}
@@ -130,6 +133,13 @@ func (m *Manager) requiredCapabilities() ([]string, error) {
 		}
 	}
 	for _, config := range []*protocol.Config{data.Config, data.DesiredConfig} {
+		if config != nil {
+			for _, user := range config.Users {
+				if user.ReplacesID != 0 {
+					required["telegram_identity_rekey_v1"] = true
+				}
+			}
+		}
 		if config == nil {
 			continue
 		}

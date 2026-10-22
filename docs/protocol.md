@@ -1,5 +1,13 @@
 # WebSocket protocol v1
 
+`telegram_identity_rekey_v1` permits `users[].replaces_id`: the previous numeric
+identity for a Telegram-ID replacement. It is unique within a snapshot and must
+differ from the new ID. The registry retains matching credential generations,
+paid-period counters and existing leases; stale mux admission still checks the
+complete credential-bound identity. Masters must accept late journal samples by
+their authenticated node and unchanged accounting period, never by a global
+numeric alias alone. Cached replacements prevent rollback to an older agent.
+
 `native_auxiliary_inbounds_v1` permits native `dokodemo-door` and `tunnel`
 forwarding/utility listeners. These listeners retain native settings, never
 receive managed accounts and are excluded from member connection/traffic

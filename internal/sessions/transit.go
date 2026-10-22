@@ -27,5 +27,12 @@ func (r *Registry) validIdentity(user protocol.User, identity, tag string) bool 
 	if epoch := r.epochs[tag]; epoch != "" {
 		normal += "@" + epoch
 	}
-	return identity == normal || r.isTransit(user, identity, tag)
+	if identity == normal || r.isTransit(user, identity, tag) {
+		return true
+	}
+	if user.ReplacesID != 0 {
+		user.ID, user.ReplacesID = user.ReplacesID, 0
+		return r.validIdentity(user, identity, tag)
+	}
+	return false
 }

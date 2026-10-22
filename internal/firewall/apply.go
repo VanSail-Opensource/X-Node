@@ -126,6 +126,10 @@ func (m *Manager) prepare(ctx context.Context, id string, p protocol.FirewallPol
 	if err != nil {
 		return tx, err
 	}
+	native, err = withoutVolatileProtection(native)
+	if err != nil {
+		return tx, err
+	}
 	if tx.Compat, err = m.saveCompat(ctx, compat, "rollback"); err != nil {
 		return tx, err
 	}

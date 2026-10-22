@@ -48,9 +48,8 @@ func firewallControlChecks(ctx context.Context, manager *firewall.Manager, polic
 		return err
 	}
 	defer stopPeer()
-	for range 3 {
-		_, _ = runner.Run(ctx, "ip", "netns", "exec", "xnode-client", "python3", "-c", echoProbe, "198.18.0.1", "9444", "tcp")
-	}
+	// The first bounded delta must arrive before the old local threshold of 3.
+	_, _ = runner.Run(ctx, "ip", "netns", "exec", "xnode-client", "python3", "-c", echoProbe, "198.18.0.1", "9444", "tcp")
 	var detection protocol.FirewallEvent
 	if err = waitFixture(ctx, func() bool {
 		for {
@@ -74,7 +73,7 @@ func firewallControlChecks(ctx context.Context, manager *firewall.Manager, polic
 	}); err != nil {
 		return fmt.Errorf("closed-port report: %w", err)
 	}
-	if detection.Count < 3 || detection.Rule != "closed_port" || guard.Status().ActiveBans != 0 {
+	if detection.Count == 0 || detection.Count >= 3 || detection.Rule != "closed_port" || guard.Status().ActiveBans != 0 {
 		return fmt.Errorf("detector did not remain report-only")
 	}
 	guard.Acknowledge([]string{detection.ID})
@@ -94,8 +93,9 @@ func firewallControlChecks(ctx context.Context, manager *firewall.Manager, polic
 			return fmt.Errorf("ban blocked outbound/reply traffic: %w", err)
 		}
 	}
-	if err = waitFixture(ctx, func() bool { return banRemaining("banned_v4_v2", netip.MustParseAddr("198.18.0.2")) > 30*time.Minute }); err != nil {
-		return fmt.Errorf("repeat hit did not refresh ban: %w", err)
+	remaining := banRemaining("banned_v4_v2", netip.MustParseAddr("198.18.0.2"))
+	if remaining <= 0 || remaining > time.Minute {
+		return fmt.Errorf("packet hit changed master ban deadline: %s", remaining)
 	}
 	exemption := protocol.FirewallExemption{IP: "2001:db8:1::2", Generation: "vm-exempt", Until: now.Add(time.Minute)}
 	if err = guard.Update(ctx, protocol.FirewallUpdate{Version: 2, SnapshotID: "vm-exempt", Exemptions: []protocol.FirewallExemption{exemption}}); err != nil {

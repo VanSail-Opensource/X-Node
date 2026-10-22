@@ -224,3 +224,7 @@ Master reporting never opens closed services: packet filtering is distinct from
 a persistent source ban. Protected sources bypass bans and detection only on
 configured open services/forwards; they do not bypass port boundaries. Source
 inventory matches remain report-only until a master ban in protection mode.
+
+`volatile_snapshot.go` removes derived trusted source-set elements before rollback
+snapshots are written. It preserves master bans, configuration and user-owned
+tables. `volatile_snapshot_test.go` verifies exact scope and malformed snapshots.

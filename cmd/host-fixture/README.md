@@ -69,3 +69,6 @@ deadline, full post-reboot assertions and production watchdog timing are retaine
 IPv4/IPv6 sources. Open services and configured forwarding remain reachable;
 listening closed TCP/UDP services must time out without a reply or rejection.
 These checks run only in hosted disposable VMs.
+
+`firewall_control.go` requires a first count delta below the retired local
+threshold and verifies packet hits cannot extend a master-issued deadline.

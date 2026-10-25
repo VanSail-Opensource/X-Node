@@ -275,6 +275,19 @@
       "example": {"v": 1, "type": "telemetry.compact", "data": {"a": "node-1", "b": "boot-1", "t": "2026-10-25T00:00:00Z", "u": [{"i": 1, "c": 2}]}}
     },
     {
+      "name": "ddns.changes",
+      "direction": "Agent → master",
+      "description": "Replayable successful DDNS address changes with job generation and durable ordering.",
+      "body": "## Negotiate delivery\nOffer `X-XNode-DDNS-Changes: acknowledged-v1` at upgrade and advertise `ddns_changes_v1` in agent.hello. Send change batches only when the master echoes the header. A queued extension frame is suppressed after reconnecting to a legacy master.\n\n## Successful changes\nEach change has an opaque `id`, `job_id`, master-provided configuration `generation`, monotonic `sequence`, discovered `ipv4` and/or `ipv6`, and `observed_at`. The master validates the authenticated node, current job and generation before applying addresses. Changes are emitted only after discovery and any external-provider update succeed; unchanged addresses are suppressed within a generation. A new generation produces a fresh initial observation even when the address is unchanged. Built-in discovery uses provider `builtin:panel` and never publishes public DNS records. Host bindings belong to the master and are absent from agent configuration.\n\n## Durable replay\nThe private ddns.json journal retains at most 1024 pending changes and 1024 current-job snapshots within 1 MiB. The transport sends at most 16 changes per frame using its existing critical lane and single writer. Only acknowledged IDs retire events. A failed write does not advance the last valid address. The separate journal survives an older agent rewriting its main state during rollback.\n\nThe master acknowledges already accepted, duplicate and obsolete-generation events after rejecting their effects, preventing endless replay. A newly accepted change is acknowledged only after its durable operation is recorded. See the [change schema](schemas/ddns-changes.schema.json)."
+    },
+    {
+      "name": "ddns.changes.ack",
+      "direction": "Master → agent",
+      "description": "Retire a bounded set of durably accepted or explicitly discarded DDNS change IDs.",
+      "body": "The `ids` array contains at most 16 change IDs. Repeated or unknown IDs are harmless. Acknowledgements do not erase the latest successful per-job discovery snapshot or reset ordering. Persist the accepted operation before acknowledging a new change; obsolete or duplicate effects must not be applied again.",
+      "example": {"v": 1, "type": "ddns.changes.ack", "data": {"ids": ["change-1"]}}
+    },
+    {
       "name": "traffic.report",
       "direction": "Agent → master",
       "description": "Replay-safe upload/download byte batches for durable billing.",

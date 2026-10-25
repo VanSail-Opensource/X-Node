@@ -191,6 +191,25 @@ Speedtests use a separate outbound-only Xray client and transfer HTTPS payloads 
 
 The configuration schema describes provider credentials, certificate profiles, inbound certificate references, DDNS jobs, resolver policy, firewall policy, outbound port ranges, asset hashes, telemetry, torrent policy and update policy. Operational defaults are one-second sampling, five-second reporting, five-minute DDNS refresh, ten-minute torrent bans and disabled automatic binary installation.
 
+DDNS provider `builtin:panel` discovers enabled `auto` IPv4/IPv6 families without
+publishing DNS records or requiring provider credentials, zone or record name.
+The master retains host bindings and supplies opaque per-job `generation` values;
+host IDs never enter agent configuration. `builtin_ddns_v1` gates this job type.
+Legacy named providers keep their existing record behavior. Failed discovery
+does not replace a previously successful address.
+
+For `ddns_changes_v1`, upgrade negotiation uses
+`X-XNode-DDNS-Changes: acknowledged-v1`. The master echoes that value only when it
+supports durable changes and verifies the hello capability. Successful generated
+jobs produce ordered `ddns.changes` batches (at most 16 events), retaining IDs,
+configuration generation and addresses until `ddns.changes.ack`. A new generation
+produces an initial observation; unchanged addresses in that generation do not.
+The master validates authenticated node/job ownership, exact current generation
+and event order, persists new operations before acknowledging, and discards
+duplicate or obsolete effects. The private bounded `ddns.json` journal remains
+separate from accounting and survives old-agent rollback. Legacy masters receive
+no new extension frames; new masters strip generation fields for older agents.
+
 The agent owns verified geosite.dat domain downloads and suppresses the core's duplicate downloader. GeoIP data and source-prefix resolution belong to the master. Native domain assets stay inside the managed directory; completion-based hour intervals, retained legacy cron and download outbound selection are honored. SHA-256 hashes are supplied through `asset_hashes[file]`.
 
 Signed handover checks compare authenticated hello `binary_sha256` and `platform`

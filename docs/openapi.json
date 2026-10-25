@@ -36,12 +36,29 @@
               "const": "compact-v1",
               "type": "string"
             }
+          },
+          {
+            "description": "Offer acknowledged DDNS changes. A master echoes the accepted format; absence preserves legacy DDNS reporting.",
+            "in": "header",
+            "name": "X-XNode-DDNS-Changes",
+            "required": false,
+            "schema": {
+              "const": "acknowledged-v1",
+              "type": "string"
+            }
           }
         ],
         "responses": {
           "101": {
             "description": "WebSocket connection established",
             "headers": {
+              "X-XNode-DDNS-Changes": {
+                "description": "Accepted DDNS change format; also requires the hello capability.",
+                "schema": {
+                  "const": "acknowledged-v1",
+                  "type": "string"
+                }
+              },
               "X-XNode-Telemetry": {
                 "description": "Accepted telemetry format; compact also requires the agent hello capability.",
                 "schema": {
@@ -83,7 +100,8 @@
             "torrent.detected",
             "torrent.expired",
             "admission.rejected",
-            "telemetry.compact"
+            "telemetry.compact",
+            "ddns.changes"
           ],
           "masterToAgent": {
             "$ref": "schemas/master-message.schema.json"

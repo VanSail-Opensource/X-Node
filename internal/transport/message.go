@@ -8,6 +8,11 @@ import (
 )
 
 func (c *Client) writeMessage(socket *websocket.Conn, message protocol.Message) error {
+	// A reconnect to a legacy master must not send a queued extension frame.
+	// Its durable event remains pending until a capable master acknowledges it.
+	if message.Type == "ddns.changes" && !c.DDNSChanges() {
+		return nil
+	}
 	// A snapshot queued by an earlier connection can outlive negotiation. Always
 	// fall back before writing it to a legacy master, including reconnect races.
 	if message.Type == "telemetry.compact" && !c.CompactTelemetry() {

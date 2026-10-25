@@ -1,5 +1,13 @@
 # Agent orchestration
 
+`ddns.go` shares scheduled/manual discovery and external-provider execution under
+the existing DNS utility lock. Built-in `builtin:panel` skips provider creation
+and DNS publication. Successful generated jobs append a durable change before
+returning; failure retains the last valid discovery. Periodic reporting replays
+bounded batches only on a negotiated connection, and `state_receive.go` persists
+acknowledgements. Journal corruption disables generated DDNS jobs and logs a
+warning while ordinary traffic/runtime startup remains available.
+
 `agent.go` owns serialized desired-state and runtime activation. Utility jobs use
 two bounded workers; they submit traffic captures back to the actor instead of
 mutating sampling baselines concurrently.

@@ -59,6 +59,7 @@ type Agent struct {
 	Updater             *updatepkg.Manager
 	Runner              host.Runner
 	Jobs                *Jobs
+	ddnsJournal         *state.DDNSJournal
 	desired             protocol.Config
 	desiredCached       bool
 	hasDesired          bool
@@ -109,6 +110,10 @@ func New(dir, version string, client *transport.Client, logs *nlog.Stream) (*Age
 	runner := host.Commands{}
 	registry := sessions.New()
 	a := &Agent{Dir: dir, Version: version, BootID: state.ID(), Store: store, Registry: registry, Runtime: xray.New(registry), Client: client, Logs: logs, Sampler: monitor.New(), Certificates: cert.NewPool(filepath.Join(dir, "certs")), Runner: runner, apply: make(chan applyJob, 1), applied: make(chan applied, 1), bans: make(chan banEvent, 128), previous: state.Traffic{}, lastDDNS: map[string]time.Time{}, notify: make(chan reloadRequest, 1)}
+	a.ddnsJournal, e = state.OpenDDNS(dir)
+	if e != nil {
+		nlog.Core().Warn("DDNS journal unavailable")
+	}
 	if cached := store.Snapshot(); cached.Config != nil {
 		a.Certificates.RetainStored(*cached.Config)
 	}
@@ -147,4 +152,4 @@ func New(dir, version string, client *transport.Client, logs *nlog.Stream) (*Age
 	return a, nil
 }
 
-var Capabilities = []string{protocol.CompactTelemetryCapability, "incremental_reload_v1", "member_source_whitelist_v1", "firewall_master_observation_v1", "telegram_identity_rekey_v1", "native_hot_reload_v1", "activation_commands_v1", "update_transaction_v1", "firewall_cidr_exemptions_v1", "source_geoip_stream_v1", "disk_firewall_sources_v1", "node_file_certificates_v1", "xtables_compat_snapshot_v1", "host_firewall_ownership_v1", "sampled_activity_v1", "transit_credentials_v1", "source_geoip_firewall_v1", "shared_domain_blocks_v1", "geodata_interval_v1", "native_firewall_v1", "firewall_control_v1", "native_xray", "multi_inbound", "tcp_udp_limits", "session_revocation", "traffic_ack", "certificates", "ddns", "xray_scoped_dns_v1", "geodata", "nftables", "port_forward", "metrics", "logs", "peer_speedtest", "torrent_ban", "signed_updates", "traffic_periods_v1", "measured_user_rates", "authorization_expiry", "member_outbound_guards", "traffic_period_barriers_v1", "config_validation_v1", "volatile_connection_controls_v1", "native_auxiliary_inbounds_v1"}
+var Capabilities = []string{protocol.BuiltinDDNSCapability, protocol.DDNSChangesCapability, protocol.CompactTelemetryCapability, "incremental_reload_v1", "member_source_whitelist_v1", "firewall_master_observation_v1", "telegram_identity_rekey_v1", "native_hot_reload_v1", "activation_commands_v1", "update_transaction_v1", "firewall_cidr_exemptions_v1", "source_geoip_stream_v1", "disk_firewall_sources_v1", "node_file_certificates_v1", "xtables_compat_snapshot_v1", "host_firewall_ownership_v1", "sampled_activity_v1", "transit_credentials_v1", "source_geoip_firewall_v1", "shared_domain_blocks_v1", "geodata_interval_v1", "native_firewall_v1", "firewall_control_v1", "native_xray", "multi_inbound", "tcp_udp_limits", "session_revocation", "traffic_ack", "certificates", "ddns", "xray_scoped_dns_v1", "geodata", "nftables", "port_forward", "metrics", "logs", "peer_speedtest", "torrent_ban", "signed_updates", "traffic_periods_v1", "measured_user_rates", "authorization_expiry", "member_outbound_guards", "traffic_period_barriers_v1", "config_validation_v1", "volatile_connection_controls_v1", "native_auxiliary_inbounds_v1"}

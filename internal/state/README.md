@@ -1,5 +1,16 @@
 # Private state and traffic journals
 
+`ddns.go` and `ddns_changes.go` own the private 1 MiB `ddns.json` journal using
+the same atomic writer. Sequence, at most 1024 unacknowledged changes and 1024
+latest successful job snapshots survive reconnects, restart and rollback to an
+older agent rewriting `state.json`. Acknowledgement retires IDs but preserves the
+latest discovery; identical values in one generation do not enqueue again.
+New generations emit initial observations for changed panel bindings. Failed
+discovery or journal persistence never advances the last valid address.
+`ddns_test.go` covers replay, rollback isolation, unchanged values, acknowledgement
+idempotency, generation changes, capacity and failed writes. No traffic accounting
+fields or source-IP telemetry are added to this journal.
+
 `store.go` atomically persists authorization, accepted configuration, bans, and
 bounded private state. `traffic.go` exposes ordered immutable replay/acknowledgment.
 `desired.go` stages validated activation targets before listener binding, using

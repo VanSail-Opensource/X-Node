@@ -6,7 +6,6 @@ import (
 	"errors"
 	"time"
 
-	"github.com/VanSail-Opensource/X-Node/internal/dns"
 	"github.com/VanSail-Opensource/X-Node/internal/geodata"
 	"github.com/VanSail-Opensource/X-Node/internal/protocol"
 	"github.com/VanSail-Opensource/X-Node/internal/speedtest"
@@ -98,13 +97,7 @@ func (a *Agent) command(ctx context.Context, m protocol.Message) error {
 			}
 			for _, job := range configuration.DDNS {
 				if job.ID == p.ID {
-					a.dnsMu.Lock()
-					defer a.dnsMu.Unlock()
-					provider, e := dns.Provider(configuration.Providers[job.Provider])
-					if e != nil {
-						return nil, e
-					}
-					return dns.DDNS(ctx, job, provider, nil)
+					return a.runDDNS(ctx, configuration, job)
 				}
 			}
 			return nil, errors.New("unknown DDNS job")

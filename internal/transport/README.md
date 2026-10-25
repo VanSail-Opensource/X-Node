@@ -1,5 +1,10 @@
 # Master WebSocket transport
 
+`X-XNode-DDNS-Changes: acknowledged-v1` independently negotiates durable DDNS
+change delivery. `Client.DDNSChanges()` is connection-local; `message.go` drops
+an old queued extension after reconnecting to a legacy master, leaving its
+journal event unacknowledged for later replay. `ddns_test.go` covers both peers.
+
 `Client.Run` owns reconnection, the authenticated handshake, one reader and one
 writer. `Client.Send` retains its existing public interface; callers never write
 the socket directly. `connection.go` owns connection/read lifetime, while

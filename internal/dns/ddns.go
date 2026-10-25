@@ -36,9 +36,13 @@ func Provider(p protocol.Provider) (any, error) {
 }
 func DDNS(ctx context.Context, j protocol.DDNSJob, p any, client *http.Client) (Result, error) {
 	result := Result{ID: j.ID}
-	setter, ok := p.(Setter)
-	if !ok {
-		return result, errors.New("provider does not support DDNS record setting")
+	var setter Setter
+	if j.Provider != protocol.BuiltinDDNSProvider {
+		var ok bool
+		setter, ok = p.(Setter)
+		if !ok {
+			return result, errors.New("provider does not support DDNS record setting")
+		}
 	}
 	v4, err := address(ctx, j.IPv4, j.Interface, j.IPv4URL, true, client)
 	if err != nil {
@@ -50,6 +54,9 @@ func DDNS(ctx context.Context, j protocol.DDNSJob, p any, client *http.Client) (
 	}
 	if v4 == "" && v6 == "" {
 		return result, errors.New("DDNS job has no address source")
+	}
+	if j.Provider == protocol.BuiltinDDNSProvider {
+		return Result{ID: j.ID, IPv4: v4, IPv6: v6, Updated: time.Now().UTC()}, nil
 	}
 	zone := strings.TrimSuffix(strings.ToLower(j.Zone), ".") + "."
 	absolute := strings.TrimSuffix(strings.ToLower(j.Name), ".")

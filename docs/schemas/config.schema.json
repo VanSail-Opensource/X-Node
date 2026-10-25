@@ -107,6 +107,9 @@
       "items": {
         "additionalProperties": false,
         "properties": {
+          "generation": {
+            "type": "string"
+          },
           "id": {
             "type": "string"
           },

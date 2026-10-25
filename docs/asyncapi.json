@@ -70,6 +70,40 @@
             "type": "object"
           }
         },
+        "ddnsChanges": {
+          "payload": {
+            "additionalProperties": false,
+            "properties": {
+              "base_revision": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "data": {
+                "$ref": "schemas/ddns-changes.schema.json"
+              },
+              "id": {
+                "type": "string"
+              },
+              "revision": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "type": {
+                "const": "ddns.changes",
+                "type": "string"
+              },
+              "v": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "v",
+              "type",
+              "data"
+            ],
+            "type": "object"
+          }
+        },
         "masterMessage": {
           "payload": {
             "$ref": "schemas/master-message.schema.json"

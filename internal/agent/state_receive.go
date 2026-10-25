@@ -141,6 +141,13 @@ func (a *Agent) handle(ctx context.Context, m protocol.Message) {
 		}
 		a.queue(ctx, applyJob{ID: m.ID, Revision: m.Revision, Config: c})
 		a.Client.Send(protocol.New("state.accepted", m.ID, m.Revision, map[string]uint64{"authorization_revision": m.Revision}), true)
+	case "ddns.changes.ack":
+		var ack protocol.DDNSChangeAck
+		if e := protocol.Decode(m.Data, &ack); e != nil || a.ddnsJournal == nil {
+			fail(errors.New("invalid DDNS acknowledgment"))
+		} else if e = a.ddnsJournal.Acknowledge(ack.IDs); e != nil {
+			fail(e)
+		}
 	case "firewall.events.ack":
 		var ack protocol.FirewallEventAck
 		if e := protocol.Decode(m.Data, &ack); e != nil || len(ack.IDs) > protocol.MaxFirewallEventsPerFrame {

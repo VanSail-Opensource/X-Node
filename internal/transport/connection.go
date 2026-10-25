@@ -12,6 +12,7 @@ import (
 
 func (c *Client) connect(ctx context.Context) bool {
 	c.compactTelemetry.Store(false)
+	c.ddnsChanges.Store(false)
 	dialer := *websocket.DefaultDialer
 	if c.Dialer != nil {
 		dialer = *c.Dialer
@@ -24,6 +25,7 @@ func (c *Client) connect(ctx context.Context) bool {
 	headers.Set("Authorization", "Bearer "+c.Token)
 	headers.Set("Sec-WebSocket-Protocol", "x-node.v1")
 	headers.Set(protocol.TelemetryFormatHeader, protocol.CompactTelemetryFormat)
+	headers.Set(protocol.DDNSChangesHeader, protocol.DDNSChangesFormat)
 	socket, response, e := dialer.DialContext(ctx, c.URL, headers)
 	if e != nil {
 		if response != nil && response.Body != nil {
@@ -36,6 +38,8 @@ func (c *Client) connect(ctx context.Context) bool {
 	defer c.status(false)
 	c.compactTelemetry.Store(response.Header.Get(protocol.TelemetryFormatHeader) == protocol.CompactTelemetryFormat)
 	defer c.compactTelemetry.Store(false)
+	c.ddnsChanges.Store(response.Header.Get(protocol.DDNSChangesHeader) == protocol.DDNSChangesFormat)
+	defer c.ddnsChanges.Store(false)
 	if err := socket.SetCompressionLevel(flate.BestSpeed); err != nil {
 		return true
 	}

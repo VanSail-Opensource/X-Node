@@ -31,6 +31,49 @@
           "type": "integer"
         },
         "type": {
+          "const": "ddns.changes.ack"
+        },
+        "v": {
+          "const": 1
+        }
+      },
+      "required": [
+        "v",
+        "type",
+        "data"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "base_revision": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "data": {
+          "additionalProperties": false,
+          "properties": {
+            "ids": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "ids"
+          ],
+          "type": "object"
+        },
+        "id": {
+          "type": "string"
+        },
+        "revision": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "type": {
           "const": "firewall.events.ack"
         },
         "v": {
@@ -160,6 +203,9 @@
               "items": {
                 "additionalProperties": false,
                 "properties": {
+                  "generation": {
+                    "type": "string"
+                  },
                   "id": {
                     "type": "string"
                   },
@@ -713,6 +759,9 @@
               "items": {
                 "additionalProperties": false,
                 "properties": {
+                  "generation": {
+                    "type": "string"
+                  },
                   "id": {
                     "type": "string"
                   },

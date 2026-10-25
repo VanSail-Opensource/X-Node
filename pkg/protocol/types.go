@@ -12,6 +12,16 @@ const Version = wire.Version
 const MaxFrameBytes = wire.MaxFrameBytes
 const MaxFirewallEventsPerFrame = wire.MaxFirewallEventsPerFrame
 const GeoIPPrefixesPerChunk = wire.GeoIPPrefixesPerChunk
+const BuiltinDDNSProvider = wire.BuiltinDDNSProvider
+const BuiltinDDNSCapability = wire.BuiltinDDNSCapability
+const DDNSChangesCapability = wire.DDNSChangesCapability
+const DDNSChangesHeader = wire.DDNSChangesHeader
+const DDNSChangesFormat = wire.DDNSChangesFormat
+const MaxDDNSChangesPerFrame = wire.MaxDDNSChangesPerFrame
+
+type DDNSChange = wire.DDNSChange
+type DDNSChanges = wire.DDNSChanges
+type DDNSChangeAck = wire.DDNSChangeAck
 
 type Message = wire.Message
 type Config = wire.Config

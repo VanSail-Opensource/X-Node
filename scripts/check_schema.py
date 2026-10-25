@@ -21,6 +21,9 @@ compact_validator.validate({"a": "agent", "b": "boot", "t": "2026-10-25T00:00:00
 for users in (None, [{"i": 0}], [{"i": 1, "c": -1}]):
     assert not compact_validator.is_valid({"a": "agent", "b": "boot", "t": "2026-10-25T00:00:00Z", "u": users})
 validate(json.loads((root / "docs/openapi.json").read_text()))
+ddns = json.loads((root / "docs/schemas/ddns-changes.schema.json").read_text())
+Draft202012Validator.check_schema(ddns)
+Draft202012Validator(ddns).validate({"changes": [{"id": "change", "job_id": "wan", "generation": "config-1", "sequence": 1, "ipv4": "203.0.113.7", "observed_at": "2026-10-25T00:00:00Z"}]})
 asyncapi = json.loads((root / "docs/asyncapi.json").read_text())
 assert asyncapi["asyncapi"] == "3.1.0"
 assert asyncapi["servers"]["master"]["protocol"] == "wss"

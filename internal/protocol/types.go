@@ -141,6 +141,7 @@ type Certificate struct {
 	Config   config.CertConfig `json:"config"`
 }
 type DDNSJob struct {
+	Generation      string `json:"generation,omitempty"`
 	ID              string `json:"id"`
 	Provider        string `json:"provider"`
 	Zone            string `json:"zone"`
@@ -418,12 +419,18 @@ func (c Config) Validate() error {
 	}
 	jobs := map[string]bool{}
 	for _, j := range c.DDNS {
-		if !ValidName(j.ID) || jobs[j.ID] || j.Zone == "" || j.Name == "" || j.IntervalSeconds < 0 || j.IntervalSeconds > 86400 || j.TTLSeconds < 0 {
+		if !ValidName(j.ID) || jobs[j.ID] || j.IntervalSeconds < 0 || j.IntervalSeconds > 86400 || j.TTLSeconds < 0 || j.Generation != "" && !ValidName(j.Generation) {
 			return errors.New("invalid DDNS job")
 		}
 		jobs[j.ID] = true
-		if _, ok := c.Providers[j.Provider]; !ok {
-			return errors.New("unknown DDNS provider")
+		if j.Provider == BuiltinDDNSProvider {
+			if j.IPv4 != "" && j.IPv4 != "auto" || j.IPv6 != "" && j.IPv6 != "auto" || j.IPv4 == "" && j.IPv6 == "" {
+				return errors.New("built-in DDNS requires an enabled discovery family")
+			}
+		} else {
+			if _, ok := c.Providers[j.Provider]; !ok || j.Zone == "" || j.Name == "" {
+				return errors.New("unknown DDNS provider or missing record identity")
+			}
 		}
 		for _, s := range []string{j.IPv4URL, j.IPv6URL} {
 			if s != "" {

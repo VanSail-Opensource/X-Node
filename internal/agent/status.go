@@ -46,6 +46,11 @@ func (a *Agent) periodic(ctx context.Context) {
 	if now.Sub(a.lastReport) >= a.desired.ReportInterval() {
 		a.lastReport = now
 		a.sendStatus()
+		if a.ddnsJournal != nil && a.Client.DDNSChanges() {
+			if changes := a.ddnsJournal.Pending(); len(changes) > 0 {
+				a.Client.Send(protocol.New("ddns.changes", "", 0, protocol.DDNSChanges{Changes: changes}), true)
+			}
+		}
 		if batch, e := a.Store.Batch(); e != nil {
 			a.failStorage(e)
 		} else if batch != nil {

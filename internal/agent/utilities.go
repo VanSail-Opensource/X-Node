@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/VanSail-Opensource/X-Node/internal/dns"
 	"github.com/VanSail-Opensource/X-Node/internal/geodata"
 	"github.com/VanSail-Opensource/X-Node/internal/protocol"
 	"path/filepath"
@@ -59,17 +58,8 @@ func (a *Agent) scheduleUtilities(ctx context.Context, now time.Time) {
 		}
 		a.lastDDNS[job.ID] = now
 		job := job
-		p := c.Providers[job.Provider]
 		_ = a.Jobs.Start(ctx, "internal-ddns-"+fmt.Sprint(now.UnixNano()), "ddns", func(ctx context.Context, progress func(any)) (any, error) {
-			a.dnsMu.Lock()
-			defer a.dnsMu.Unlock()
-			child, cancel := context.WithTimeout(ctx, 30*time.Second)
-			defer cancel()
-			provider, e := dns.Provider(p)
-			if e != nil {
-				return nil, e
-			}
-			return dns.DDNS(child, job, provider, nil)
+			return a.runDDNS(ctx, c, job)
 		})
 	}
 	if next := a.geoNext.Load(); next > 0 && now.UnixNano() >= next && !a.geoRunning.Load() {

@@ -21,12 +21,7 @@ type speedPolicy struct {
 	above, below          time.Duration
 	limited               bool
 }
-type SpeedStatus struct {
-	NormalMbps int  `json:"normal_mbps"`
-	BurstMbps  int  `json:"burst_mbps"`
-	Limited    bool `json:"limited"`
-	ActiveMbps int  `json:"active_mbps"`
-}
+type SpeedStatus = protocol.UserSpeedStatus
 
 func sameSpeed(a, b protocol.User) bool {
 	return a.SpeedLimitMbps == b.SpeedLimitMbps && a.BurstSpeedLimitMbps == b.BurstSpeedLimitMbps && a.SpeedLimitAfterSeconds == b.SpeedLimitAfterSeconds && a.SpeedLimitResetSeconds == b.SpeedLimitResetSeconds
@@ -121,5 +116,5 @@ func (p *speedPolicy) status() SpeedStatus {
 	if p.limited {
 		active = p.normalMbps
 	}
-	return SpeedStatus{p.normalMbps, p.burstMbps, p.limited, active}
+	return SpeedStatus{NormalMbps: p.normalMbps, BurstMbps: p.burstMbps, Limited: p.limited, ActiveMbps: active}
 }

@@ -1,6 +1,7 @@
 package transport
 
 import (
+	"compress/flate"
 	"context"
 	"github.com/VanSail-Opensource/X-Node/internal/nlog"
 	"github.com/VanSail-Opensource/X-Node/internal/protocol"
@@ -10,15 +11,19 @@ import (
 )
 
 func (c *Client) connect(ctx context.Context) bool {
-	dialer := c.Dialer
-	if dialer == nil {
-		copy := *websocket.DefaultDialer
-		copy.HandshakeTimeout = 15 * time.Second
-		dialer = &copy
+	c.compactTelemetry.Store(false)
+	dialer := *websocket.DefaultDialer
+	if c.Dialer != nil {
+		dialer = *c.Dialer
 	}
+	if dialer.HandshakeTimeout == 0 {
+		dialer.HandshakeTimeout = 15 * time.Second
+	}
+	dialer.EnableCompression = true
 	headers := http.Header{}
 	headers.Set("Authorization", "Bearer "+c.Token)
 	headers.Set("Sec-WebSocket-Protocol", "x-node.v1")
+	headers.Set(protocol.TelemetryFormatHeader, protocol.CompactTelemetryFormat)
 	socket, response, e := dialer.DialContext(ctx, c.URL, headers)
 	if e != nil {
 		if response != nil && response.Body != nil {
@@ -29,6 +34,11 @@ func (c *Client) connect(ctx context.Context) bool {
 	}
 	defer socket.Close()
 	defer c.status(false)
+	c.compactTelemetry.Store(response.Header.Get(protocol.TelemetryFormatHeader) == protocol.CompactTelemetryFormat)
+	defer c.compactTelemetry.Store(false)
+	if err := socket.SetCompressionLevel(flate.BestSpeed); err != nil {
+		return true
+	}
 	socket.SetReadLimit(protocol.MaxFrameBytes)
 	_ = socket.SetReadDeadline(time.Now().Add(90 * time.Second))
 	socket.SetPongHandler(func(string) error { return socket.SetReadDeadline(time.Now().Add(90 * time.Second)) })
@@ -42,7 +52,7 @@ func (c *Client) connect(ctx context.Context) bool {
 	})
 	write := func(m protocol.Message) error {
 		_ = socket.SetWriteDeadline(time.Now().Add(10 * time.Second))
-		return socket.WriteJSON(m)
+		return c.writeMessage(socket, m)
 	}
 	if c.Hello != nil {
 		if write(c.Hello()) != nil {
@@ -59,7 +69,7 @@ func (c *Client) connect(ctx context.Context) bool {
 	go func() {
 		defer close(done)
 		for {
-			kind, b, e := socket.ReadMessage()
+			kind, reader, e := socket.NextReader()
 			if e != nil {
 				return
 			}
@@ -67,6 +77,10 @@ func (c *Client) connect(ctx context.Context) bool {
 			if kind != websocket.TextMessage {
 				c.resync.Store(true)
 				continue
+			}
+			b, e := protocol.ReadMessagePayload(reader)
+			if e != nil {
+				return
 			}
 			m, e := protocol.Parse(b)
 			if e != nil {

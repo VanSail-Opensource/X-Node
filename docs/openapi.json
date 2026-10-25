@@ -26,11 +26,30 @@
               "const": "x-node.v1",
               "type": "string"
             }
+          },
+          {
+            "description": "Offer compact telemetry for this authenticated connection. The master echoes the accepted format; absence selects legacy telemetry.",
+            "in": "header",
+            "name": "X-XNode-Telemetry",
+            "required": false,
+            "schema": {
+              "const": "compact-v1",
+              "type": "string"
+            }
           }
         ],
         "responses": {
           "101": {
-            "description": "WebSocket connection established"
+            "description": "WebSocket connection established",
+            "headers": {
+              "X-XNode-Telemetry": {
+                "description": "Accepted telemetry format; compact also requires the agent hello capability.",
+                "schema": {
+                  "const": "compact-v1",
+                  "type": "string"
+                }
+              }
+            }
           },
           "401": {
             "description": "Invalid or missing bearer credential"
@@ -63,7 +82,8 @@
             "firewall.pending",
             "torrent.detected",
             "torrent.expired",
-            "admission.rejected"
+            "admission.rejected",
+            "telemetry.compact"
           ],
           "masterToAgent": {
             "$ref": "schemas/master-message.schema.json"

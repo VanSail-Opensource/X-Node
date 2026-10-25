@@ -1,5 +1,11 @@
 # Master protocol package
 
+`CompactTelemetry` and `ExpandTelemetry` map negotiated compact snapshots to the
+same internal report types. Empty snapshots replace prior observations, and
+normalization rejects duplicate users and invalid counters/rates. Transport
+headers and hello capability constants define connection-local negotiation.
+`ReadMessagePayload` bounds expanded input without importing a WebSocket library.
+
 This public package exposes the same versioned wire types, strict decoders,
 configuration validation, account labels and schemas used by the agent.
 Masters can import it without depending on private implementation packages.

@@ -4,6 +4,7 @@ package protocol
 import (
 	"github.com/VanSail-Opensource/X-Node/internal/config"
 	wire "github.com/VanSail-Opensource/X-Node/internal/protocol"
+	"io"
 	"net/netip"
 )
 
@@ -65,6 +66,22 @@ type UserMetrics = wire.UserMetrics
 type UserLimitStatus = wire.UserLimitStatus
 type UserSpeedStatus = wire.UserSpeedStatus
 type TelemetryReport = wire.TelemetryReport
+type CompactTelemetryReport = wire.CompactTelemetryReport
+type CompactUserMetrics = wire.CompactUserMetrics
+type CompactUserSpeed = wire.CompactUserSpeed
+type CompactUserRate = wire.CompactUserRate
+
+const CompactTelemetryCapability = wire.CompactTelemetryCapability
+const TelemetryFormatHeader = wire.TelemetryFormatHeader
+const CompactTelemetryFormat = wire.CompactTelemetryFormat
+
+func CompactTelemetry(report TelemetryReport) CompactTelemetryReport {
+	return wire.CompactTelemetry(report)
+}
+func ExpandTelemetry(report CompactTelemetryReport) (TelemetryReport, error) {
+	return wire.ExpandTelemetry(report)
+}
+func ReadMessagePayload(reader io.Reader) ([]byte, error) { return wire.ReadMessagePayload(reader) }
 
 func ExemptionPrefix(raw string) (netip.Prefix, error) { return wire.ExemptionPrefix(raw) }
 func ExemptionKey(raw string) (string, error)          { return wire.ExemptionKey(raw) }

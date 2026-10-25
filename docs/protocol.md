@@ -98,6 +98,25 @@ Bandwidth settings are shared per user across upload/download and all inbounds. 
 
 `telemetry.report` is an authoritative current snapshot containing agent/boot IDs, timestamp, liveness/readiness, revisions, per-user connection counts and limit status, rejection counters, machine metrics and certificate status. Missing users in its current online set have zero active sessions; the master must replace that set rather than merge indefinitely.
 
+Agents advertising `compact_telemetry_v1` offer `X-XNode-Telemetry: compact-v1`
+during the authenticated WebSocket upgrade. A supporting master echoes that
+header; missing/unknown responses select legacy reports for that connection.
+`telemetry.compact` uses the generated [compact snapshot schema](schemas/telemetry-compact.schema.json):
+one row per observed user, short field keys and omitted zero/default values.
+`u` must be an explicit array; an empty array clears all earlier user observations.
+Default unlimited inactive users need no row. Limits, configured speed caps,
+active rates, rejection counters and explicitly opted-in IP sets retain their
+meaning. Masters normalize either format to the same fresh `TelemetryReport`.
+Negotiation resets on reconnect; queued compact snapshots fall back to legacy
+before reaching an older master.
+
+Both endpoints negotiate per-message deflate using the existing
+[Gorilla WebSocket extension](https://pkg.go.dev/github.com/gorilla/websocket#hdr-Compression_EXPERIMENTAL).
+The agent's single writer uses fast compression only for report bodies at least
+1 KiB. Uncompressed peers remain supported. Readers bound expanded input to
+16 MiB before JSON decoding; compressed frame size alone is not sufficient.
+Traffic journal bodies and acknowledgement ordering remain unchanged.
+
 User source IPs are omitted by default. Request a one-time report with `users.active_ips`, or opt into periodic IP sets with `telemetry.include_active_ips: true`. Each requested record carries `user_id`, canonical `source_ip`, and its current connection count.
 
 Per-user `users.status[userID]` reports `limited: true/false`, `reason`, and `scope`. A full active-IP quota has scope `new_ip`: existing IPs can still create streams when the connection quota allows it. `block_new` and connection quotas have scope `new_connection`. Each rejected admission also emits `admission.rejected` with `user_id`, `limited: true`, `reason` and `scope`; `source_ip` appears only when periodic IP reporting is enabled. Reasons include `ineligible`, `block_new`, `torrent_ban`, `ip_temp_block`, `blocked_port`, `connection_limit`, `active_ip_limit`, and `storage_backpressure`.

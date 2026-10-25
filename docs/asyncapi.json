@@ -36,6 +36,40 @@
             "type": "object"
           }
         },
+        "compactTelemetry": {
+          "payload": {
+            "additionalProperties": false,
+            "properties": {
+              "base_revision": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "data": {
+                "$ref": "schemas/telemetry-compact.schema.json"
+              },
+              "id": {
+                "type": "string"
+              },
+              "revision": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "type": {
+                "const": "telemetry.compact",
+                "type": "string"
+              },
+              "v": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "v",
+              "type",
+              "data"
+            ],
+            "type": "object"
+          }
+        },
         "masterMessage": {
           "payload": {
             "$ref": "schemas/master-message.schema.json"

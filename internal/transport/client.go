@@ -11,18 +11,19 @@ import (
 )
 
 type Client struct {
-	URL       string
-	Token     string
-	Dialer    *websocket.Dialer
-	Hello     func() protocol.Message
-	Incoming  chan protocol.Message
-	Status    chan bool
-	lanes     [4]*messageLane
-	wake      chan struct{}
-	reset     chan struct{}
-	connected atomic.Bool
-	resync    atomic.Bool
-	dropped   atomic.Uint64
+	URL              string
+	Token            string
+	Dialer           *websocket.Dialer
+	Hello            func() protocol.Message
+	Incoming         chan protocol.Message
+	Status           chan bool
+	lanes            [4]*messageLane
+	wake             chan struct{}
+	reset            chan struct{}
+	connected        atomic.Bool
+	resync           atomic.Bool
+	dropped          atomic.Uint64
+	compactTelemetry atomic.Bool
 }
 
 func New(url, token string) *Client {
@@ -30,8 +31,9 @@ func New(url, token string) *Client {
 		lanes: [4]*messageLane{newMessageLane(64, 32<<20), newMessageLane(16, 32<<20), newMessageLane(1, protocol.MaxFrameBytes+128), newMessageLane(64, 4<<20)},
 		wake:  make(chan struct{}, 1), reset: make(chan struct{}, 1)}
 }
-func (c *Client) Connected() bool { return c.connected.Load() }
-func (c *Client) Dropped() uint64 { return c.dropped.Load() }
+func (c *Client) Connected() bool        { return c.connected.Load() }
+func (c *Client) Dropped() uint64        { return c.dropped.Load() }
+func (c *Client) CompactTelemetry() bool { return c.compactTelemetry.Load() }
 func (c *Client) Send(m protocol.Message, critical bool) bool {
 	lane := 3
 	if critical {

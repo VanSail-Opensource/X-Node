@@ -16,12 +16,7 @@ type AdmissionEvent struct {
 	Scope    string `json:"scope"`
 	SourceIP string `json:"source_ip,omitempty"`
 }
-type LimitStatus struct {
-	UserID  int    `json:"user_id"`
-	Limited bool   `json:"limited"`
-	Reason  string `json:"reason,omitempty"`
-	Scope   string `json:"scope"`
-}
+type LimitStatus = protocol.UserLimitStatus
 type ActiveIP struct {
 	UserID      int    `json:"user_id"`
 	SourceIP    string `json:"source_ip"`

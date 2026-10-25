@@ -1,5 +1,12 @@
 # Module
 
+`telemetry_compact.go` defines the optional authoritative snapshot format.
+`CompactTelemetry` removes default observations and repeated user keys;
+`ExpandTelemetry` creates fresh internal maps and validates row identity, rates
+and counters. Transport/header constants are exported through `pkg/protocol`.
+`payload.go` bounds expanded message input before JSON decoding. These pure
+codecs neither grant access nor change journal traffic/accounting payloads.
+
 `firewall.go` defines configurable rules, authoritative restrictions, exact-IP
 exemptions, compact source generations and versioned updates. `firewall_state.go`
 defines live status. The `firewall_control_v1` capability and `master_controlled`

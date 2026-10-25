@@ -14,6 +14,12 @@ validator.validate({"xray": {"inbounds": []}, "users": []})
 for bad in ({"xray": {"inbounds": []}}, {"xray": {"inbounds": []}, "users": None}):
     assert not validator.is_valid(bad), "missing/null user snapshots must be rejected"
 Draft202012Validator.check_schema(json.loads((root / "docs/schemas/master-message.schema.json").read_text()))
+compact = json.loads((root / "docs/schemas/telemetry-compact.schema.json").read_text())
+Draft202012Validator.check_schema(compact)
+compact_validator = Draft202012Validator(compact)
+compact_validator.validate({"a": "agent", "b": "boot", "t": "2026-10-25T00:00:00Z", "u": []})
+for users in (None, [{"i": 0}], [{"i": 1, "c": -1}]):
+    assert not compact_validator.is_valid({"a": "agent", "b": "boot", "t": "2026-10-25T00:00:00Z", "u": users})
 validate(json.loads((root / "docs/openapi.json").read_text()))
 asyncapi = json.loads((root / "docs/asyncapi.json").read_text())
 assert asyncapi["asyncapi"] == "3.1.0"

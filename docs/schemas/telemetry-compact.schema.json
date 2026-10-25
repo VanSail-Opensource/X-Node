@@ -1,0 +1,129 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "a": {
+      "type": "string"
+    },
+    "b": {
+      "type": "string"
+    },
+    "c": {
+      "type": "boolean"
+    },
+    "d": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "k": {
+      "type": "object"
+    },
+    "l": {
+      "type": "boolean"
+    },
+    "m": {
+      "type": "object"
+    },
+    "r": {
+      "type": "boolean"
+    },
+    "s": {
+      "type": "boolean"
+    },
+    "t": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "u": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "b": {
+            "additionalProperties": false,
+            "properties": {
+              "d": {
+                "type": "number"
+              },
+              "s": {
+                "type": "number"
+              },
+              "u": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "s"
+            ],
+            "type": "object"
+          },
+          "c": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "i": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "l": {
+            "type": "boolean"
+          },
+          "p": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "r": {
+            "type": "string"
+          },
+          "s": {
+            "type": "string"
+          },
+          "x": {
+            "additionalProperties": false,
+            "properties": {
+              "a": {
+                "type": "integer"
+              },
+              "b": {
+                "type": "integer"
+              },
+              "l": {
+                "type": "boolean"
+              },
+              "n": {
+                "type": "integer"
+              }
+            },
+            "required": [],
+            "type": "object"
+          }
+        },
+        "required": [
+          "i"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "v": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "x": {
+      "additionalProperties": {
+        "minimum": 0,
+        "type": "integer"
+      },
+      "type": "object"
+    }
+  },
+  "required": [
+    "a",
+    "b",
+    "t",
+    "u"
+  ],
+  "title": "Authoritative compact telemetry snapshot v1",
+  "type": "object"
+}

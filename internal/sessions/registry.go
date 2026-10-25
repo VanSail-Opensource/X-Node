@@ -430,14 +430,7 @@ func (r *Registry) Counters() state.Traffic {
 	return out
 }
 
-type Summary struct {
-	Connections map[int]int               `json:"connections"`
-	ActiveIPs   map[int][]string          `json:"active_ips,omitempty"`
-	Rejections  map[string]uint64         `json:"rejections"`
-	Status      map[int]LimitStatus       `json:"status"`
-	Speed       map[int]SpeedStatus       `json:"speed"`
-	Rates       map[int]protocol.UserRate `json:"rates,omitempty"`
-}
+type Summary = protocol.UserMetrics
 
 func (r *Registry) Summary() Summary {
 	r.mu.RLock()

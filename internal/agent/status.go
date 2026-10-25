@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/VanSail-Opensource/X-Node/internal/nlog"
 	"github.com/VanSail-Opensource/X-Node/internal/protocol"
 	"github.com/VanSail-Opensource/X-Node/internal/state"
 	"net"
@@ -16,10 +17,26 @@ func (a *Agent) sendStatus() {
 	d := a.Store.Snapshot()
 	summary := a.Registry.Summary()
 	synchronized := d.Config != nil && d.ConfigRevision == d.Revision && !a.applying.Load()
-	a.Client.Send(protocol.New("telemetry.report", "", d.Revision, map[string]any{"agent_id": d.AgentID, "boot_id": a.BootID, "time": time.Now().UTC(), "connected": a.Client.Connected(), "liveness": true, "ready": a.Runtime.Ready(), "synchronized": synchronized, "config_revision": d.ConfigRevision, "users": summary, "machine": a.Sampler.Snapshot(), "certificates": a.Certificates.Status(), "transport_dropped": a.Client.Dropped()}), false)
+	report := protocol.TelemetryReport{AgentID: d.AgentID, BootID: a.BootID, Time: time.Now().UTC(), Connected: a.Client.Connected(), Liveness: true, Ready: a.Runtime.Ready(), Synchronized: synchronized, ConfigRevision: d.ConfigRevision, Users: summary, Machine: telemetryJSON(a.Sampler.Snapshot()), Certificates: telemetryJSON(a.Certificates.Status()), TransportDropped: a.Client.Dropped()}
+	var message protocol.Message
+	if a.Client.CompactTelemetry() {
+		message = protocol.New("telemetry.compact", "", d.Revision, protocol.CompactTelemetry(report))
+	} else {
+		message = protocol.New("telemetry.report", "", d.Revision, report)
+	}
+	a.Client.Send(message, false)
 	notifySystemd(fmt.Sprintf("STATUS=Runtime ready=%t synchronized=%t connected=%t authorization=%d configuration=%d", a.Runtime.Ready(), synchronized, a.Client.Connected(), d.Revision, d.ConfigRevision))
 	status, _ := json.Marshal(map[string]any{"liveness": true, "ready": a.Runtime.Ready(), "connected": a.Client.Connected(), "revision": d.Revision, "config_revision": d.ConfigRevision, "updated": time.Now().UTC()})
 	_ = state.AtomicWrite(filepath.Join(a.Dir, "status.json"), status, 0600)
+}
+
+func telemetryJSON(value any) json.RawMessage {
+	raw, err := json.Marshal(value)
+	if err != nil {
+		nlog.Core().Warn("telemetry field could not be encoded")
+		return nil
+	}
+	return raw
 }
 func (a *Agent) periodic(ctx context.Context) {
 	if !a.hasDesired {

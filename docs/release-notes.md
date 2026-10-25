@@ -1,3 +1,23 @@
+# X-Node v2.0.14
+
+Isolates bounded command, traffic, telemetry and log delivery lanes while keeping
+one WebSocket writer. Disposable telemetry coalesces to the newest snapshot;
+durable traffic replay and acknowledgments retain their existing order.
+
+Negotiates compact authoritative telemetry and fast per-message deflate for
+reports of at least 1 KiB. Older panels receive the legacy uncompressed format
+when negotiation is absent. Expanded frames are bounded before decoding; source
+IP collection remains opt-in and exact accounting is unchanged. Hosted socket
+fixtures measured a 98.13% wire-byte reduction for representative telemetry.
+
+Adds the reserved Built-in DDNS provider for IPv4/IPv6 discovery without public
+DNS publication or provider credentials. VanSail owns host bindings separately.
+Successful generated jobs retain acknowledged address-change events in a bounded
+private journal, replay after reconnect and preserve the last valid discovery on
+failure. Both capability and upgrade-header negotiation gate this extension;
+older panels and agents retain their existing behavior. Publish compatible panel
+support before enabling these formats or configuring Built-in jobs.
+
 # X-Node v2.0.13
 
 Adds credential-bound Telegram identity rekeys and exact-IP member whitelist

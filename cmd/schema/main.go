@@ -4,9 +4,10 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/VanSail-Opensource/X-Node/internal/protocol"
 	"os"
 	"path/filepath"
+
+	"github.com/VanSail-Opensource/X-Node/internal/protocol"
 )
 
 func main() {
@@ -21,6 +22,7 @@ func main() {
 	async := map[string]any{"asyncapi": "3.1.0", "info": map[string]any{"title": "X-Node control channel", "version": "1.0.0"}, "servers": map[string]any{"master": map[string]any{"host": "master.example.com", "protocol": "wss"}}, "channels": map[string]any{"control": map[string]any{"address": "/v1/agents/connect", "messages": map[string]any{"masterMessage": map[string]any{"payload": map[string]any{"$ref": "schemas/master-message.schema.json"}}, "agentMessage": map[string]any{"payload": protocol.Schema(protocol.Message{})}}}}, "operations": map[string]any{"receiveMasterState": map[string]any{"action": "receive", "channel": map[string]any{"$ref": "#/channels/control"}}, "sendAgentReports": map[string]any{"action": "send", "channel": map[string]any{"$ref": "#/channels/control"}}}}
 	telemetryContract(dir, api, async)
 	ddnsContract(dir, api, async)
+	computeContract(api, async)
 	write(filepath.Join(dir, "openapi.json"), api)
 	write(filepath.Join(dir, "asyncapi.json"), async)
 }

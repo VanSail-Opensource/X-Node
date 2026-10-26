@@ -58,7 +58,7 @@ func (q *messageLane) take() (protocol.Message, bool) {
 func (c *Client) next(cursor *int) (protocol.Message, bool) {
 	// Two command slots per round keep replies responsive while every report
 	// class has a guaranteed turn during continuous command/log production.
-	order := [...]int{0, 0, 1, 2, 3}
+	order := [...]int{0, 0, 1, 2, 3, 4}
 	for range order {
 		lane := order[*cursor]
 		*cursor = (*cursor + 1) % len(order)

@@ -3,14 +3,16 @@ package transport
 import (
 	"compress/flate"
 	"context"
+	"net/http"
+	"time"
+
 	"github.com/VanSail-Opensource/X-Node/internal/nlog"
 	"github.com/VanSail-Opensource/X-Node/internal/protocol"
 	"github.com/gorilla/websocket"
-	"net/http"
-	"time"
 )
 
 func (c *Client) connect(ctx context.Context) bool {
+	c.computePool.Store(false)
 	c.compactTelemetry.Store(false)
 	c.ddnsChanges.Store(false)
 	dialer := *websocket.DefaultDialer
@@ -26,6 +28,7 @@ func (c *Client) connect(ctx context.Context) bool {
 	headers.Set("Sec-WebSocket-Protocol", "x-node.v1")
 	headers.Set(protocol.TelemetryFormatHeader, protocol.CompactTelemetryFormat)
 	headers.Set(protocol.DDNSChangesHeader, protocol.DDNSChangesFormat)
+	headers.Set(protocol.ComputePoolHeader, protocol.ComputePoolFormat)
 	socket, response, e := dialer.DialContext(ctx, c.URL, headers)
 	if e != nil {
 		if response != nil && response.Body != nil {
@@ -36,6 +39,8 @@ func (c *Client) connect(ctx context.Context) bool {
 	}
 	defer socket.Close()
 	defer c.status(false)
+	c.computePool.Store(response.Header.Get(protocol.ComputePoolHeader) == protocol.ComputePoolFormat)
+	defer c.computePool.Store(false)
 	c.compactTelemetry.Store(response.Header.Get(protocol.TelemetryFormatHeader) == protocol.CompactTelemetryFormat)
 	defer c.compactTelemetry.Store(false)
 	c.ddnsChanges.Store(response.Header.Get(protocol.DDNSChangesHeader) == protocol.DDNSChangesFormat)

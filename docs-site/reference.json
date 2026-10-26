@@ -272,7 +272,21 @@
       "direction": "Agent → master",
       "description": "Negotiated authoritative telemetry with consolidated user rows and default omission.",
       "body": "## Negotiate before sending\nOffer `X-XNode-Telemetry: compact-v1` during the WebSocket upgrade and announce `compact_telemetry_v1` in agent.hello capabilities. Send this format only when the master echoes the header. Otherwise use telemetry.report.\n\n## Snapshot fields\nRoot fields are `a` agent ID, `b` boot ID, `t` timestamp, `c` connected, `l` liveness, `r` ready, `s` synchronized, `v` config revision, `u` users, `x` rejections, `m` machine, `k` certificates and `d` dropped frames. The explicit `u` array replaces all previous observations; an empty array clears them. Omitted optional values mean zero or the default, never retention.\n\nEach user row has positive `i` user ID, `c` connection count, optional opted-in `p` source IPs, `l` limited, `r` reason, `s` scope, `x` speed limits and `b` measured byte rates. Speed fields are `n` normal Mbps, `b` burst Mbps, `l` limited and `a` active Mbps. Rate fields are `u` upload bytes/second, `d` download bytes/second and positive `s` sample seconds. Omitted scope means new_connection. Inactive default users are omitted. See the [compact schema](schemas/telemetry-compact.schema.json).\n\n## Compression and accounting\nWhen per-message deflate is negotiated, report bodies of at least 1 KiB use fast compression. Expanded frames are bounded before JSON decoding. Durable traffic.report retains its exact integer payload and acknowledgement contract; it is not compact telemetry.",
-      "example": {"v": 1, "type": "telemetry.compact", "data": {"a": "node-1", "b": "boot-1", "t": "2026-10-25T00:00:00Z", "u": [{"i": 1, "c": 2}]}}
+      "example": {
+        "v": 1,
+        "type": "telemetry.compact",
+        "data": {
+          "a": "node-1",
+          "b": "boot-1",
+          "t": "2026-10-25T00:00:00Z",
+          "u": [
+            {
+              "i": 1,
+              "c": 2
+            }
+          ]
+        }
+      }
     },
     {
       "name": "ddns.changes",
@@ -285,7 +299,15 @@
       "direction": "Master → agent",
       "description": "Retire a bounded set of durably accepted or explicitly discarded DDNS change IDs.",
       "body": "The `ids` array contains at most 16 change IDs. Repeated or unknown IDs are harmless. Acknowledgements do not erase the latest successful per-job discovery snapshot or reset ordering. Persist the accepted operation before acknowledging a new change; obsolete or duplicate effects must not be applied again.",
-      "example": {"v": 1, "type": "ddns.changes.ack", "data": {"ids": ["change-1"]}}
+      "example": {
+        "v": 1,
+        "type": "ddns.changes.ack",
+        "data": {
+          "ids": [
+            "change-1"
+          ]
+        }
+      }
     },
     {
       "name": "traffic.report",
@@ -435,6 +457,48 @@
       "direction": "Master → agent",
       "description": "Acknowledge durably processed firewall events.",
       "body": "Send event IDs only after committing their effects. The agent replays unacknowledged events after reconnect. Acknowledging an obsolete generation cannot remove a newer ban."
+    },
+    {
+      "name": "compute.announce",
+      "direction": "Master to agent",
+      "description": "Offer a bounded numerical batch to idle nodes.",
+      "body": "The signal binds a batch ID, attempt and SHA-256 input digest. Includes kernel version, byte/item counts and a deadline at most two minutes away. Idle healthy agents reserve one slot before claiming."
+    },
+    {
+      "name": "compute.claim",
+      "direction": "Agent to master",
+      "description": "Claim one announced batch while idle.",
+      "body": "The master grants only the first valid claim and rejects simultaneous assignments to a busy node. A claim without a grant expires after two seconds."
+    },
+    {
+      "name": "compute.grant",
+      "direction": "Master to agent",
+      "description": "Assign the original numerical input to the winning node.",
+      "body": "Only the winner receives the payload. Validate the input hash and execute the explicitly versioned shared kernels in a dedicated single worker."
+    },
+    {
+      "name": "compute.heartbeat",
+      "direction": "Agent to master",
+      "description": "Renew an active calculation attempt lease.",
+      "body": "Send every five seconds during calculation and upload. Masters bind the renewal to the winning authenticated connection and never extend the overall task deadline."
+    },
+    {
+      "name": "compute.result",
+      "direction": "Agent to master",
+      "description": "Return a bounded compressed result chunk.",
+      "body": "Zstd output is split into base64 chunks of at most 64 KiB with a result digest. Reject results above 1 MiB compressed or 4 MiB decompressed. Retain the reservation until acknowledgement."
+    },
+    {
+      "name": "compute.ack",
+      "direction": "Master to agent",
+      "description": "Acknowledge durably accepted calculation results.",
+      "body": "Sent after input/result validation and idempotent durable acceptance. Duplicate results receive the same acknowledgement. The agent then releases its calculation slot."
+    },
+    {
+      "name": "compute.cancel",
+      "direction": "Bidirectional",
+      "description": "Cancel or abandon a calculation attempt.",
+      "body": "Masters cancel losing, expired or rejected attempts. Agents abandon failed or resource-constrained attempts. Disconnects cancel local work; the master assigns a new attempt to another eligible node."
     }
   ],
   "commands": [

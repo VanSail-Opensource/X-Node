@@ -70,6 +70,231 @@
             "type": "object"
           }
         },
+        "compute.cancel": {
+          "payload": {
+            "additionalProperties": false,
+            "properties": {
+              "base_revision": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "data": {
+                "additionalProperties": false,
+                "properties": {
+                  "attempt": {
+                    "type": "integer"
+                  },
+                  "batch_id": {
+                    "type": "string"
+                  },
+                  "input_hash": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "batch_id",
+                  "attempt",
+                  "input_hash"
+                ],
+                "type": "object"
+              },
+              "id": {
+                "type": "string"
+              },
+              "revision": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "type": {
+                "const": "compute.cancel"
+              },
+              "v": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "v",
+              "type",
+              "data"
+            ],
+            "type": "object"
+          }
+        },
+        "compute.claim": {
+          "payload": {
+            "additionalProperties": false,
+            "properties": {
+              "base_revision": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "data": {
+                "additionalProperties": false,
+                "properties": {
+                  "attempt": {
+                    "type": "integer"
+                  },
+                  "batch_id": {
+                    "type": "string"
+                  },
+                  "input_hash": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "batch_id",
+                  "attempt",
+                  "input_hash"
+                ],
+                "type": "object"
+              },
+              "id": {
+                "type": "string"
+              },
+              "revision": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "type": {
+                "const": "compute.claim"
+              },
+              "v": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "v",
+              "type",
+              "data"
+            ],
+            "type": "object"
+          }
+        },
+        "compute.heartbeat": {
+          "payload": {
+            "additionalProperties": false,
+            "properties": {
+              "base_revision": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "data": {
+                "additionalProperties": false,
+                "properties": {
+                  "attempt": {
+                    "type": "integer"
+                  },
+                  "batch_id": {
+                    "type": "string"
+                  },
+                  "input_hash": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "batch_id",
+                  "attempt",
+                  "input_hash"
+                ],
+                "type": "object"
+              },
+              "id": {
+                "type": "string"
+              },
+              "revision": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "type": {
+                "const": "compute.heartbeat"
+              },
+              "v": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "v",
+              "type",
+              "data"
+            ],
+            "type": "object"
+          }
+        },
+        "compute.result": {
+          "payload": {
+            "additionalProperties": false,
+            "properties": {
+              "base_revision": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "data": {
+                "additionalProperties": false,
+                "properties": {
+                  "data": {
+                    "type": "string"
+                  },
+                  "index": {
+                    "type": "integer"
+                  },
+                  "result_hash": {
+                    "type": "string"
+                  },
+                  "signal": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "attempt": {
+                        "type": "integer"
+                      },
+                      "batch_id": {
+                        "type": "string"
+                      },
+                      "input_hash": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "batch_id",
+                      "attempt",
+                      "input_hash"
+                    ],
+                    "type": "object"
+                  },
+                  "total": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "signal",
+                  "result_hash",
+                  "index",
+                  "total",
+                  "data"
+                ],
+                "type": "object"
+              },
+              "id": {
+                "type": "string"
+              },
+              "revision": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "type": {
+                "const": "compute.result"
+              },
+              "v": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "v",
+              "type",
+              "data"
+            ],
+            "type": "object"
+          }
+        },
         "ddnsChanges": {
           "payload": {
             "additionalProperties": false,

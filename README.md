@@ -137,3 +137,10 @@ See `cmd/xnodectl/README.md` for bootstrap and signed installer upgrade delegati
 See [migration](docs/migration.md), [supported native fields](docs/features.md), and [the upstream review ledger](docs/upstream-review.md).
 
 MPL-2.0. Required third-party attributions are in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+## Optional compute pool
+
+The negotiated `compute_pool_v1` utility accepts bounded numerical batches through
+the existing master WebSocket. One independent worker handles a calculation through
+result acknowledgement; compressed results use a separate low-priority lane.
+See [the compute protocol](docs/compute-pool.md) and `pkg/compute/README.md`.

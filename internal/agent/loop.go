@@ -4,8 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/VanSail-Opensource/X-Node/internal/protocol"
 	"time"
+
+	"github.com/VanSail-Opensource/X-Node/internal/protocol"
 )
 
 func (a *Agent) Run(ctx context.Context) error {
@@ -38,6 +39,11 @@ func (a *Agent) Run(ctx context.Context) error {
 			a.utilityCancel()
 		}
 	}()
+	a.compute = newComputeWorker(a.Client.Send)
+	a.compute.eligible = a.computeEligible
+	computeDone := make(chan struct{})
+	go func() { defer close(computeDone); a.compute.run(child) }()
+	defer func() { cancel(); <-computeDone }()
 	go a.Client.Run(child)
 	go a.Sampler.Run(child)
 	applyDone := make(chan struct{})
@@ -72,6 +78,9 @@ func (a *Agent) Run(ctx context.Context) error {
 		case request := <-a.accountingRequests:
 			a.handleAccounting(request)
 		case connected := <-a.Client.Status:
+			if !connected {
+				a.compute.reset()
+			}
 			if connected {
 				a.lastReport = time.Time{}
 				a.sendStatus()

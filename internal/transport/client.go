@@ -3,11 +3,12 @@ package transport
 
 import (
 	"context"
-	"github.com/VanSail-Opensource/X-Node/internal/protocol"
-	"github.com/gorilla/websocket"
 	"math/rand/v2"
 	"sync/atomic"
 	"time"
+
+	"github.com/VanSail-Opensource/X-Node/internal/protocol"
+	"github.com/gorilla/websocket"
 )
 
 type Client struct {
@@ -17,24 +18,26 @@ type Client struct {
 	Hello            func() protocol.Message
 	Incoming         chan protocol.Message
 	Status           chan bool
-	lanes            [4]*messageLane
+	lanes            [5]*messageLane
 	wake             chan struct{}
 	reset            chan struct{}
 	connected        atomic.Bool
 	resync           atomic.Bool
 	dropped          atomic.Uint64
+	computePool      atomic.Bool
 	compactTelemetry atomic.Bool
 	ddnsChanges      atomic.Bool
 }
 
 func New(url, token string) *Client {
 	return &Client{URL: url, Token: token, Incoming: make(chan protocol.Message, 128), Status: make(chan bool, 8),
-		lanes: [4]*messageLane{newMessageLane(64, 32<<20), newMessageLane(16, 32<<20), newMessageLane(1, protocol.MaxFrameBytes+128), newMessageLane(64, 4<<20)},
+		lanes: [5]*messageLane{newMessageLane(64, 32<<20), newMessageLane(16, 32<<20), newMessageLane(1, protocol.MaxFrameBytes+128), newMessageLane(64, 4<<20), newMessageLane(24, 2<<20)},
 		wake:  make(chan struct{}, 1), reset: make(chan struct{}, 1)}
 }
 func (c *Client) Connected() bool        { return c.connected.Load() }
 func (c *Client) Dropped() uint64        { return c.dropped.Load() }
 func (c *Client) CompactTelemetry() bool { return c.compactTelemetry.Load() }
+func (c *Client) ComputePool() bool      { return c.computePool.Load() }
 func (c *Client) DDNSChanges() bool      { return c.ddnsChanges.Load() }
 func (c *Client) Send(m protocol.Message, critical bool) bool {
 	lane := 3
@@ -42,6 +45,9 @@ func (c *Client) Send(m protocol.Message, critical bool) bool {
 		lane = 0
 	}
 	switch m.Type {
+	case "compute.claim", "compute.heartbeat", "compute.result", "compute.cancel":
+		lane = 4
+		critical = false
 	case "traffic.report":
 		lane = 1
 		critical = true

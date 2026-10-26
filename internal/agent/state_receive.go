@@ -3,8 +3,9 @@ package agent
 import (
 	"context"
 	"errors"
-	"github.com/VanSail-Opensource/X-Node/internal/protocol"
 	"time"
+
+	"github.com/VanSail-Opensource/X-Node/internal/protocol"
 )
 
 func (a *Agent) handle(ctx context.Context, m protocol.Message) {
@@ -12,6 +13,9 @@ func (a *Agent) handle(ctx context.Context, m protocol.Message) {
 		a.Client.Send(protocol.New("error", m.ID, m.Revision, map[string]string{"error": a.Logs.Redact(e.Error())}), true)
 	}
 	switch m.Type {
+	case "compute.announce", "compute.grant", "compute.ack", "compute.cancel":
+		a.receiveCompute(ctx, m)
+		return
 	case "state.sync", "config.apply", "users.sync", "users.delta", "user.controls":
 		d := a.Store.Snapshot()
 		if m.Revision == 0 || m.Revision <= d.Revision {

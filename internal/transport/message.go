@@ -2,12 +2,16 @@ package transport
 
 import (
 	"encoding/json"
+	"strings"
 
 	"github.com/VanSail-Opensource/X-Node/internal/protocol"
 	"github.com/gorilla/websocket"
 )
 
 func (c *Client) writeMessage(socket *websocket.Conn, message protocol.Message) error {
+	if strings.HasPrefix(message.Type, "compute.") && !c.ComputePool() {
+		return nil
+	}
 	// A reconnect to a legacy master must not send a queued extension frame.
 	// Its durable event remains pending until a capable master acknowledges it.
 	if message.Type == "ddns.changes" && !c.DDNSChanges() {

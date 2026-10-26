@@ -46,6 +46,16 @@
               "const": "acknowledged-v1",
               "type": "string"
             }
+          },
+          {
+            "description": "Offer bounded numerical compute. Both the response header and hello capability are required.",
+            "in": "header",
+            "name": "X-Xnode-Compute-Pool",
+            "required": false,
+            "schema": {
+              "const": "v1",
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -63,6 +73,13 @@
                 "description": "Accepted telemetry format; compact also requires the agent hello capability.",
                 "schema": {
                   "const": "compact-v1",
+                  "type": "string"
+                }
+              },
+              "X-Xnode-Compute-Pool": {
+                "description": "Accepted compute pool version.",
+                "schema": {
+                  "const": "v1",
                   "type": "string"
                 }
               }
@@ -101,7 +118,11 @@
             "torrent.expired",
             "admission.rejected",
             "telemetry.compact",
-            "ddns.changes"
+            "ddns.changes",
+            "compute.claim",
+            "compute.heartbeat",
+            "compute.result",
+            "compute.cancel"
           ],
           "masterToAgent": {
             "$ref": "schemas/master-message.schema.json"

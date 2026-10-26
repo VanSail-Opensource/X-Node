@@ -207,3 +207,10 @@ Debian 13 redesign with one embedded Xray runtime, multiple tagged inbounds and 
 - Publishes amd64/arm64 binaries with a Minisign-authenticated SHA-256 manifest and rollback-aware updates.
 
 The production master is separate. Follow the migration and protocol documentation before installation. Xray v26.10.10 is an upstream prerelease tag pinned by commit.
+
+## Compute pool
+
+Adds negotiated numerical compute, one calculation per agent, bounded zstd result
+transport and cancellation on disconnect, deadline or resource pressure. Legacy
+masters retain the existing transport behavior. No financial or authorization
+mutation is delegated to agents.

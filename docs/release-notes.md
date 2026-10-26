@@ -1,9 +1,16 @@
-# X-Node v2.0.14
+# X-Node v2.0.15
 
 Fixes accounting counter reuse after authorization removal and restoration.
 Process-local counter generations prevent false regressions and undercounting;
 snapshot-aware pruning preserves final bytes arriving during durable writes.
 Admission-stop diagnostics now include the redacted underlying storage error.
+
+Adds negotiated numerical compute, one calculation per agent, bounded zstd result
+transport and cancellation on disconnect, deadline or resource pressure. Legacy
+masters retain the existing transport behavior. No financial or authorization
+mutation is delegated to agents.
+
+# X-Node v2.0.14
 
 Isolates bounded command, traffic, telemetry and log delivery lanes while keeping
 one WebSocket writer. Disposable telemetry coalesces to the newest snapshot;
@@ -208,9 +215,3 @@ Debian 13 redesign with one embedded Xray runtime, multiple tagged inbounds and 
 
 The production master is separate. Follow the migration and protocol documentation before installation. Xray v26.10.10 is an upstream prerelease tag pinned by commit.
 
-## Compute pool
-
-Adds negotiated numerical compute, one calculation per agent, bounded zstd result
-transport and cancellation on disconnect, deadline or resource pressure. Legacy
-masters retain the existing transport behavior. No financial or authorization
-mutation is delegated to agents.

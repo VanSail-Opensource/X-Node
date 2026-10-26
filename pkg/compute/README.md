@@ -8,5 +8,9 @@ Both the panel and agent use these kernels, so local and remote results agree.
 The transport bounds batches to 64 tasks / 256 KiB, uses single-threaded zstd
 compression, and rejects compressed results above 1 MiB or decompression above
 4 MiB. `ValidateResult` binds output to its original input; the panel still owns
-policy checks, publication, billing and idempotent commits. New kernels require
+policy checks, publication, billing and idempotent commits. Validation recomputes
+empirical quantiles, checks candidate revenue against net coupon prices, and
+verifies holdout diagnostics in a linear pass without repeating model fitting.
+Nodes cannot assert calibration or invent revenue through result metadata.
+New kernels require
 a new explicit kind and compatible protocol/schema release.

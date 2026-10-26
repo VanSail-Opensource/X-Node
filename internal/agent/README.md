@@ -22,6 +22,9 @@ exercises a real occupied TCP port across restart and subsequent recovery.
 authorization accounting periods, publishes measured byte rates, and seals
 durable flush barriers. Quiescing requires fenced admission and waits for native
 handlers, including final bytes after admission slots were released.
+Capture baselines include the registry's transient counter generation. Only
+successfully persisted, unchanged snapshots can be pruned. Admission-stop logs
+and `agent.error` retain the redacted underlying failure for storage diagnostics.
 
 `jobs.go` persists bounded mutation replay history. `job_privacy.go` excludes
 session/IP scans, machine metrics and history reads from disk. Live read replay

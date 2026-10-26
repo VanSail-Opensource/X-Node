@@ -1,5 +1,10 @@
 # X-Node v2.0.14
 
+Fixes accounting counter reuse after authorization removal and restoration.
+Process-local counter generations prevent false regressions and undercounting;
+snapshot-aware pruning preserves final bytes arriving during durable writes.
+Admission-stop diagnostics now include the redacted underlying storage error.
+
 Isolates bounded command, traffic, telemetry and log delivery lanes while keeping
 one WebSocket writer. Disposable telemetry coalesces to the newest snapshot;
 durable traffic replay and acknowledgments retain their existing order.

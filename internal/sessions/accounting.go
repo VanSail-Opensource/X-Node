@@ -16,11 +16,13 @@ type accountingKey struct {
 type accountingCounters struct {
 	upload, download atomic.Uint64
 	leases           int
+	generation       uint64
 }
 type AccountingCounter struct {
 	UserID           int
 	Period           string
 	Upload, Download uint64
+	Generation       uint64
 }
 
 func (r *Registry) Acquire(ctx context.Context, id int, identity, tag, ip, destination, network string, port int, cancel func()) (*Lease, error) {
@@ -51,7 +53,7 @@ func (r *Registry) initializeAccounting(lease *Lease, tracked bool) {
 	key := accountingKey{lease.Info.UserID, lease.user.policy.AccountingPeriod}
 	counter := r.accounting[key]
 	if counter == nil {
-		counter = &accountingCounters{}
+		counter = &accountingCounters{generation: r.sequence}
 		r.accounting[key] = counter
 	}
 	counter.leases++
@@ -82,17 +84,23 @@ func (r *Registry) AccountingCounters() []AccountingCounter {
 	defer r.mu.RUnlock()
 	out := make([]AccountingCounter, 0, len(r.accounting))
 	for key, value := range r.accounting {
-		out = append(out, AccountingCounter{key.user, key.period, value.upload.Load(), value.download.Load()})
+		out = append(out, AccountingCounter{UserID: key.user, Period: key.period, Upload: value.upload.Load(), Download: value.download.Load(), Generation: value.generation})
 	}
 	return out
 }
 
-func (r *Registry) PruneAccounting() {
+// PruneAccounting retires only the exact counters successfully persisted by the sampler.
+func (r *Registry) PruneAccounting(captured []AccountingCounter) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	for key, value := range r.accounting {
+	for _, sample := range captured {
+		key := accountingKey{sample.UserID, sample.Period}
+		value := r.accounting[key]
+		if value == nil || value.generation != sample.Generation || value.leases != 0 || value.upload.Load() != sample.Upload || value.download.Load() != sample.Download {
+			continue
+		}
 		u := r.users[key.user]
-		if value.leases == 0 && (u == nil || u.policy.AccountingPeriod != key.period || len(u.policy.InboundTags) == 0) {
+		if u == nil || u.policy.AccountingPeriod != key.period || len(u.policy.InboundTags) == 0 {
 			delete(r.accounting, key)
 		}
 	}

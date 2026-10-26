@@ -49,8 +49,9 @@ func (a *Agent) captureTraffic() error {
 	nextAccounting := map[string][2]uint64{}
 	periodTotals := state.Traffic{}
 	var samples []protocol.TrafficSample
-	for _, counter := range a.Registry.AccountingCounters() {
-		key := fmt.Sprintf("%d:%s", counter.UserID, counter.Period)
+	captured := a.Registry.AccountingCounters()
+	for _, counter := range captured {
+		key := fmt.Sprintf("%d:%s:%d", counter.UserID, counter.Period, counter.Generation)
 		old := a.previousAccounting[key]
 		if counter.Upload < old[0] || counter.Download < old[1] {
 			return errors.New("accounting counter regressed")
@@ -75,7 +76,7 @@ func (a *Agent) captureTraffic() error {
 	}
 	a.previous, a.previousAccounting, a.lastCapture = current, nextAccounting, now
 	a.Registry.SetRates(delta, elapsed)
-	a.Registry.PruneAccounting()
+	a.Registry.PruneAccounting(captured)
 	a.Registry.PruneCounters()
 	return nil
 }

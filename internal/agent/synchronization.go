@@ -12,8 +12,9 @@ import (
 func (a *Agent) failStorage(err error) {
 	a.Registry.Pause(true)
 	a.Runtime.Stop()
-	nlog.Core().Error("durable state unavailable; proxy admission stopped")
-	a.Client.Send(protocol.New("agent.error", "", 0, map[string]string{"error": "durable state unavailable"}), true)
+	reason := a.Logs.Redact(err.Error())
+	nlog.Core().Error("durable state unavailable; proxy admission stopped", "error", reason)
+	a.Client.Send(protocol.New("agent.error", "", 0, map[string]string{"error": "durable state unavailable: " + reason}), true)
 }
 func (a *Agent) registerSecrets(c protocol.Config) {
 	values := []string{a.Client.Token}

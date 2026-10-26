@@ -5,6 +5,13 @@ IPs. Authentication labels bind credentials and inbound configuration epochs.
 `registry.go` owns admission/release and current limit projections; `accounting.go`
 keeps a separate native-handler lifetime and period counter after logical release.
 
+Each period counter carries its first lease's process-local generation. The
+sampler keys its baseline by that generation, so removing and restoring the same
+authorization cannot compare a fresh counter with a retired counter. Pruning
+requires the persisted generation and exact byte snapshot with no remaining
+handlers; bytes arriving during a durable write remain available to the next
+capture. Generations never enter the database or wire protocol.
+
 `AcquireTracked`/`Finish` bracket actual Xray dispatch. Period changes retain
 previous counters until all native handlers and sampling finish. `Quiesce` adds a
 temporary admission fence and returns its release after handlers drain. Cached

@@ -214,4 +214,3 @@ Debian 13 redesign with one embedded Xray runtime, multiple tagged inbounds and 
 - Publishes amd64/arm64 binaries with a Minisign-authenticated SHA-256 manifest and rollback-aware updates.
 
 The production master is separate. Follow the migration and protocol documentation before installation. Xray v26.10.10 is an upstream prerelease tag pinned by commit.
-

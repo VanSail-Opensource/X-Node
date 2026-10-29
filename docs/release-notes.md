@@ -1,3 +1,11 @@
+# X-Node v2.0.16
+
+Adds `open_connections_v1` telemetry: total open client TCP/UDP flows are reported
+separately from traffic-active connections, including idle flows and excluding
+internal transit hops. Logical close clears the total immediately. Legacy and
+compact telemetry carry the same observations. Connection limits, sampled
+activity, accounting and admission controls retain their existing behavior.
+
 # X-Node v2.0.15
 
 Fixes accounting counter reuse after authorization removal and restoration.

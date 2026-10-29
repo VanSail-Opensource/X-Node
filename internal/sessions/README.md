@@ -1,5 +1,10 @@
 # Logical sessions
 
+Summary `TotalConnections` derives all logically open client flows from the same
+locked registry, including idle flows and excluding transit. It adds no persistent
+state and never feeds connection limits. Logical close removes its contribution
+while unfinished native handlers retain their accounting/capacity reservations.
+
 The registry atomically reserves shared per-user TCP/UDP connections and active
 IPs. Authentication labels bind credentials and inbound configuration epochs.
 `registry.go` owns admission/release and current limit projections; `accounting.go`

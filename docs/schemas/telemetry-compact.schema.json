@@ -67,6 +67,10 @@
           "l": {
             "type": "boolean"
           },
+          "o": {
+            "minimum": 0,
+            "type": "integer"
+          },
           "p": {
             "items": {
               "type": "string"

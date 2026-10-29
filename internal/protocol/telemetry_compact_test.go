@@ -38,13 +38,44 @@ func TestCompactTelemetryRejectsMissingDuplicateAndInvalidMetrics(t *testing.T) 
 		t.Fatal("implicit snapshot accepted")
 	}
 	for _, rows := range [][]CompactUserMetrics{
-		{{ID: 0}}, {{ID: 1}, {ID: 1}}, {{ID: 1, Connections: -1}},
+		{{ID: 0}}, {{ID: 1}, {ID: 1}}, {{ID: 1, Connections: -1}}, {{ID: 1, TotalConnections: -1}},
 		{{ID: 1, Rate: &CompactUserRate{Seconds: 0}}}, {{ID: 1, Rate: &CompactUserRate{Seconds: 1, Upload: math.Inf(1)}}},
 		{{ID: 1, Speed: &CompactUserSpeed{NormalMbps: -1}}},
 	} {
 		if _, err := ExpandTelemetry(CompactTelemetryReport{Users: rows}); err == nil {
 			t.Fatal("invalid compact metrics accepted", rows)
 		}
+	}
+}
+
+func TestIdleOpenConnectionsSurviveBothTelemetryFormats(t *testing.T) {
+	report := TelemetryReport{Users: UserMetrics{TotalConnections: map[int]int{7: 2}}}
+	for _, compact := range []bool{false, true} {
+		var decoded TelemetryReport
+		var err error
+		if compact {
+			data, marshalErr := json.Marshal(CompactTelemetry(report))
+			if marshalErr != nil {
+				t.Fatal(marshalErr)
+			}
+			var frame CompactTelemetryReport
+			if err = json.Unmarshal(data, &frame); err == nil {
+				decoded, err = ExpandTelemetry(frame)
+			}
+		} else {
+			data, marshalErr := json.Marshal(report)
+			if marshalErr != nil {
+				t.Fatal(marshalErr)
+			}
+			err = json.Unmarshal(data, &decoded)
+		}
+		if err != nil || decoded.Users.TotalConnections[7] != 2 || decoded.Users.Connections[7] != 0 {
+			t.Fatal("idle connections lost or counted as traffic activity", compact, decoded, err)
+		}
+	}
+	empty, err := ExpandTelemetry(CompactTelemetry(TelemetryReport{}))
+	if err != nil || len(empty.Users.TotalConnections) != 0 {
+		t.Fatal("empty snapshot retained open connections", empty, err)
 	}
 }
 

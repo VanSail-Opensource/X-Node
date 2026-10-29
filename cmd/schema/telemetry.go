@@ -19,6 +19,7 @@ func telemetryContract(dir string, api, async map[string]any) {
 	rows := properties["u"].(map[string]any)["items"].(map[string]any)["properties"].(map[string]any)
 	rows["i"].(map[string]any)["minimum"] = 1
 	rows["c"].(map[string]any)["minimum"] = 0
+	rows["o"].(map[string]any)["minimum"] = 0
 	write(filepath.Join(dir, "schemas", "telemetry-compact.schema.json"), schema)
 	agent := async["channels"].(map[string]any)["control"].(map[string]any)["messages"].(map[string]any)
 	envelope := protocol.Schema(protocol.Message{})

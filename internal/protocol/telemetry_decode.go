@@ -10,15 +10,18 @@ func ExpandTelemetry(compact CompactTelemetryReport) (TelemetryReport, error) {
 	if compact.Users == nil {
 		return report, errors.New("compact telemetry requires an explicit user snapshot")
 	}
-	report.Users = UserMetrics{Connections: map[int]int{}, ActiveIPs: map[int][]string{}, Rejections: compact.Rejections, Status: map[int]UserLimitStatus{}, Speed: map[int]UserSpeedStatus{}, Rates: map[int]UserRate{}}
+	report.Users = UserMetrics{Connections: map[int]int{}, TotalConnections: map[int]int{}, ActiveIPs: map[int][]string{}, Rejections: compact.Rejections, Status: map[int]UserLimitStatus{}, Speed: map[int]UserSpeedStatus{}, Rates: map[int]UserRate{}}
 	seen := make(map[int]bool, len(compact.Users))
 	for _, row := range compact.Users {
-		if row.ID <= 0 || seen[row.ID] || row.Connections < 0 {
+		if row.ID <= 0 || seen[row.ID] || row.Connections < 0 || row.TotalConnections < 0 {
 			return report, errors.New("invalid compact telemetry user")
 		}
 		seen[row.ID] = true
 		if row.Connections != 0 {
 			report.Users.Connections[row.ID] = row.Connections
+		}
+		if row.TotalConnections != 0 {
+			report.Users.TotalConnections[row.ID] = row.TotalConnections
 		}
 		if len(row.IPs) != 0 {
 			report.Users.ActiveIPs[row.ID] = row.IPs

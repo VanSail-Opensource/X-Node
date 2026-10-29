@@ -435,7 +435,7 @@ type Summary = protocol.UserMetrics
 func (r *Registry) Summary() Summary {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	s := Summary{Connections: map[int]int{}, Rejections: protocol.Clone(r.rejects), Status: map[int]LimitStatus{}, Speed: map[int]SpeedStatus{}}
+	s := Summary{Connections: map[int]int{}, TotalConnections: r.totalConnections(), Rejections: protocol.Clone(r.rejects), Status: map[int]LimitStatus{}, Speed: map[int]SpeedStatus{}}
 	s.Rates = protocol.Clone(r.rates)
 	if r.reportIPs {
 		s.ActiveIPs = map[int][]string{}

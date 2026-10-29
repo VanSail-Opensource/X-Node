@@ -32,13 +32,17 @@ type UserSpeedStatus struct {
 	ActiveMbps int  `json:"active_mbps"`
 }
 
+// OpenConnectionsCapability distinguishes total open client flows from sampled activity.
+const OpenConnectionsCapability = "open_connections_v1"
+
 type UserMetrics struct {
-	Connections map[int]int             `json:"connections"`
-	ActiveIPs   map[int][]string        `json:"active_ips,omitempty"`
-	Rejections  map[string]uint64       `json:"rejections"`
-	Status      map[int]UserLimitStatus `json:"status"`
-	Speed       map[int]UserSpeedStatus `json:"speed"`
-	Rates       map[int]UserRate        `json:"rates,omitempty"`
+	Connections      map[int]int             `json:"connections"`
+	TotalConnections map[int]int             `json:"total_connections,omitempty"`
+	ActiveIPs        map[int][]string        `json:"active_ips,omitempty"`
+	Rejections       map[string]uint64       `json:"rejections"`
+	Status           map[int]UserLimitStatus `json:"status"`
+	Speed            map[int]UserSpeedStatus `json:"speed"`
+	Rates            map[int]UserRate        `json:"rates,omitempty"`
 }
 
 type TelemetryReport struct {

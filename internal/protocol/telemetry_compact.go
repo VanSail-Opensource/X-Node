@@ -28,14 +28,15 @@ type CompactTelemetryReport struct {
 }
 
 type CompactUserMetrics struct {
-	ID          int               `json:"i"`
-	Connections int               `json:"c,omitempty"`
-	IPs         []string          `json:"p,omitempty"`
-	Limited     bool              `json:"l,omitempty"`
-	Reason      string            `json:"r,omitempty"`
-	Scope       string            `json:"s,omitempty"`
-	Speed       *CompactUserSpeed `json:"x,omitempty"`
-	Rate        *CompactUserRate  `json:"b,omitempty"`
+	ID               int               `json:"i"`
+	Connections      int               `json:"c,omitempty"`
+	TotalConnections int               `json:"o,omitempty"`
+	IPs              []string          `json:"p,omitempty"`
+	Limited          bool              `json:"l,omitempty"`
+	Reason           string            `json:"r,omitempty"`
+	Scope            string            `json:"s,omitempty"`
+	Speed            *CompactUserSpeed `json:"x,omitempty"`
+	Rate             *CompactUserRate  `json:"b,omitempty"`
 }
 
 type CompactUserSpeed struct {

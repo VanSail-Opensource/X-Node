@@ -249,7 +249,7 @@ generation stages; source commits never overwrite a newer paid exemption.
 
 ## Sampled activity and master policies
 
-`sampled_activity_v1` reports only live flows with increasing payload counters in the latest interval. Idle/open/native completion resources and traffic accounting are independent. `transit_credentials_v1` adds bounded peer credentials to each owner, scoped by source node, inbound and generation; peer hops remain metered but are absent from client connection/IP counts.
+`sampled_activity_v1` reports only live flows with increasing payload counters in the latest interval. Idle/open/native completion resources and traffic accounting are independent. `open_connections_v1` adds `users.total_connections` (compact user field `o`), counting all logically open client flows including idle TCP/UDP, but excluding internal transit hops and logically closed native handlers. Missing user entries mean zero on capable agents; older agents do not provide total counts. `users.connections` (compact `c`) continues to govern connection limits. `transit_credentials_v1` adds bounded peer credentials to each owner, scoped by source node, inbound and generation; peer hops remain metered but are absent from client connection/IP counts.
 
 `source_geoip_firewall_v1` accepts only master-resolved prefix generations and non-REALITY listener bindings. Agents reject GeoIP downloads and routing/DNS selectors. `shared_domain_blocks_v1` adds a front-of-routing domain block policy. `geodata_interval_v1` permits completion-based `geodata.interval_hours` (0 disables, 1..8760 enables); legacy cron is retained when interval is absent.
 

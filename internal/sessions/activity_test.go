@@ -19,25 +19,30 @@ func TestSampledActivityWithoutGrace(t *testing.T) {
 			}
 			defer lease.Close()
 			r.SampleActivity()
-			if r.Summary().Connections[1] != 0 || len(r.List("", 100)) != 0 {
+			if r.Summary().Connections[1] != 0 || r.Summary().TotalConnections[1] != 1 || len(r.List("", 100)) != 0 {
 				t.Fatal("unused lease was active")
 			}
 			lease.Account(true, 12)
 			r.SampleActivity()
-			if r.Summary().Connections[1] != 1 || len(r.ActiveIPs(1)) != 1 || len(r.List("", 100)) != 1 {
+			if r.Summary().Connections[1] != 1 || r.Summary().TotalConnections[1] != 1 || len(r.ActiveIPs(1)) != 1 || len(r.List("", 100)) != 1 {
 				t.Fatal("sample projections diverged")
 			}
 			if _, err := acquire(r, u, "192.0.2.2", network); err == nil {
 				t.Fatal("sampled limit was ignored")
 			}
 			r.SampleActivity()
-			if r.Summary().Connections[1] != 0 || len(r.ActiveIPs(1)) != 0 {
+			if r.Summary().Connections[1] != 0 || r.Summary().TotalConnections[1] != 1 || len(r.ActiveIPs(1)) != 0 {
 				t.Fatal("idle lease retained a grace period")
 			}
+			idle, err := acquire(r, u, "192.0.2.2", network)
+			if err != nil {
+				t.Fatal("idle open lease consumed the sampled limit", err)
+			}
+			idle.Close()
 			lease.Account(false, 4)
 			r.SampleActivity()
 			lease.Close()
-			if r.Summary().Connections[1] != 0 || len(r.ActiveIPs(1)) != 0 {
+			if r.Summary().Connections[1] != 0 || r.Summary().TotalConnections[1] != 0 || len(r.ActiveIPs(1)) != 0 {
 				t.Fatal("closed lease remained active")
 			}
 			if r.Counters()[1] != [2]uint64{12, 4} {
@@ -64,7 +69,7 @@ func TestAuthenticatedTransitAccountingAndRevocation(t *testing.T) {
 	defer lease.Finish()
 	lease.Account(true, 100)
 	r.SampleActivity()
-	if r.Summary().Connections[1] != 0 || len(r.ActiveIPs(1)) != 0 || r.Counters()[1][0] != 100 {
+	if r.Summary().Connections[1] != 0 || r.Summary().TotalConnections[1] != 0 || len(r.ActiveIPs(1)) != 0 || r.Counters()[1][0] != 100 {
 		t.Fatal("transit affected client counts or lost traffic")
 	}
 	u.TransitCredentials = nil

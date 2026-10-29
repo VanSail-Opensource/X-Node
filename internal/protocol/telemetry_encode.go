@@ -8,6 +8,9 @@ func CompactTelemetry(report TelemetryReport) CompactTelemetryReport {
 	for id := range report.Users.Connections {
 		ids[id] = true
 	}
+	for id := range report.Users.TotalConnections {
+		ids[id] = true
+	}
 	for id := range report.Users.ActiveIPs {
 		ids[id] = true
 	}
@@ -21,7 +24,7 @@ func CompactTelemetry(report TelemetryReport) CompactTelemetryReport {
 		ids[id] = true
 	}
 	for id := range ids {
-		row := CompactUserMetrics{ID: id, Connections: report.Users.Connections[id], IPs: report.Users.ActiveIPs[id]}
+		row := CompactUserMetrics{ID: id, Connections: report.Users.Connections[id], TotalConnections: report.Users.TotalConnections[id], IPs: report.Users.ActiveIPs[id]}
 		status := report.Users.Status[id]
 		if status.Limited || status.Reason != "" {
 			row.Limited, row.Reason = status.Limited, status.Reason
@@ -35,7 +38,7 @@ func CompactTelemetry(report TelemetryReport) CompactTelemetryReport {
 		if rate, exists := report.Users.Rates[id]; exists && (rate.UploadBytesPerSecond != 0 || rate.DownloadBytesPerSecond != 0 || rate.SampleSeconds <= 0) {
 			row.Rate = &CompactUserRate{Upload: rate.UploadBytesPerSecond, Download: rate.DownloadBytesPerSecond, Seconds: rate.SampleSeconds}
 		}
-		if row.Connections != 0 || len(row.IPs) != 0 || row.Limited || row.Reason != "" || row.Speed != nil || row.Rate != nil {
+		if row.Connections != 0 || row.TotalConnections != 0 || len(row.IPs) != 0 || row.Limited || row.Reason != "" || row.Speed != nil || row.Rate != nil {
 			compact.Users = append(compact.Users, row)
 		}
 	}

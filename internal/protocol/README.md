@@ -1,5 +1,9 @@
 # Module
 
+`open_connections_v1` adds optional total open client counts independently of
+sampled `Connections`. Compact field `o` preserves idle-only rows and empty
+snapshots clear totals. The capability is exported for master availability gates.
+
 `telemetry_compact.go` defines the optional authoritative snapshot format.
 `CompactTelemetry` removes default observations and repeated user keys;
 `ExpandTelemetry` creates fresh internal maps and validates row identity, rates

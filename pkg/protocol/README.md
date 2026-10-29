@@ -1,5 +1,9 @@
 # Master protocol package
 
+`OpenConnectionsCapability` gates `UserMetrics.TotalConnections` (compact `o`).
+These totals include idle client flows; existing `Connections` remains the sampled
+traffic-active count used for limits. Treat totals from older agents as unknown.
+
 `CompactTelemetry` and `ExpandTelemetry` map negotiated compact snapshots to the
 same internal report types. Empty snapshots replace prior observations, and
 normalization rejects duplicate users and invalid counters/rates. Transport

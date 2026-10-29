@@ -26,6 +26,7 @@ type Client struct {
 	dropped          atomic.Uint64
 	computePool      atomic.Bool
 	compactTelemetry atomic.Bool
+	openConnections  atomic.Bool
 	ddnsChanges      atomic.Bool
 }
 
@@ -37,6 +38,7 @@ func New(url, token string) *Client {
 func (c *Client) Connected() bool        { return c.connected.Load() }
 func (c *Client) Dropped() uint64        { return c.dropped.Load() }
 func (c *Client) CompactTelemetry() bool { return c.compactTelemetry.Load() }
+func (c *Client) OpenConnections() bool  { return c.openConnections.Load() }
 func (c *Client) ComputePool() bool      { return c.computePool.Load() }
 func (c *Client) DDNSChanges() bool      { return c.ddnsChanges.Load() }
 func (c *Client) Send(m protocol.Message, critical bool) bool {

@@ -83,6 +83,8 @@ type CompactUserRate = wire.CompactUserRate
 
 const CompactTelemetryCapability = wire.CompactTelemetryCapability
 const OpenConnectionsCapability = wire.OpenConnectionsCapability
+const OpenConnectionsHeader = wire.OpenConnectionsHeader
+const OpenConnectionsFormat = wire.OpenConnectionsFormat
 const TelemetryFormatHeader = wire.TelemetryFormatHeader
 const CompactTelemetryFormat = wire.CompactTelemetryFormat
 

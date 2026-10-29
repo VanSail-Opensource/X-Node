@@ -5,6 +5,8 @@ separately from traffic-active connections, including idle flows and excluding
 internal transit hops. Logical close clears the total immediately. Legacy and
 compact telemetry carry the same observations. Connection limits, sampled
 activity, accounting and admission controls retain their existing behavior.
+The extension requires an echoed WebSocket handshake header, preserving strict
+older masters even when snapshots were queued before reconnect.
 
 # X-Node v2.0.15
 

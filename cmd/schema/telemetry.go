@@ -9,7 +9,9 @@ import (
 func telemetryContract(dir string, api, async map[string]any) {
 	path := api["paths"].(map[string]any)["/v1/agents/connect"].(map[string]any)["get"].(map[string]any)
 	path["parameters"] = append(path["parameters"].([]any), map[string]any{"in": "header", "name": protocol.TelemetryFormatHeader, "required": false, "description": "Offer compact telemetry for this authenticated connection. The master echoes the accepted format; absence selects legacy telemetry.", "schema": map[string]any{"type": "string", "const": protocol.CompactTelemetryFormat}})
+	path["parameters"] = append(path["parameters"].([]any), map[string]any{"in": "header", "name": protocol.OpenConnectionsHeader, "required": false, "description": "Offer total open client connections. Only an echoed acceptance permits the extension in legacy or compact telemetry.", "schema": map[string]any{"type": "string", "const": protocol.OpenConnectionsFormat}})
 	path["responses"].(map[string]any)["101"].(map[string]any)["headers"] = map[string]any{protocol.TelemetryFormatHeader: map[string]any{"description": "Accepted telemetry format; compact also requires the agent hello capability.", "schema": map[string]any{"type": "string", "const": protocol.CompactTelemetryFormat}}}
+	path["responses"].(map[string]any)["101"].(map[string]any)["headers"].(map[string]any)[protocol.OpenConnectionsHeader] = map[string]any{"description": "Accepted total open client connection extension; also requires the agent hello capability.", "schema": map[string]any{"type": "string", "const": protocol.OpenConnectionsFormat}}
 	messages := path["x-websocket-messages"].(map[string]any)
 	messages["agentToMaster"] = append(messages["agentToMaster"].([]string), "telemetry.compact")
 	schema := protocol.Schema(protocol.CompactTelemetryReport{})

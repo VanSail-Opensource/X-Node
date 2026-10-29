@@ -1,5 +1,11 @@
 # Master WebSocket transport
 
+`X-XNode-Open-Connections: v1` independently negotiates total open client counts.
+`Client.OpenConnections()` resets on disconnect; the serialized writer strips
+the extension from queued legacy/compact snapshots for older strict masters.
+`open_connections_test.go` covers negotiation, queued reconnect fallback, both
+formats, and unchanged traffic-active counts.
+
 `X-XNode-DDNS-Changes: acknowledged-v1` independently negotiates durable DDNS
 change delivery. `Client.DDNSChanges()` is connection-local; `message.go` drops
 an old queued extension after reconnecting to a legacy master, leaving its

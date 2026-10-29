@@ -30,6 +30,28 @@ func (c *Client) writeMessage(socket *websocket.Conn, message protocol.Message) 
 		}
 		message = protocol.New("telemetry.report", message.ID, message.Revision, report)
 	}
+	// Strict older masters must never receive the extension, even from a snapshot
+	// queued before reconnect. Strip it at the connection's serialized writer.
+	if !c.OpenConnections() {
+		switch message.Type {
+		case "telemetry.report":
+			var report protocol.TelemetryReport
+			if err := protocol.Decode(message.Data, &report); err != nil {
+				return err
+			}
+			report.Users.TotalConnections = nil
+			message = protocol.New(message.Type, message.ID, message.Revision, report)
+		case "telemetry.compact":
+			var report protocol.CompactTelemetryReport
+			if err := protocol.Decode(message.Data, &report); err != nil {
+				return err
+			}
+			for index := range report.Users {
+				report.Users[index].TotalConnections = 0
+			}
+			message = protocol.New(message.Type, message.ID, message.Revision, report)
+		}
+	}
 	data, err := json.Marshal(message)
 	if err != nil {
 		return err

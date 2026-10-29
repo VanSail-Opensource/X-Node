@@ -38,6 +38,16 @@
             }
           },
           {
+            "description": "Offer total open client connections. Only an echoed acceptance permits the extension in legacy or compact telemetry.",
+            "in": "header",
+            "name": "X-XNode-Open-Connections",
+            "required": false,
+            "schema": {
+              "const": "v1",
+              "type": "string"
+            }
+          },
+          {
             "description": "Offer acknowledged DDNS changes. A master echoes the accepted format; absence preserves legacy DDNS reporting.",
             "in": "header",
             "name": "X-XNode-DDNS-Changes",
@@ -66,6 +76,13 @@
                 "description": "Accepted DDNS change format; also requires the hello capability.",
                 "schema": {
                   "const": "acknowledged-v1",
+                  "type": "string"
+                }
+              },
+              "X-XNode-Open-Connections": {
+                "description": "Accepted total open client connection extension; also requires the agent hello capability.",
+                "schema": {
+                  "const": "v1",
                   "type": "string"
                 }
               },

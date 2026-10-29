@@ -34,6 +34,8 @@ type UserSpeedStatus struct {
 
 // OpenConnectionsCapability distinguishes total open client flows from sampled activity.
 const OpenConnectionsCapability = "open_connections_v1"
+const OpenConnectionsHeader = "X-XNode-Open-Connections"
+const OpenConnectionsFormat = "v1"
 
 type UserMetrics struct {
 	Connections      map[int]int             `json:"connections"`

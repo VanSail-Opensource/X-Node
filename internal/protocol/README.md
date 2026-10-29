@@ -3,6 +3,8 @@
 `open_connections_v1` adds optional total open client counts independently of
 sampled `Connections`. Compact field `o` preserves idle-only rows and empty
 snapshots clear totals. The capability is exported for master availability gates.
+The independent `X-XNode-Open-Connections: v1` handshake must also be accepted
+before sending these fields to a strict master.
 
 `telemetry_compact.go` defines the optional authoritative snapshot format.
 `CompactTelemetry` removes default observations and repeated user keys;

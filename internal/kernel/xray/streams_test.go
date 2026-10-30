@@ -218,18 +218,54 @@ func TestRealTLSVisionXHTTPAndREALITYAccounting(t *testing.T) {
 				t.Fatal("TLS/Vision/XHTTP payload bypassed accounting")
 			}
 			if mode == "reality-vision" {
-				probe, err := net.DialTimeout("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(port)), time.Second)
+				probes := []struct {
+					name    string
+					payload []byte
+				}{
+					{"empty TCP connection", nil},
+					{"plain HTTP GET", []byte("GET / HTTP/1.1\r\nHost: example.com\r\nConnection: close\r\n\r\n")},
+					{"malformed TLS record", []byte{0x16, 0x03, 0x03, 0x00, 0x02, 0x01, 0x00}},
+				}
+				for _, probe := range probes {
+					conn, err := net.DialTimeout("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(port)), time.Second)
+					if err != nil {
+						t.Fatal(err)
+					}
+					if _, err = conn.Write(probe.payload); err != nil {
+						conn.Close()
+						t.Fatal(err)
+					}
+					_ = conn.(*net.TCPConn).CloseWrite()
+					_ = conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+					_, _ = io.Copy(io.Discard, conn)
+					_ = conn.Close()
+					select {
+					case observation := <-events:
+						if observation.Rule != "xray_tcp_probe" {
+							t.Fatalf("REALITY %s = %+v", probe.name, observation)
+						}
+					case <-time.After(10 * time.Second):
+						t.Fatalf("REALITY %s was not observed", probe.name)
+					}
+				}
+				raw, err := net.DialTimeout("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(port)), time.Second)
 				if err != nil {
 					t.Fatal(err)
 				}
-				_ = probe.Close()
+				_ = raw.SetDeadline(time.Now().Add(10 * time.Second))
+				fallback := tls.Client(raw, &tls.Config{ServerName: "probe.invalid", InsecureSkipVerify: true, MinVersion: tls.VersionTLS13})
+				if err = fallback.Handshake(); err != nil {
+					fallback.Close()
+					t.Fatal("ordinary TLS fallback failed", err)
+				}
+				_ = fallback.Close()
 				select {
 				case observation := <-events:
-					if observation.Rule != "xray_tcp_probe" {
-						t.Fatalf("REALITY probe = %+v", observation)
+					if observation.Rule != "xray_invalid" {
+						t.Fatalf("REALITY TLS probe = %+v", observation)
 					}
 				case <-time.After(10 * time.Second):
-					t.Fatal("REALITY TCP probe was not observed")
+					t.Fatal("REALITY TLS probe was not observed")
 				}
 				invalidUser := map[string]any{"id": "33333333-3333-4333-8333-333333333333", "encryption": "none", "flow": "xtls-rprx-vision"}
 				invalidPeer := map[string]any{"tag": "peer", "protocol": "vless", "settings": map[string]any{"vnext": []any{map[string]any{"address": "127.0.0.1", "port": port, "users": []any{invalidUser}}}}, "streamSettings": clientStream}

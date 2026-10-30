@@ -33,8 +33,11 @@ including REALITY, while excluding authenticated shutdowns. `reality_observation
 also recognizes explicit failures logged before the TCP proxy handler runs.
 REALITY XHTTP and gRPC discard pre-handshake errors inside the upstream listener,
 so those failures cannot be observed by the public Xray log handler. No mux-facing
-reader or private registry is inspected. Hosted regressions cover classification
-and a real managed TCP probe.
+reader or private registry is inspected. Hosted regressions send an empty TCP
+connection, a plain HTTP GET and a malformed TLS record to a real REALITY TCP
+listener. The upstream error does not distinguish these payloads; each is reported
+as `xray_tcp_probe` after fallback forwarding ends. A valid TLS ClientHello with
+an unconfigured server name exercises camouflage forwarding and `xray_invalid`.
 
 `transit.go` expands owner-scoped peer accounts with separate credential generations and managed authentication labels. `domain_blocks.go` inserts the master domain block rule before all native/system rules with a reserved block outbound. Agent validation refuses unresolved IP geodata and mixed REALITY/source-filter sockets before listener activation.
 

@@ -27,14 +27,32 @@ func (s *Store) Batch() (*Batch, error) {
 
 // Ack retires only the matching head and advances queued barrier batches in order.
 func (s *Store) Ack(id string) error {
-	return s.change(func(d *Data) error {
-		if d.Pending != nil && d.Pending.ID == id {
-			d.Pending = nil
-			if len(d.Backlog) > 0 {
-				d.Pending = d.Backlog[0]
-				d.Backlog = d.Backlog[1:]
-			}
-		}
-		return nil
-	})
+	_, err := s.Acknowledge(id)
+	return err
+}
+
+// Acknowledge reports durable progress. Duplicate/stale ACKs do not write disk.
+func (s *Store) Acknowledge(id string) (bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.data.Pending == nil || s.data.Pending.ID != id {
+		return false, nil
+	}
+	next := protocol.Clone(s.data)
+	next.Pending = nil
+	if len(next.Backlog) > 0 {
+		next.Pending, next.Backlog = next.Backlog[0], next.Backlog[1:]
+	}
+	if err := s.persist(next); err != nil {
+		return false, err
+	}
+	s.data = next
+	return true, nil
+}
+
+// Pending returns only the sealed head; it never seals newly accumulated bytes.
+func (s *Store) Pending() *Batch {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return protocol.Clone(s.data.Pending)
 }

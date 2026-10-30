@@ -465,7 +465,7 @@ func (c Config) SampleInterval() time.Duration {
 }
 func (c Config) ReportInterval() time.Duration {
 	if c.Telemetry.ReportSeconds == 0 {
-		return 5 * time.Second
+		return 2 * time.Second
 	}
 	return time.Duration(c.Telemetry.ReportSeconds) * time.Second
 }

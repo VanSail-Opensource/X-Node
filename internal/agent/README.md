@@ -73,3 +73,5 @@ material and uses the existing prepared incremental runtime path. Hosted
 `activation_test.go` covers normal/forced reload counters and whitelist/firewall
 updates without native rebuilding. Traffic capture/ACK and authorization paths
 remain owned by the actor while activation runs in the serialized worker.
+
+`reports.go` coalesces periodic/status/replay requests in one joined worker. Report encoding and status-file writes do not occupy the actor. `status.go` uses value-only state metadata and rejects a summary built across a revision change. `reporting_test.go` covers request coalescing, shutdown and ACK-driven replay.

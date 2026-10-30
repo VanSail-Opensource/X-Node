@@ -1,3 +1,18 @@
+# X-Node v2.0.17
+
+Moves report encoding and status-file persistence off the control actor into one
+bounded coalescing worker. Value-only state metadata avoids copying credentials
+and the traffic journal for routine reports and authenticated reconnects.
+Reporting defaults to two seconds when omitted; saved intervals remain effective.
+Socket/process/GPU scans use an independent ten-second sampling cadence.
+
+Matching traffic acknowledgements immediately advance sealed replay batches;
+duplicate acknowledgements perform no disk writes. Ordered inbound saturation
+forces authenticated reconnect instead of silently dropping commands or ACKs.
+Exact accounting, command receipts, state ordering and existing wire negotiation
+remain compatible. Hosted regressions include replay, overflow and metadata
+allocation comparisons.
+
 # X-Node v2.0.16
 
 Adds `open_connections_v1` telemetry: total open client TCP/UDP flows are reported

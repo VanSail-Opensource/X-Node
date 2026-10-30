@@ -44,6 +44,12 @@ jobs:
           path: telemetry-wire.txt
       - name: Incremental configuration comparison
         run: go test ./internal/kernel/xray -run '^$' -bench 'Benchmark(ConfigPreparation|RoutingApply|RuntimeReload)$' -benchtime=20x -benchmem | tee reload-benchmark.txt
+      - name: Reporting snapshot allocation comparison
+        run: go test ./internal/state -run '^$' -bench '^BenchmarkReportingMetadata$' -benchtime=100x -benchmem | tee reporting-benchmark.txt
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: reporting-benchmark
+          path: reporting-benchmark.txt
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: reload-benchmark

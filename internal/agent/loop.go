@@ -34,6 +34,9 @@ func (a *Agent) Run(ctx context.Context) error {
 	}
 	child, cancel := context.WithCancel(ctx)
 	defer cancel()
+	reportsDone := make(chan struct{})
+	go func() { defer close(reportsDone); a.runReports(child) }()
+	defer func() { cancel(); <-reportsDone }()
 	defer func() {
 		if a.utilityCancel != nil {
 			a.utilityCancel()

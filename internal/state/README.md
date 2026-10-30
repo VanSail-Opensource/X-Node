@@ -37,3 +37,5 @@ scrubbed on open. `connection_controls_test.go` covers restart, upgrade cleanup,
 and preservation of credential/period/expiry fields.
 
 `configuration.go` exposes bounded configuration copies and revision reads without cloning accounting journals for recovery commands.
+
+`Metadata` reads revisions without copying credentials or journals. `Acknowledge` persists matching head progress before advancing; duplicate acknowledgements are write-free. `Pending` never seals new samples. `reporting_test.go` covers persistence failures and compares full-snapshot versus metadata allocations.

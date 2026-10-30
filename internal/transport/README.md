@@ -42,3 +42,5 @@ transport never acknowledges, persists, rewrites or settles traffic itself.
 overflow and byte-budget release. Existing WSS tests cover authentication and
 serialized concurrent producers. Automated regressions run only in hosted CI
 for this delivery; local verification uses static checks and permitted builds.
+
+An overflowing ordered inbound queue closes the connection to trigger authenticated reconciliation, rather than silently losing a command or acknowledgement. `overflow_test.go` verifies disconnect at saturation.

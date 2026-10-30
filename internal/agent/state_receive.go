@@ -165,8 +165,11 @@ func (a *Agent) handle(ctx context.Context, m protocol.Message) {
 		}
 		if e := protocol.Decode(m.Data, &p); e != nil {
 			fail(e)
-		} else if e = a.Store.Ack(p.ID); e != nil {
+		} else if advanced, e := a.Store.Acknowledge(p.ID); e != nil {
+			a.failStorage(e)
 			fail(e)
+		} else if advanced {
+			a.requestReports(reportReplay)
 		}
 	case "command":
 		if e := a.command(ctx, m); e != nil {

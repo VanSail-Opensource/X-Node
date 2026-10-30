@@ -189,7 +189,7 @@ Speedtests use a separate outbound-only Xray client and transfer HTTPS payloads 
 
 ## Operational settings
 
-The configuration schema describes provider credentials, certificate profiles, inbound certificate references, DDNS jobs, resolver policy, firewall policy, outbound port ranges, asset hashes, telemetry, torrent policy and update policy. Operational defaults are one-second sampling, five-second reporting, five-minute DDNS refresh, ten-minute torrent bans and disabled automatic binary installation.
+The configuration schema describes provider credentials, certificate profiles, inbound certificate references, DDNS jobs, resolver policy, firewall policy, outbound port ranges, asset hashes, telemetry, torrent policy and update policy. Operational defaults are one-second sampling, two-second reporting, five-minute DDNS refresh, ten-minute torrent bans and disabled automatic binary installation.
 
 DDNS provider `builtin:panel` discovers enabled `auto` IPv4/IPv6 families without
 publishing DNS records or requiring provider credentials, zone or record name.
@@ -282,3 +282,5 @@ other owner's active exemption. Non-Reality geolocation filtering precedes every
 bypass. Protected-address commands and live IP projections are private and do
 not enter durable command history. Whitelist/firewall changes update registry
 and nftables state without reconstructing native Xray.
+
+Reporting intervals are scheduling targets. A bounded coalescing worker encodes reports independently of command receipt and one-second accounting capture. Matching traffic acknowledgements immediately release the next sealed journal batch; new batches and lost-ACK retransmissions follow the configured reporting interval. Socket/process/GPU scans refresh at most once per ten seconds.

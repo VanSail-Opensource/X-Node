@@ -106,6 +106,9 @@ func (c *Client) connect(ctx context.Context) bool {
 				return
 			default:
 				c.resync.Store(true)
+				// The stream has lost ordered delivery. Reconnect instead of
+				// silently dropping a command, ACK or authorization mutation.
+				return
 			}
 		}
 	}()

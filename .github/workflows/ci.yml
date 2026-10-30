@@ -47,6 +47,16 @@ jobs:
         run: go test ./internal/kernel/xray -run '^$' -bench 'Benchmark(ConfigPreparation|RoutingApply|RuntimeReload)$' -benchtime=20x -benchmem | tee reload-benchmark.txt
       - name: Reporting snapshot allocation comparison
         run: go test ./internal/state -run '^$' -bench '^BenchmarkReportingMetadata$' -benchtime=100x -benchmem | tee reporting-benchmark.txt
+      - name: Authentication lookup comparison
+        run: go test ./internal/sessions -run '^$' -bench '^BenchmarkIdentityLookup$' -benchtime=1000x -benchmem | tee identity-benchmark.txt
+      - name: Duplicate firewall acknowledgment comparison
+        run: go test ./internal/firewall -run '^$' -bench '^BenchmarkDuplicateFirewallAcknowledgment$' -benchtime=100x -benchmem | tee firewall-ack-benchmark.txt
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: identity-benchmark
+          path: |
+            identity-benchmark.txt
+            firewall-ack-benchmark.txt
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: reporting-benchmark

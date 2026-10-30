@@ -7,6 +7,16 @@ process routing, file-loader symlink handling and bounded Geodata downloads.
 Native configuration, mux/XUDP lifecycle, accounting, revocation and wire
 capabilities remain unchanged.
 
+Managed REALITY inbounds now report rejected proxy credentials and malformed
+traffic. REALITY TCP listeners also report clear pre-handshake probes after
+fallback forwarding finishes; upstream XHTTP/gRPC pre-handshake errors remain
+unavailable. Authenticated closures are excluded.
+
+Admission caches credential and listener-epoch identities between policy
+updates, and duplicate firewall acknowledgments no longer rewrite the journal.
+Firewall kernel updates retain their existing revision fencing and unlocked
+execution; hosted checks exercise stale completion and compare both hot paths.
+
 # X-Node v2.0.17
 
 Moves report encoding and status-file persistence off the control actor into one

@@ -24,7 +24,7 @@ func (g *Guard) Run(ctx context.Context, send func(protocol.Message, bool) bool)
 			return
 		case ids := <-g.acks:
 			g.mu.Lock()
-			_ = g.appendJournal(journalRecord{Ack: ids})
+			_ = g.acknowledge(ids)
 			g.mu.Unlock()
 		case <-ticker.C:
 			g.mu.Lock()

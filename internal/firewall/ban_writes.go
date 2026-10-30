@@ -13,6 +13,26 @@ import (
 func kernelChange(record journalRecord) bool {
 	return len(record.Bans)+len(record.Exemptions)+len(record.Remove)+len(record.RemoveExemptions)+len(record.ExpiredSources)+len(record.BaseExpiredSources) > 0
 }
+
+// acknowledge requires g.mu. Retried ACKs must first flush pending writes and
+// only journal events still present in durable state.
+func (g *Guard) acknowledge(ids []string) error {
+	if err := g.flushPending(); err != nil {
+		return err
+	}
+	seen := make(map[string]bool, len(ids))
+	remaining := make([]string, 0, len(ids))
+	for _, id := range ids {
+		if _, exists := g.state.Events[id]; exists && !seen[id] {
+			remaining = append(remaining, id)
+			seen[id] = true
+		}
+	}
+	if len(remaining) == 0 {
+		return nil
+	}
+	return g.appendJournal(journalRecord{Ack: remaining})
+}
 func (g *Guard) appendJournal(record journalRecord) error {
 	if err := g.flushPending(); err != nil {
 		return err

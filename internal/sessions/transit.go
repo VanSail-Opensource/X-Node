@@ -2,41 +2,42 @@ package sessions
 
 import "github.com/VanSail-Opensource/X-Node/internal/protocol"
 
-func (r *Registry) transitIdentity(user protocol.User, binding protocol.TransitCredential) string {
-	identity := protocol.TransitEmail(user.ID, binding)
-	if epoch := r.epochs[binding.InboundTag]; epoch != "" {
-		identity += "@" + epoch
-	}
-	return identity
+type identityKey struct{ tag, value string }
+
+// A false value is a member identity; true marks an authenticated transit hop.
+type identityIndex map[identityKey]bool
+
+func (index identityIndex) lookup(identity, tag string) (transit, valid bool) {
+	transit, valid = index[identityKey{tag: tag, value: identity}]
+	return transit, valid
 }
 
-func (r *Registry) isTransit(user protocol.User, identity, tag string) bool {
-	for _, binding := range user.TransitCredentials {
-		if binding.InboundTag == tag && r.transitIdentity(user, binding) == identity {
-			return true
+// identities builds the credential and epoch-bound labels only on policy changes.
+func (r *Registry) identities(user protocol.User) identityIndex {
+	index := identityIndex{}
+	for _, id := range []int{user.ID, user.ReplacesID} {
+		if id == 0 {
+			continue
+		}
+		candidate := user
+		candidate.ID, candidate.ReplacesID = id, 0
+		for _, tag := range candidate.InboundTags {
+			label := protocol.UserEmail(candidate, tag)
+			if epoch := r.epochs[tag]; epoch != "" {
+				label += "@" + epoch
+			}
+			index[identityKey{tag: tag, value: label}] = false
+		}
+		for _, binding := range candidate.TransitCredentials {
+			if !eligible(candidate, binding.InboundTag) {
+				continue
+			}
+			label := protocol.TransitEmail(id, binding)
+			if epoch := r.epochs[binding.InboundTag]; epoch != "" {
+				label += "@" + epoch
+			}
+			index[identityKey{tag: binding.InboundTag, value: label}] = true
 		}
 	}
-	if user.ReplacesID != 0 {
-		user.ID, user.ReplacesID = user.ReplacesID, 0
-		return r.isTransit(user, identity, tag)
-	}
-	return false
-}
-
-func (r *Registry) validIdentity(user protocol.User, identity, tag string) bool {
-	if !eligible(user, tag) {
-		return false
-	}
-	normal := protocol.UserEmail(user, tag)
-	if epoch := r.epochs[tag]; epoch != "" {
-		normal += "@" + epoch
-	}
-	if identity == normal || r.isTransit(user, identity, tag) {
-		return true
-	}
-	if user.ReplacesID != 0 {
-		user.ID, user.ReplacesID = user.ReplacesID, 0
-		return r.validIdentity(user, identity, tag)
-	}
-	return false
+	return index
 }

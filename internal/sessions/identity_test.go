@@ -48,3 +48,27 @@ func TestTelegramRekeyDoesNotAcceptNumericIdentityCollision(t *testing.T) {
 		t.Fatal("old number bypassed credential generation")
 	}
 }
+
+func TestIdentityIndexFollowsInboundEpoch(t *testing.T) {
+	r, user := New(), testUser()
+	r.SetInboundEpochs(map[string]string{"in": "first"})
+	r.SetUsers([]protocol.User{user})
+	old := protocol.UserEmail(user, "in") + "@first"
+	lease, err := r.Acquire(context.Background(), user.ID, old, "in", "192.0.2.1", "example.com:443", "tcp", 443, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.SetInboundEpochs(map[string]string{"in": "second"})
+	if !lease.closed {
+		t.Fatal("old epoch retained a live lease")
+	}
+	if _, err = r.Acquire(context.Background(), user.ID, old, "in", "192.0.2.1", "example.com:443", "tcp", 443, nil); err == nil {
+		t.Fatal("old epoch was admitted")
+	}
+	current := protocol.UserEmail(user, "in") + "@second"
+	fresh, err := r.Acquire(context.Background(), user.ID, current, "in", "192.0.2.1", "example.com:443", "tcp", 443, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fresh.Close()
+}

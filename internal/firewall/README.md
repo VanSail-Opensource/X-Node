@@ -119,6 +119,10 @@ never bypass ordinary port, invalid-packet or forwarding checks.
 `ban_journal.go`, `ban_persistence.go` and `ban_writes.go` use private gzip
 checkpoints plus a bounded append journal. Changes fsync before command success.
 A stable event namespace and monotonic sequence allow replay-safe master cursors.
+Repeated acknowledgments of already-retired events do not append another journal
+record; pending writes are flushed before determining which IDs remain active.
+Hosted `BenchmarkDuplicateFirewallAcknowledgment` compares duplicate journal
+writes with the no-op path on the same private state fixture.
 Acknowledged events and expired records are pruned; torn final journal members
 are removed without losing committed records. Compaction epochs prevent stale
 journal replay, and expiry acknowledgments cannot remove a newer source.

@@ -7,6 +7,11 @@ while unfinished native handlers retain their accounting/capacity reservations.
 
 The registry atomically reserves shared per-user TCP/UDP connections and active
 IPs. Authentication labels bind credentials and inbound configuration epochs.
+`transit.go` precomputes member, transit and authorized replacement labels when
+users or listener epochs change; admission performs a bounded map lookup while
+the registry lock still protects the atomic reservation.
+Hosted `BenchmarkIdentityLookup` compares the original repeated credential
+derivation with the cached lookup for the same member and transit bindings.
 `registry.go` owns admission/release and current limit projections; `accounting.go`
 keeps a separate native-handler lifetime and period counter after logical release.
 

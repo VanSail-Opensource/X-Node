@@ -56,8 +56,10 @@ func (r *Registry) rekeyUsers(users []protocol.User) {
 // identity still matches the replacement. A numeric collision never suffices.
 func (r *Registry) rekeyIdentity(old int, identity, tag string) int {
 	id := r.identityAliases[old]
-	if user := r.users[id]; user != nil && r.validIdentity(user.policy, identity, tag) {
-		return id
+	if user := r.users[id]; user != nil {
+		if _, valid := user.identities.lookup(identity, tag); valid {
+			return id
+		}
 	}
 	return 0
 }

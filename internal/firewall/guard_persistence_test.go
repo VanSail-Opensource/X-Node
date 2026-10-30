@@ -83,3 +83,30 @@ func TestCompactionAndOldSourceExpiryAckCannotEraseNewGeneration(t *testing.T) {
 		t.Fatal("stale source expiry ack erased a newer generation")
 	}
 }
+
+func TestDuplicateAcknowledgmentsDoNotWriteJournal(t *testing.T) {
+	g, _ := guardFixture(t)
+	now := time.Now().UTC()
+	if err := g.appendJournal(journalRecord{Events: []protocol.FirewallEvent{{Kind: "detected", IP: "8.8.8.8", Rule: "xray_invalid", Count: 1, FirstSeen: now, Time: now}}}); err != nil {
+		t.Fatal(err)
+	}
+	id := g.pendingEvents(1)[0].ID
+	if err := g.acknowledge([]string{id, id}); err != nil {
+		t.Fatal(err)
+	}
+	before, err := os.Stat(g.file("bans.journal.gz"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = g.acknowledge([]string{id, "missing"}); err != nil {
+		t.Fatal(err)
+	}
+	after, err := os.Stat(g.file("bans.journal.gz"))
+	if err != nil || before.Size() != after.Size() || len(g.state.Events) != 0 {
+		t.Fatal("duplicate acknowledgment changed durable journal", err)
+	}
+	restarted, err := OpenGuard(g.dir, g.manager)
+	if err != nil || len(restarted.state.Events) != 0 {
+		t.Fatal("acknowledgment did not survive restart", err)
+	}
+}

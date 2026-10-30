@@ -28,7 +28,7 @@ type Connection struct {
 }
 type userState struct {
 	policy           protocol.User
-	identities       map[string]string
+	identities       identityIndex
 	ips              map[string]int
 	count            int
 	handlers         int
@@ -130,8 +130,11 @@ func (r *Registry) SetUsers(users []protocol.User) {
 	}
 	next := map[int]*userState{}
 	policies := map[int]protocol.User{}
+	identities := map[int]identityIndex{}
+	unchanged := map[int]bool{}
 	for _, p := range users {
 		policies[p.ID] = p
+		identities[p.ID] = r.identities(p)
 		old := r.users[p.ID]
 		if old == nil {
 			old = &userState{ips: map[string]int{}}
@@ -144,13 +147,19 @@ func (r *Registry) SetUsers(users []protocol.User) {
 	var close []*Lease
 	for _, l := range r.connections {
 		p, ok := policies[l.Info.UserID]
-		if !ok || !sameIdentity(l.user.policy, p) || !eligible(p, l.Info.InboundTag) || !r.validIdentity(p, l.identity, l.Info.InboundTag) || !l.transit && !sourceAllowed(p, l.Info.SourceIP) {
+		same, checked := unchanged[l.Info.UserID]
+		if ok && !checked {
+			same = sameIdentity(l.user.policy, p)
+			unchanged[l.Info.UserID] = same
+		}
+		_, valid := identities[l.Info.UserID].lookup(l.identity, l.Info.InboundTag)
+		if !ok || !same || !valid || !l.transit && !sourceAllowed(p, l.Info.SourceIP) {
 			close = append(close, l)
 		}
 	}
 	for _, p := range users {
 		next[p.ID].policy = protocol.Clone(p)
-		next[p.ID].identities = r.identities(p)
+		next[p.ID].identities = identities[p.ID]
 	}
 	// Retain removed counters until all associated leases finish and the sampler consumes them.
 	for id, u := range r.users {
@@ -165,16 +174,6 @@ func (r *Registry) SetUsers(users []protocol.User) {
 	for _, l := range close {
 		l.Close()
 	}
-}
-func (r *Registry) identities(u protocol.User) map[string]string {
-	out := map[string]string{}
-	for _, tag := range u.InboundTags {
-		out[tag] = protocol.UserEmail(u, tag)
-		if epoch := r.epochs[tag]; epoch != "" {
-			out[tag] += "@" + epoch
-		}
-	}
-	return out
 }
 func (r *Registry) SetInboundEpochs(epochs map[string]string) {
 	r.mu.Lock()
@@ -258,14 +257,17 @@ func (r *Registry) acquire(ctx context.Context, id int, identity, tag, ip, desti
 	if mapped := r.rekeyIdentity(id, identity, tag); mapped != 0 {
 		id, u = mapped, r.users[mapped]
 	}
-	transit := u != nil && r.isTransit(u.policy, identity, tag)
+	transit, valid := false, false
+	if u != nil {
+		transit, valid = u.identities.lookup(identity, tag)
+	}
 	reason := ""
 	switch {
 	case r.paused:
 		reason = "storage_backpressure"
 	case r.resources >= 100000:
 		reason = "agent_capacity"
-	case u == nil || !r.validIdentity(u.policy, identity, tag):
+	case u == nil || !valid:
 		reason = "ineligible"
 	case u.policy.ValidUntil != nil && !u.policy.ValidUntil.After(time.Now()):
 		reason = "expired"

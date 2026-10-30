@@ -33,6 +33,7 @@ jobs:
           RELEASE_VERSION: ${{ inputs.version || github.ref_name }}
         run: |
           [[ "$RELEASE_VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          python3 scripts/release_notes.py "$RELEASE_VERSION" > "$RUNNER_TEMP/x-node-release-notes.md"
           make build VERSION="$RELEASE_VERSION"
           python3 scripts/build_docs.py
           (cd docs-site/dist && zip -q -r ../../dist/x-node-api-docs.zip .)
@@ -50,4 +51,4 @@ jobs:
           printf '%s' "$RELEASE_KEY" > /tmp/x-node-release.key
           trap 'rm -f /tmp/x-node-release.key' EXIT
           go run ./cmd/release-sign --key-file /tmp/x-node-release.key --manifest dist/SHA256SUMS --version "$RELEASE_VERSION"
-          gh release create "$RELEASE_VERSION" dist/* --verify-tag --title "X-Node $RELEASE_VERSION" --notes-file docs/release-notes.md
+          gh release create "$RELEASE_VERSION" dist/* --verify-tag --title "X-Node $RELEASE_VERSION" --notes-file "$RUNNER_TEMP/x-node-release-notes.md"

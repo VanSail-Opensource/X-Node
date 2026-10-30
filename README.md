@@ -31,6 +31,8 @@ sudo bash install.sh --master-url wss://master.example.com/v1/agents/connect
 
 The installer asks for the token without echoing it. For automation, use `--token-stdin`. Credentials are never required in process arguments. Release manifests and binaries are signature/hash checked before any downloaded binary is executed.
 
+Release descriptions are extracted by `scripts/release_notes.py` from the matching version heading in `docs/release-notes.md`. Publication fails if the section is missing, duplicated, or empty; the cumulative document remains the source of release history.
+
 Installation checks the required package manager, service manager and architecture rather than a distribution name or version. The agent, CLI and updater also accept Linux without a distribution/version gate. Package repositories must provide the installer dependencies, including `minisign` ([Ubuntu 24.04 universe](https://packages.ubuntu.com/en/noble/misc/minisign)). Hosted Ubuntu 24.04 checks exercise CLI bootstrap after token entry; privileged firewall/reboot integration remains covered on Debian 13.
 
 Only two local fields are required in `/etc/x-node/bootstrap.json`:

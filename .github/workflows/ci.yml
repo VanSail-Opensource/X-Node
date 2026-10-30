@@ -25,6 +25,7 @@ jobs:
           test -z "$(gofmt -l $(git ls-files '*.go'))"
           go mod verify
           git diff --check
+          python3 -m unittest discover -s scripts -p test_release_notes.py
       - name: Race and real-kernel regressions
         # Xray's VLESS TLS splice paths use uintptr-based field offsets that checkptr rejects.
         run: go test -race -gcflags='github.com/xtls/xray-core/proxy/vless/...=-d=checkptr=0' -count=1 -coverprofile=coverage.out ./...

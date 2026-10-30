@@ -28,10 +28,13 @@ including one-query loop prevention. These regressions run in hosted Quality.
 
 `inbound_config.go` and `inbound_observer.go` wrap public native proxy interfaces,
 retaining public user-management methods and existing listener update behavior.
-They classify unauthenticated probes, malformed input and rejected credentials;
-REALITY and authenticated shutdowns are excluded. No mux-facing reader or private
-registry is inspected. `inbound_observer_test.go` exercises classification and a
-real managed TCP probe in hosted Quality.
+They classify unauthenticated probes, malformed input and rejected credentials,
+including REALITY, while excluding authenticated shutdowns. `reality_observation.go`
+also recognizes explicit failures logged before the TCP proxy handler runs.
+REALITY XHTTP and gRPC discard pre-handshake errors inside the upstream listener,
+so those failures cannot be observed by the public Xray log handler. No mux-facing
+reader or private registry is inspected. Hosted regressions cover classification
+and a real managed TCP probe.
 
 `transit.go` expands owner-scoped peer accounts with separate credential generations and managed authentication labels. `domain_blocks.go` inserts the master domain block rule before all native/system rules with a reserved block outbound. Agent validation refuses unresolved IP geodata and mixed REALITY/source-filter sockets before listener activation.
 

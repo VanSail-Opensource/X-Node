@@ -127,6 +127,11 @@ func New(dir, version string, client *transport.Client, logs *nlog.Stream) (*Age
 		return nil, e
 	}
 	a.Runtime.SetInboundObserver(func(event xray.InboundObservation) { a.Guard.Observe(event.IP, event.Rule) })
+	logs.SetXrayObserver(func() bool { return a.Runtime.Ready() && a.Guard.XrayDetectionEnabled() }, func(text string) {
+		if event, ok := xray.RealityLogObservation(text); ok {
+			a.Guard.Observe(event.IP, event.Rule)
+		}
+	})
 	a.previousAccounting = map[string][2]uint64{}
 	a.accountingRequests = make(chan accountingRequest, 16)
 	a.Updater = updatepkg.New(filepath.Join(dir, "updates"), version, runner)

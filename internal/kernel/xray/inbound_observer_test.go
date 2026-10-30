@@ -17,14 +17,14 @@ import (
 )
 
 type observationInbound struct {
-	auth    bool
-	failure error
+	identity string
+	failure  error
 }
 
 func (observationInbound) Network() []xnet.Network { return []xnet.Network{xnet.Network_TCP} }
 func (h observationInbound) Process(ctx context.Context, _ xnet.Network, _ stat.Connection, _ routing.Dispatcher) error {
-	if h.auth {
-		session.InboundFromContext(ctx).User = &nativeprotocol.MemoryUser{Email: "user@1:authenticated"}
+	if h.identity != "" {
+		session.InboundFromContext(ctx).User = &nativeprotocol.MemoryUser{Email: h.identity}
 	}
 	return h.failure
 }
@@ -49,23 +49,26 @@ func observationSocket(t *testing.T) net.Conn {
 	t.Cleanup(func() { _ = conn.Close() })
 	return conn
 }
-func TestInboundObservationExcludesRealityAndAuthenticatedTermination(t *testing.T) {
+func TestInboundObservationIncludesRealityAndExcludesAuthenticatedTermination(t *testing.T) {
 	for _, test := range []struct {
-		name          string
-		reality, auth bool
-		failure       error
-		rule          string
+		name     string
+		reality  bool
+		identity string
+		failure  error
+		rule     string
 	}{
-		{"probe", false, false, nil, "xray_tcp_probe"},
-		{"invalid", false, false, errors.New("invalid request version"), "xray_invalid"},
-		{"auth", false, false, errors.New("invalid request user id"), "xray_auth_failure"},
-		{"reality", true, false, errors.New("invalid request user id"), ""},
-		{"normal close", false, true, errors.New("connection ended"), ""},
+		{"probe", false, "", nil, "xray_tcp_probe"},
+		{"invalid", false, "", errors.New("invalid request version"), "xray_invalid"},
+		{"auth", false, "", errors.New("invalid request user id"), "xray_auth_failure"},
+		{"reality auth", true, "", errors.New("invalid request user id"), "xray_auth_failure"},
+		{"reality probe", true, "", errors.New("EOF"), "xray_tcp_probe"},
+		{"normal close", false, "user@1:authenticated", errors.New("connection ended"), ""},
+		{"reality transit close", true, "transit@1:authenticated", errors.New("connection ended"), ""},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			var observations []InboundObservation
 			bridge := &integration{Observe: func(event InboundObservation) { observations = append(observations, event) }}
-			handler := &observedInbound{Inbound: observationInbound{auth: test.auth, failure: test.failure}, bridge: bridge, tag: "managed", reality: test.reality}
+			handler := &observedInbound{Inbound: observationInbound{identity: test.identity, failure: test.failure}, bridge: bridge, tag: "managed", reality: test.reality}
 			ctx := session.ContextWithInbound(context.Background(), &session.Inbound{Tag: "managed"})
 			conn := observationSocket(t)
 			_ = handler.Process(ctx, xnet.Network_TCP, &stat.CounterConnection{Connection: conn}, nil)

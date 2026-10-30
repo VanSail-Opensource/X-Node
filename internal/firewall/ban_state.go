@@ -170,6 +170,20 @@ func (g *Guard) Observe(ip netip.Addr, rule string) {
 		g.dropped.Add(1)
 	}
 }
+
+// XrayDetectionEnabled reports whether a native Xray observation can be used.
+func (g *Guard) XrayDetectionEnabled() bool {
+	p := g.policy.Load()
+	if p == nil || !p.Enabled || !p.MasterControlled || !p.Protect {
+		return false
+	}
+	for _, name := range []string{"xray_tcp_probe", "xray_invalid", "xray_auth_failure"} {
+		if _, enabled := p.Rule(name); enabled {
+			return true
+		}
+	}
+	return false
+}
 func (g *Guard) Acknowledge(ids []string) {
 	if len(ids) > 512 {
 		return

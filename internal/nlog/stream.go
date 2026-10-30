@@ -24,6 +24,12 @@ type Stream struct {
 	dropped  uint64
 	out      io.Writer
 	local    xlog.Handler
+	observer atomic.Pointer[xrayObserver]
+}
+
+type xrayObserver struct {
+	enabled func() bool
+	observe func(string)
 }
 
 var capture atomic.Pointer[Stream]
@@ -120,21 +126,48 @@ func RestoreXray() {
 		xlog.RegisterHandler(s)
 	}
 }
-func (s *Stream) Severity() xlog.Severity {
-	s.mu.Lock()
-	local := s.local
-	s.mu.Unlock()
+
+// SetXrayObserver installs a nonblocking observer for explicitly enabled
+// native information logs without changing configured log output filtering.
+func (s *Stream) SetXrayObserver(enabled func() bool, observe func(string)) {
+	if enabled == nil || observe == nil {
+		s.observer.Store(nil)
+		return
+	}
+	s.observer.Store(&xrayObserver{enabled: enabled, observe: observe})
+}
+
+func xraySeverity(local xlog.Handler) xlog.Severity {
 	if logger, ok := local.(xlog.SeverityLogger); ok {
 		return logger.Severity()
 	}
 	return xlog.Severity_Info
 }
-func (s *Stream) Handle(msg xlog.Message) {
-	text := s.Redact(msg.String())
-	s.append("xray", text, false)
+
+func (s *Stream) Severity() xlog.Severity {
 	s.mu.Lock()
 	local := s.local
 	s.mu.Unlock()
+	level := xraySeverity(local)
+	if observer := s.observer.Load(); observer != nil && observer.enabled() && level < xlog.Severity_Info {
+		return xlog.Severity_Info
+	}
+	return level
+}
+func (s *Stream) Handle(msg xlog.Message) {
+	s.mu.Lock()
+	local := s.local
+	s.mu.Unlock()
+	if general, ok := msg.(*xlog.GeneralMessage); ok {
+		if observer := s.observer.Load(); observer != nil && general.Severity == xlog.Severity_Info && observer.enabled() {
+			observer.observe(fmt.Sprint(general.Content))
+		}
+		if general.Severity > xraySeverity(local) {
+			return
+		}
+	}
+	text := s.Redact(msg.String())
+	s.append("xray", text, false)
 	if local == nil {
 		return
 	}

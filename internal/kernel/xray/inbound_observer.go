@@ -56,7 +56,7 @@ type observedInbound struct {
 
 func (h *observedInbound) Close() error { return common.Close(h.Inbound) }
 func (h *observedInbound) Process(ctx context.Context, network xnet.Network, conn stat.Connection, dispatcher routing.Dispatcher) error {
-	if h.reality || h.bridge == nil || h.bridge.Observe == nil {
+	if h.bridge == nil || h.bridge.Observe == nil {
 		return h.Inbound.Process(ctx, network, conn, dispatcher)
 	}
 	tracker := &authDispatcher{Dispatcher: dispatcher}
@@ -64,7 +64,7 @@ func (h *observedInbound) Process(ctx context.Context, network xnet.Network, con
 	if tracker.authorized.Load() || ctx.Err() != nil {
 		return err
 	}
-	if inbound := session.InboundFromContext(ctx); inbound != nil && inbound.User != nil && strings.HasPrefix(inbound.User.Email, "user@") {
+	if inbound := session.InboundFromContext(ctx); inbound != nil && inbound.User != nil {
 		return err
 	}
 	addr, parseErr := netip.ParseAddrPort(conn.RemoteAddr().String())
@@ -91,7 +91,7 @@ type authDispatcher struct {
 }
 
 func (d *authDispatcher) mark(ctx context.Context) {
-	if inbound := session.InboundFromContext(ctx); inbound != nil && inbound.User != nil && strings.HasPrefix(inbound.User.Email, "user@") {
+	if inbound := session.InboundFromContext(ctx); inbound != nil && inbound.User != nil {
 		d.authorized.Store(true)
 	}
 }

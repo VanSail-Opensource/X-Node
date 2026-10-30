@@ -19,6 +19,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -167,6 +168,15 @@ func TestRealTLSVisionXHTTPAndREALITYAccounting(t *testing.T) {
 			registry.SetUsers(cfg.Users)
 			r := New(registry)
 			defer r.Stop()
+			events := make(chan InboundObservation, 8)
+			if mode == "reality-vision" {
+				r.SetInboundObserver(func(event InboundObservation) { events <- event })
+				logs.SetXrayObserver(r.Ready, func(text string) {
+					if event, ok := RealityLogObservation(text); ok {
+						events <- event
+					}
+				})
+			}
 			if e = r.Apply(context.Background(), cfg); e != nil {
 				t.Fatal(e)
 			}
@@ -206,6 +216,45 @@ func TestRealTLSVisionXHTTPAndREALITYAccounting(t *testing.T) {
 			}
 			if registry.Counters()[1][1] < 128<<10 {
 				t.Fatal("TLS/Vision/XHTTP payload bypassed accounting")
+			}
+			if mode == "reality-vision" {
+				probe, err := net.DialTimeout("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(port)), time.Second)
+				if err != nil {
+					t.Fatal(err)
+				}
+				_ = probe.Close()
+				select {
+				case observation := <-events:
+					if observation.Rule != "xray_tcp_probe" {
+						t.Fatalf("REALITY probe = %+v", observation)
+					}
+				case <-time.After(10 * time.Second):
+					t.Fatal("REALITY TCP probe was not observed")
+				}
+				invalidUser := map[string]any{"id": "33333333-3333-4333-8333-333333333333", "encryption": "none", "flow": "xtls-rprx-vision"}
+				invalidPeer := map[string]any{"tag": "peer", "protocol": "vless", "settings": map[string]any{"vnext": []any{map[string]any{"address": "127.0.0.1", "port": port, "users": []any{invalidUser}}}}, "streamSettings": clientStream}
+				invalidClient, closeInvalid, err := HTTPClient(context.Background(), []any{invalidPeer}, "peer")
+				if err != nil {
+					t.Fatal(err)
+				}
+				invalidClient.Transport.(*http.Transport).TLSClientConfig = target.Client().Transport.(*http.Transport).TLSClientConfig
+				invalidClient.Timeout = 12 * time.Second
+				invalidResponse, err := invalidClient.Get(target.URL)
+				if invalidResponse != nil {
+					invalidResponse.Body.Close()
+				}
+				closeInvalid()
+				if err == nil {
+					t.Fatal("invalid REALITY proxy credential succeeded")
+				}
+				select {
+				case observation := <-events:
+					if observation.Rule != "xray_auth_failure" {
+						t.Fatalf("REALITY invalid credential = %+v", observation)
+					}
+				case <-time.After(5 * time.Second):
+					t.Fatal("invalid REALITY proxy credential was not observed")
+				}
 			}
 			registry.SetUsers([]protocol.User{})
 			if _, e = client.Get(target.URL); e == nil {

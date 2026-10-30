@@ -1,3 +1,12 @@
+# X-Node v2.0.18
+
+Updates the pinned Xray core to upstream v26.10.29 (commit `0afec66085a8`),
+including its `go-proxyproto` v0.16.0 dependency. This brings upstream fixes for
+WebSocket normal-close handling, DNS hijacked-reply buffering, Linux IPv6
+process routing, file-loader symlink handling and bounded Geodata downloads.
+Native configuration, mux/XUDP lifecycle, accounting, revocation and wire
+capabilities remain unchanged.
+
 # X-Node v2.0.17
 
 Moves report encoding and status-file persistence off the control actor into one

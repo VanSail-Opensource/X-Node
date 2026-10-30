@@ -1,6 +1,6 @@
 # Incremental Xray configuration
 
-The agent uses the merged Xray v26.10.17 dependency. Compilation means native
+The agent uses the merged Xray v26.10.29 dependency. Compilation means native
 configuration/matcher construction; no configuration action compiles a binary.
 Signed binaries are built only in release delivery.
 

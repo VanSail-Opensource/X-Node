@@ -33,7 +33,7 @@ require (
 	github.com/miekg/dns v1.1.73
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/shirou/gopsutil/v4 v4.26.9
-	github.com/xtls/xray-core v1.260327.1-0.20261029083850-0afec66085a8
+	github.com/xtls/xray-core v1.260327.1-0.20261031132019-a4a3dff5b20c
 	go.uber.org/zap v1.28.0
 	go4.org/netipx v0.0.0-20231129151722-fdeea329fbba
 	golang.org/x/crypto v0.58.0

@@ -61,6 +61,10 @@ func (c *Client) writeMessage(socket *websocket.Conn, message protocol.Message) 
 			message = protocol.New(message.Type, message.ID, message.Revision, report)
 		}
 	}
+	message, err := c.telemetryExtensions(message)
+	if err != nil {
+		return err
+	}
 	data, err := json.Marshal(message)
 	if err != nil {
 		return err

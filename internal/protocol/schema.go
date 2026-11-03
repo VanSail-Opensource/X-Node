@@ -36,7 +36,11 @@ func schemaType(t reflect.Type) map[string]any {
 			if name == "" {
 				name = f.Name
 			}
-			properties[name] = schemaType(f.Type)
+			field := schemaType(f.Type)
+			if strings.Contains(tag, ",string") && f.Type.Kind() >= reflect.Uint && f.Type.Kind() <= reflect.Uint64 {
+				field = map[string]any{"type": "string", "pattern": "^[0-9]+$"}
+			}
+			properties[name] = field
 			if !strings.Contains(tag, "omitempty") {
 				required = append(required, name)
 			}

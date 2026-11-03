@@ -69,7 +69,7 @@ func TestAuthenticatedTransitAccountingAndRevocation(t *testing.T) {
 	defer lease.Finish()
 	lease.Account(true, 100)
 	r.SampleActivity()
-	if r.Summary().Connections[1] != 0 || r.Summary().TotalConnections[1] != 0 || len(r.ActiveIPs(1)) != 0 || r.Counters()[1][0] != 100 {
+	if r.Summary().Connections[1] != 0 || r.Summary().TotalConnections[1] != 0 || len(r.ActiveIPs(1)) != 0 || len(r.Summary().ActiveIPObservations) != 0 || r.Counters()[1][0] != 100 {
 		t.Fatal("transit affected client counts or lost traffic")
 	}
 	u.TransitCredentials = nil

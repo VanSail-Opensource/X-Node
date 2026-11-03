@@ -1,5 +1,7 @@
 package sessions
 
+import "time"
+
 // activitySnapshot is replaced at each sampling boundary. Closed leases are
 // invalidated separately without mutating the published interval's counters.
 type activitySnapshot struct {
@@ -31,6 +33,7 @@ func (r *Registry) SampleActivity() {
 		ips[lease.Info.SourceIP]++
 	}
 	r.activity, r.closedActivity = next, nil
+	r.activityHistory.sample(time.Now().UTC(), next.ips)
 }
 
 func (r *Registry) activeCount(user int) int {

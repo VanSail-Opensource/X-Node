@@ -12,19 +12,22 @@ const CompactTelemetryFormat = "compact-v1"
 // CompactTelemetryReport remains an authoritative snapshot. Empty users clears
 // every previous online/rate/limit observation; omitted fields mean zero/default.
 type CompactTelemetryReport struct {
-	AgentID          string               `json:"a"`
-	BootID           string               `json:"b"`
-	Time             time.Time            `json:"t"`
-	Connected        bool                 `json:"c,omitempty"`
-	Liveness         bool                 `json:"l,omitempty"`
-	Ready            bool                 `json:"r,omitempty"`
-	Synchronized     bool                 `json:"s,omitempty"`
-	ConfigRevision   uint64               `json:"v,omitempty"`
-	Users            []CompactUserMetrics `json:"u"`
-	Rejections       map[string]uint64    `json:"x,omitempty"`
-	Machine          json.RawMessage      `json:"m,omitempty"`
-	Certificates     json.RawMessage      `json:"k,omitempty"`
-	TransportDropped uint64               `json:"d,omitempty"`
+	SampledAt            *time.Time           `json:"q,omitempty"`
+	ActiveIPObservations []IPActivity         `json:"h,omitempty"`
+	ObservationDrops     uint64               `json:"j,string,omitempty"`
+	AgentID              string               `json:"a"`
+	BootID               string               `json:"b"`
+	Time                 time.Time            `json:"t"`
+	Connected            bool                 `json:"c,omitempty"`
+	Liveness             bool                 `json:"l,omitempty"`
+	Ready                bool                 `json:"r,omitempty"`
+	Synchronized         bool                 `json:"s,omitempty"`
+	ConfigRevision       uint64               `json:"v,omitempty"`
+	Users                []CompactUserMetrics `json:"u"`
+	Rejections           map[string]uint64    `json:"x,omitempty"`
+	Machine              json.RawMessage      `json:"m,omitempty"`
+	Certificates         json.RawMessage      `json:"k,omitempty"`
+	TransportDropped     uint64               `json:"d,omitempty"`
 }
 
 type CompactUserMetrics struct {

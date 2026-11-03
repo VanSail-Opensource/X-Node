@@ -1,0 +1,212 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "agent_id": {
+      "type": "string"
+    },
+    "boot_id": {
+      "type": "string"
+    },
+    "certificates": {
+      "type": "object"
+    },
+    "config_revision": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "connected": {
+      "type": "boolean"
+    },
+    "liveness": {
+      "type": "boolean"
+    },
+    "machine": {
+      "type": "object"
+    },
+    "ready": {
+      "type": "boolean"
+    },
+    "synchronized": {
+      "type": "boolean"
+    },
+    "time": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "transport_dropped": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "users": {
+      "additionalProperties": false,
+      "properties": {
+        "active_ip_observations": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "ip": {
+                "type": "string"
+              },
+              "last_active": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "observations": {
+                "pattern": "^[0-9]+$",
+                "type": "string"
+              },
+              "user_id": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "user_id",
+              "ip",
+              "last_active",
+              "observations"
+            ],
+            "type": "object"
+          },
+          "maxItems": 16384,
+          "type": "array"
+        },
+        "active_ips": {
+          "additionalProperties": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "type": "object"
+        },
+        "connections": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "type": "object"
+        },
+        "observation_drops": {
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "rates": {
+          "additionalProperties": {
+            "additionalProperties": false,
+            "properties": {
+              "download_bytes_per_second": {
+                "type": "number"
+              },
+              "sample_seconds": {
+                "type": "number"
+              },
+              "upload_bytes_per_second": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "upload_bytes_per_second",
+              "download_bytes_per_second",
+              "sample_seconds"
+            ],
+            "type": "object"
+          },
+          "type": "object"
+        },
+        "rejections": {
+          "additionalProperties": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "object"
+        },
+        "sampled_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "speed": {
+          "additionalProperties": {
+            "additionalProperties": false,
+            "properties": {
+              "active_mbps": {
+                "type": "integer"
+              },
+              "burst_mbps": {
+                "type": "integer"
+              },
+              "limited": {
+                "type": "boolean"
+              },
+              "normal_mbps": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "normal_mbps",
+              "burst_mbps",
+              "limited",
+              "active_mbps"
+            ],
+            "type": "object"
+          },
+          "type": "object"
+        },
+        "status": {
+          "additionalProperties": {
+            "additionalProperties": false,
+            "properties": {
+              "limited": {
+                "type": "boolean"
+              },
+              "reason": {
+                "type": "string"
+              },
+              "scope": {
+                "type": "string"
+              },
+              "user_id": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "user_id",
+              "limited",
+              "scope"
+            ],
+            "type": "object"
+          },
+          "type": "object"
+        },
+        "total_connections": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "type": "object"
+        }
+      },
+      "required": [
+        "connections",
+        "rejections",
+        "status",
+        "speed"
+      ],
+      "type": "object"
+    }
+  },
+  "required": [
+    "agent_id",
+    "boot_id",
+    "time",
+    "connected",
+    "liveness",
+    "ready",
+    "synchronized",
+    "config_revision",
+    "users",
+    "machine",
+    "certificates",
+    "transport_dropped"
+  ],
+  "title": "Authoritative telemetry snapshot",
+  "type": "object"
+}

@@ -4,6 +4,11 @@
 These totals include idle client flows; existing `Connections` remains the sampled
 traffic-active count used for limits. Treat totals from older agents as unknown.
 
+`ActivityObservationsCapability` and its independent upgrade header gate actual
+sample timestamps and at most 16,384 recent user/IP observations. `ValidateActivity`
+checks full snapshots as strictly as compact expansion. IP history stays volatile;
+publication/replay does not refresh observation timestamps or decimal counters.
+
 `CompactTelemetry` and `ExpandTelemetry` map negotiated compact snapshots to the
 same internal report types. Empty snapshots replace prior observations, and
 normalization rejects duplicate users and invalid counters/rates. Transport

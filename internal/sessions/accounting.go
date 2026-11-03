@@ -66,6 +66,9 @@ func (l *Lease) Finish() {
 		l.registry.mu.Lock()
 		delete(l.registry.inflight, l.Info.ID)
 		l.nativeFinished = true
+		if l.closed {
+			l.registry.activityHistory.close(l)
+		}
 		l.releaseResource()
 		if l.tracked {
 			l.user.handlers--

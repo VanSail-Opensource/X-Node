@@ -38,13 +38,16 @@ const OpenConnectionsHeader = "X-XNode-Open-Connections"
 const OpenConnectionsFormat = "v1"
 
 type UserMetrics struct {
-	Connections      map[int]int             `json:"connections"`
-	TotalConnections map[int]int             `json:"total_connections,omitempty"`
-	ActiveIPs        map[int][]string        `json:"active_ips,omitempty"`
-	Rejections       map[string]uint64       `json:"rejections"`
-	Status           map[int]UserLimitStatus `json:"status"`
-	Speed            map[int]UserSpeedStatus `json:"speed"`
-	Rates            map[int]UserRate        `json:"rates,omitempty"`
+	SampledAt            *time.Time              `json:"sampled_at,omitempty"`
+	ActiveIPObservations []IPActivity            `json:"active_ip_observations,omitempty"`
+	ObservationDrops     uint64                  `json:"observation_drops,string,omitempty"`
+	Connections          map[int]int             `json:"connections"`
+	TotalConnections     map[int]int             `json:"total_connections,omitempty"`
+	ActiveIPs            map[int][]string        `json:"active_ips,omitempty"`
+	Rejections           map[string]uint64       `json:"rejections"`
+	Status               map[int]UserLimitStatus `json:"status"`
+	Speed                map[int]UserSpeedStatus `json:"speed"`
+	Rates                map[int]UserRate        `json:"rates,omitempty"`
 }
 
 type TelemetryReport struct {

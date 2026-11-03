@@ -5,6 +5,7 @@ import "slices"
 func CompactTelemetry(report TelemetryReport) CompactTelemetryReport {
 	compact := CompactTelemetryReport{AgentID: report.AgentID, BootID: report.BootID, Time: report.Time, Connected: report.Connected, Liveness: report.Liveness, Ready: report.Ready, Synchronized: report.Synchronized, ConfigRevision: report.ConfigRevision, Users: []CompactUserMetrics{}, Rejections: report.Users.Rejections, Machine: report.Machine, Certificates: report.Certificates, TransportDropped: report.TransportDropped}
 	ids := map[int]bool{}
+	compact.SampledAt, compact.ActiveIPObservations, compact.ObservationDrops = report.Users.SampledAt, report.Users.ActiveIPObservations, report.Users.ObservationDrops
 	for id := range report.Users.Connections {
 		ids[id] = true
 	}

@@ -337,3 +337,30 @@ Flush barriers name their stream plus any pending legacy sequence. Financial
 operations wait for both real cursors; ordinary command/telemetry receipt stays
 independent of that wait. The report and barrier schemas are published under
 `docs/schemas`, with negotiation/framing metadata in OpenAPI and AsyncAPI.
+
+## Sampled IP observations
+
+Peers independently negotiate `X-XNode-Activity: observations-v1` and hello
+capability `activity_observations_v1`. Full `users.sampled_at` is the actual
+sampling boundary; `users.active_ip_observations` contains `user_id`, canonical
+`ip`, `last_active` and a boot-scoped decimal-string `observations` count.
+`users.observation_drops` is a decimal-string saturating loss-observation counter.
+Compact top-level fields `q`, `h`, `j` carry these same values. The serialized
+writer removes all three unless the current master accepted the extension,
+including reports queued before a reconnect. Compression negotiation alone does
+not authorize these fields.
+
+History retains at most 16,384 user/IP keys for two hours, covering the maximum
+one-hour sample and report intervals. Brief payload flows that close between
+samples enter a separately bounded pending map and publish at the next sample.
+Their observation time is close/completion time; live payload activity is dated
+at its sampling boundary. Idle samples and repeated reports preserve old times
+and counters. Internal transit never produces client-IP evidence. Overflow may
+discard old volatile observations; it never changes accounting or admission.
+
+An observation must have a positive user/count, a valid address and a nonzero
+time no later than its sample. Duplicate user/IP rows and oversized histories
+are rejected. A master checks authenticated agent/boot identity, current peer,
+timestamp freshness and monotonic sampling independently of report publication.
+The full and compact schemas live in `docs/schemas`; all history remains in
+memory and never enters configuration, command receipts or local status files.

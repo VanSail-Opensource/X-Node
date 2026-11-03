@@ -48,6 +48,16 @@
             }
           },
           {
+            "description": "Offer bounded boot-scoped IP observation history and actual sampling timestamps. Independent of compression and compact telemetry.",
+            "in": "header",
+            "name": "X-XNode-Activity",
+            "required": false,
+            "schema": {
+              "const": "observations-v1",
+              "type": "string"
+            }
+          },
+          {
             "description": "Offer acknowledged DDNS changes. A master echoes the accepted format; absence preserves legacy DDNS reporting.",
             "in": "header",
             "name": "X-XNode-DDNS-Changes",
@@ -72,6 +82,13 @@
           "101": {
             "description": "WebSocket connection established",
             "headers": {
+              "X-XNode-Activity": {
+                "description": "Accepted activity observation extension; also requires the agent hello capability.",
+                "schema": {
+                  "const": "observations-v1",
+                  "type": "string"
+                }
+              },
               "X-XNode-DDNS-Changes": {
                 "description": "Accepted DDNS change format; also requires the hello capability.",
                 "schema": {

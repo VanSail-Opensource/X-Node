@@ -15,6 +15,40 @@
       "minimum": 0,
       "type": "integer"
     },
+    "h": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "ip": {
+            "type": "string"
+          },
+          "last_active": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "observations": {
+            "pattern": "^[0-9]+$",
+            "type": "string"
+          },
+          "user_id": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "user_id",
+          "ip",
+          "last_active",
+          "observations"
+        ],
+        "type": "object"
+      },
+      "maxItems": 16384,
+      "type": "array"
+    },
+    "j": {
+      "pattern": "^[0-9]+$",
+      "type": "string"
+    },
     "k": {
       "type": "object"
     },
@@ -23,6 +57,10 @@
     },
     "m": {
       "type": "object"
+    },
+    "q": {
+      "format": "date-time",
+      "type": "string"
     },
     "r": {
       "type": "boolean"

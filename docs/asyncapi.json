@@ -333,6 +333,39 @@
           "payload": {
             "$ref": "schemas/master-message.schema.json"
           }
+        },
+        "telemetry": {
+          "payload": {
+            "additionalProperties": false,
+            "properties": {
+              "base_revision": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "data": {
+                "$ref": "schemas/telemetry.schema.json"
+              },
+              "id": {
+                "type": "string"
+              },
+              "revision": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "type": {
+                "const": "telemetry.report",
+                "type": "string"
+              },
+              "v": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "v",
+              "type"
+            ],
+            "type": "object"
+          }
         }
       }
     }
@@ -360,6 +393,13 @@
       "host": "master.example.com",
       "protocol": "wss"
     }
+  },
+  "x-activity-observations": {
+    "capability": "activity_observations_v1",
+    "format": "observations-v1",
+    "header": "X-XNode-Activity",
+    "maxObservations": 16384,
+    "volatile": true
   },
   "x-report-framing": {
     "capability": "report_zstd_l6_v1",

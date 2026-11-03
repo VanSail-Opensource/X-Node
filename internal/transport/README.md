@@ -52,3 +52,9 @@ encoder across reconnects and closes it when Run exits; no reporting path spools
 to disk. Binary report writes explicitly disable permessage-deflate.
 
 Boot-scoped traffic has its own handshake. Serialized writing suppresses new stream reports to legacy masters, retaining old journal framing and IDs. This never converts volatile traffic into legacy sequences. Both kinds share the bounded existing traffic lane.
+
+`telemetry_extensions.go` strips sampling timestamps and IP history unless this
+connection accepted `X-XNode-Activity: observations-v1`. The handshake is
+independent of Zstandard, compact format and total-open counts. `activity_test.go`
+covers queued newer snapshots reconnecting to legacy/full/compact masters and
+negotiation reset on disconnect.

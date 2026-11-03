@@ -12,6 +12,7 @@ func ExpandTelemetry(compact CompactTelemetryReport) (TelemetryReport, error) {
 	}
 	report.Users = UserMetrics{Connections: map[int]int{}, TotalConnections: map[int]int{}, ActiveIPs: map[int][]string{}, Rejections: compact.Rejections, Status: map[int]UserLimitStatus{}, Speed: map[int]UserSpeedStatus{}, Rates: map[int]UserRate{}}
 	seen := make(map[int]bool, len(compact.Users))
+	report.Users.SampledAt, report.Users.ActiveIPObservations, report.Users.ObservationDrops = compact.SampledAt, compact.ActiveIPObservations, compact.ObservationDrops
 	for _, row := range compact.Users {
 		if row.ID <= 0 || seen[row.ID] || row.Connections < 0 || row.TotalConnections < 0 {
 			return report, errors.New("invalid compact telemetry user")
@@ -46,7 +47,7 @@ func ExpandTelemetry(compact CompactTelemetryReport) (TelemetryReport, error) {
 			report.Users.Rates[row.ID] = UserRate{UploadBytesPerSecond: rate.Upload, DownloadBytesPerSecond: rate.Download, SampleSeconds: rate.Seconds}
 		}
 	}
-	return report, nil
+	return report, ValidateActivity(report.Users)
 }
 
 func finiteRate(value float64) bool { return value >= 0 && !math.IsNaN(value) && !math.IsInf(value, 0) }

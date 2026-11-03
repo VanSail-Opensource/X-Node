@@ -73,6 +73,13 @@ type TrafficBarrier = wire.TrafficBarrier
 type UserRate = wire.UserRate
 type AgentHello = wire.AgentHello
 type UserMetrics = wire.UserMetrics
+type IPActivity = wire.IPActivity
+
+const ActivityObservationsCapability = wire.ActivityObservationsCapability
+const ActivityObservationsHeader = wire.ActivityObservationsHeader
+const ActivityObservationsFormat = wire.ActivityObservationsFormat
+const MaxActivityObservations = wire.MaxActivityObservations
+
 type UserLimitStatus = wire.UserLimitStatus
 type UserSpeedStatus = wire.UserSpeedStatus
 type TelemetryReport = wire.TelemetryReport

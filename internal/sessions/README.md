@@ -43,3 +43,13 @@ was removed. `source_whitelist_test.go` and `whitelist_transit_test.go` cover
 source isolation, immediate revocation and preserved non-Reality country checks.
 
 Active IPs are always present in sampled activity projections. Reporting never changes admission policy, and idle total-open counts remain independent of sampled byte activity.
+
+`activity_history.go` retains a volatile two-hour history of at most 16,384
+user/IP observations plus at most 16,384 pending brief-flow keys. Closing or
+finishing an unsampled payload flow records pending evidence; only the next
+configured sample publishes it. Internal transit is excluded. Idle samples and
+repeated report publication never refresh an observation's time or counter.
+Capacity evicts old records with a saturating dropped-observation counter, and
+clock rollback discards future history. No packet adds history or takes a new
+lock. `activity_history_test.go` covers brief flows, idle repetition, private
+snapshots, expiry, capacity and rollback. The bank never enters persisted state.

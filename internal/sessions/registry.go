@@ -56,6 +56,7 @@ type Registry struct {
 	fences          map[int]int
 	periodFences    map[accountingKey]int
 	activity        activitySnapshot
+	activityHistory activityHistory
 	closedActivity  map[int]map[string]int
 	resources       int
 	outboundFences  map[string]int
@@ -316,6 +317,7 @@ func (l *Lease) Close() {
 		r.mu.Lock()
 		delete(r.connections, l.Info.ID)
 		l.closed = true
+		r.activityHistory.close(l)
 		r.invalidateActivity(l)
 		l.releaseResource()
 		l.user.count--
@@ -437,6 +439,7 @@ func (r *Registry) Summary() Summary {
 	s := Summary{Connections: map[int]int{}, TotalConnections: r.totalConnections(), Rejections: protocol.Clone(r.rejects), Status: map[int]LimitStatus{}, Speed: map[int]SpeedStatus{}}
 	s.Rates = protocol.Clone(r.rates)
 	s.ActiveIPs = map[int][]string{}
+	r.activityHistory.snapshot(&s)
 	for id, u := range r.users {
 		s.Speed[id] = u.speed.status()
 		status := LimitStatus{UserID: id}

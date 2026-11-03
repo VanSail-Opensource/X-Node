@@ -24,6 +24,7 @@ func main() {
 	ddnsContract(dir, api, async)
 	computeContract(api, async)
 	trafficContract(dir, api, async)
+	automaticLeaseContract(dir, api, async)
 	write(filepath.Join(dir, "openapi.json"), api)
 	write(filepath.Join(dir, "asyncapi.json"), async)
 }

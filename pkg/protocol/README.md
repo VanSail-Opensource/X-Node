@@ -60,3 +60,9 @@ checksums, expansion bounds and retained memory; its hosted benchmark measures
 round trips over 10,000 synthetic observations.
 
 `traffic_stream.go` exposes independent boot-stream negotiation and canonical report identity validation. Traffic report/barrier aliases carry stream and legacy replay references; dropped samples signal bounded-memory loss without a fabricated byte count.
+
+Automatic firewall leases use `AutomaticLeaseCapability`, `AutomaticLeaseCommand`,
+`AutomaticLeaseUpdate` and `AutomaticLeaseAck`. `AutomaticLeaseAddress` canonicalizes
+public IPv4/IPv6 addresses with shared conservative reserved-range exclusions.
+Lease payloads and receipt data are volatile; masters must use their existing
+per-node outbound queue without durable command history.

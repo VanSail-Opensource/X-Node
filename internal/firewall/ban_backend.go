@@ -23,6 +23,9 @@ func (g *Guard) enforceMode(ctx context.Context, withSources bool) (result error
 		g.sourcesDirty = false
 		return nil
 	}
+	if err := g.restoreAutomaticLocked(ctx); err != nil {
+		return err
+	}
 	bans := []protocol.FirewallBan{}
 	exemptions := []protocol.FirewallExemption{}
 	sources := []protocol.FirewallSource{}

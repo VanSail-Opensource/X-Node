@@ -28,6 +28,7 @@ func (g *Guard) Run(ctx context.Context, send func(protocol.Message, bool) bool)
 			g.mu.Unlock()
 		case <-ticker.C:
 			g.mu.Lock()
+			g.automatic.prune(time.Now())
 			err := g.flushPending()
 			if err == nil {
 				err = g.processHits(time.Now().UTC())

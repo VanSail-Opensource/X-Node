@@ -125,9 +125,13 @@ func (j *Jobs) start(ctx context.Context, id, command string, urgent bool, fn fu
 		if len(j.history) > 128 {
 			j.history = j.history[len(j.history)-128:]
 		}
-		b, persistErr := json.Marshal(durableJobHistory(j.history))
-		if persistErr == nil {
-			persistErr = state.AtomicWrite(j.path, b, 0600)
+		var persistErr error
+		if command != protocol.AutomaticLeaseCommand {
+			var b []byte
+			b, persistErr = json.Marshal(durableJobHistory(j.history))
+			if persistErr == nil {
+				persistErr = state.AtomicWrite(j.path, b, 0600)
+			}
 		}
 		if persistErr != nil {
 			result.Status = "uncertain"

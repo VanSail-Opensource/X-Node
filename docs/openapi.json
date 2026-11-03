@@ -170,6 +170,15 @@
       "url": "https://master.example.com"
     }
   ],
+  "x-automatic-firewall-leases": {
+    "absoluteDeadlines": true,
+    "capability": "volatile_firewall_leases_v1",
+    "command": "firewall.leases.update",
+    "maximumBatch": 256,
+    "maximumEntries": 100000,
+    "schema": "schemas/automatic-leases.schema.json",
+    "volatile": true
+  },
   "x-report-framing": {
     "capability": "report_zstd_l6_v1",
     "codec": "zstandard",

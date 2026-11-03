@@ -232,3 +232,21 @@ inventory matches remain report-only until a master ban in protection mode.
 `volatile_snapshot.go` removes derived trusted source-set elements before rollback
 snapshots are written. It preserves master bans, configuration and user-owned
 tables. `volatile_snapshot_test.go` verifies exact scope and malformed snapshots.
+
+`automatic.go`, `automatic_bank.go` and `automatic_heap.go` own a separate volatile
+exact-address bank for automatic leases. Each entry retains its current epoch,
+generation/deadline and the maximum prior-epoch deadline. Same-epoch generation
+conflicts reject the whole batch; unchanged replay does no kernel write. New
+master epochs preserve former deadlines, and a process restart hydrates existing
+kernel deadlines without restoring IP payloads from disk. Capacity is 100,000
+entries; indexed local expiry prunes metadata and nftables timeouts expire rules.
+
+`automatic_linux.go` updates only batch keys in `leased_v4`/`leased_v6`; unrelated
+manual, paid, managed-node and member banks remain independent. These exact sets
+bypass the blacklist chain without adding an input admission shortcut. Kernel
+failure cannot publish/acknowledge staged memory. Configuration reconciliation
+restores live bank entries; rollback snapshots strip their elements through
+`volatile_snapshot.go`. No lease address enters the durable ban journal.
+`automatic_test.go` covers replay, epoch/process restart, duration reduction,
+conflicts, kernel failure/retry, privacy and independent grant expiry.
+`automatic_linux_test.go` checks exact sets, chain boundaries and snapshot privacy.

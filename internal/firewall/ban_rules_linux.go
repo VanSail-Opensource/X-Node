@@ -1,6 +1,7 @@
 package firewall
 
 import (
+	"github.com/VanSail-Opensource/X-Node/internal/protocol"
 	"github.com/google/nftables"
 	"github.com/google/nftables/expr"
 	"golang.org/x/sys/unix"
@@ -61,6 +62,7 @@ func (b *policyPlan) banSets() {
 		}
 		b.sets = append(b.sets, setSpec{set: &nftables.Set{Table: b.table, Name: "exempt_" + suffix, KeyType: key, HasTimeout: true, Timeout: 72 * time.Hour, Dynamic: true, Size: 1 << 20}, preserve: true})
 		b.sets = append(b.sets, setSpec{set: &nftables.Set{Table: b.table, Name: "trusted_" + suffix, KeyType: key, HasTimeout: true, Timeout: 365 * 24 * time.Hour, Dynamic: true, Size: 1 << 20}, preserve: true})
+		b.sets = append(b.sets, setSpec{set: &nftables.Set{Table: b.table, Name: "leased_" + suffix, KeyType: key, HasTimeout: true, Timeout: 2 * 8760 * time.Hour, Dynamic: true, Size: protocol.MaxAutomaticLeases}, preserve: true})
 		b.sets = append(b.sets, setSpec{set: &nftables.Set{Table: b.table, Name: "exempt_prefix_" + suffix, KeyType: key, Interval: true, HasTimeout: true, Timeout: 72 * time.Hour}, preserve: true})
 		b.chain("source_lookup_"+suffix, nil, nil, "", false)
 		b.chain("source_match_"+suffix, nil, nil, "", false)
@@ -69,6 +71,7 @@ func (b *policyPlan) banSets() {
 		b.preserveRules["source_lookup_"+suffix] = true
 		b.add("blacklist", "exempt-"+suffix, sourceSet(v6, "exempt_"+suffix, false, false), verdict(expr.VerdictReturn, ""))
 		b.add("blacklist", "trusted-"+suffix, sourceSet(v6, "trusted_"+suffix, false, false), verdict(expr.VerdictReturn, ""))
+		b.add("blacklist", "leased-"+suffix, sourceSet(v6, "leased_"+suffix, false, false), verdict(expr.VerdictReturn, ""))
 		b.add("blacklist", "exempt-prefix-"+suffix, sourceSet(v6, "exempt_prefix_"+suffix, false, false), verdict(expr.VerdictReturn, ""))
 		b.add("blacklist", "lan-"+suffix, sourceSet(v6, lan, false, false), verdict(expr.VerdictReturn, ""))
 		b.add("blacklist", "banned-"+suffix, sourceSet(v6, ban, false, v6), goTo(refresh))

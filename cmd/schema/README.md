@@ -9,3 +9,6 @@ drift. Generation performs no network or database operation.
 
 `activity.go` adds the independently negotiated bounded IP observation extension
 and a full telemetry schema. Observation/loss counters remain decimal strings.
+
+`automatic.go` publishes volatile exact-address lease arguments, maximum batch and
+entry counts, capability negotiation metadata and absolute-deadline semantics.

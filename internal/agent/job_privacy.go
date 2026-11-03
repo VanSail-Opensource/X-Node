@@ -5,6 +5,8 @@ func durableJobHistory(history []JobResult) []JobResult {
 	out := make([]JobResult, 0, len(history))
 	for _, result := range history {
 		switch result.Command {
+		case "firewall.leases.update":
+			continue
 		case "firewall.protected.sync", "firewall.bans.get", "connections.list", "users.active_ips", "metrics.get", "jobs.list", "config.validate", "ips.control", "connections.close":
 			continue
 		default:

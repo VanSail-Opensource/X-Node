@@ -364,3 +364,29 @@ are rejected. A master checks authenticated agent/boot identity, current peer,
 timestamp freshness and monotonic sampling independently of report publication.
 The full and compact schemas live in `docs/schemas`; all history remains in
 memory and never enters configuration, command receipts or local status files.
+
+## Volatile automatic firewall lease commands
+
+An agent advertising `volatile_firewall_leases_v1` accepts the master-only command
+`firewall.leases.update`. Arguments contain a process-unique master `epoch` and
+at most 256 `leases`: canonical public exact `ip`, decimal-string `generation`
+and absolute `until`. The completion result is `{epoch,generation}`, with the
+largest processed batch generation. Masters advance one generation watermark
+per node only after this result, retry uncertain delivery through the existing
+per-node command queue, and fully resynchronize after reconnect/firewall enable.
+
+Agent storage is a separate bounded memory bank and two exact timed nftables
+sets. Duplicate generations do not add entries; conflicting deadlines for one
+epoch/generation reject atomically. A newer generation may shorten the current
+epoch's deadline. Changing master epoch preserves the maximum prior grant until
+its original deadline. Process restart hydrates unexpired kernel grants as prior
+deadlines. Expired in-flight entries are acknowledged without resurrecting them.
+Local metadata expiry and kernel timeouts need no master removal command.
+
+Automatic exemptions do not remove or replace durable manual/paid grants, alter
+member source whitelists, admit credentials, open closed ports or bypass country
+admission checks. Exact IPv6 exemptions never widen to the containing /64 ban.
+The command, IP bank and replay receipts never enter durable command history;
+confirmed/rollback snapshots omit `leased_v4` and `leased_v6` elements. All other
+command/configuration/credential/ban durability remains unchanged. Public schema:
+`docs/schemas/automatic-leases.schema.json`.

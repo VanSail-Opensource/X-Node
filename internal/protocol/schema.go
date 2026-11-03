@@ -87,6 +87,8 @@ func Schemas() map[string]any {
 	command := types["command"].(map[string]any)
 	types["ddns.changes.ack"] = Schema(DDNSChangeAck{})
 	command["allOf"] = []any{map[string]any{"if": map[string]any{"properties": map[string]any{"name": map[string]any{"const": "runtime.reload"}}}, "then": map[string]any{"properties": map[string]any{"args": Schema(RuntimeReloadArgs{})}}}}
+	leaseArgs := AutomaticLeaseSchema()
+	command["allOf"] = append(command["allOf"].([]any), map[string]any{"if": map[string]any{"properties": map[string]any{"name": map[string]any{"const": AutomaticLeaseCommand}}}, "then": map[string]any{"properties": map[string]any{"args": leaseArgs}, "required": []string{"args"}}})
 	variants := []any{}
 	for _, name := range MasterMessageTypes {
 		data := types[name]
@@ -103,4 +105,4 @@ func Schemas() map[string]any {
 }
 
 var MasterMessageTypes = []string{"compute.announce", "compute.grant", "compute.ack", "compute.cancel", "ddns.changes.ack", "firewall.events.ack", "state.sync", "config.apply", "users.sync", "users.delta", "user.controls", "traffic.ack", "command", "command.cancel"}
-var CommandNames = []string{"firewall.protected.sync", "firewall.geoip.sync", "firewall.bans.sync", "firewall.bans.update", "firewall.bans.get", "connections.list", "connections.close", "users.active_ips", "ips.control", "metrics.get", "jobs.list", "firewall.status", "firewall.confirm", "firewall.apply", "speedtest", "update.check", "update.status", "update.install", "update.rollback", "runtime.reload", "geodata.refresh", "ddns.run", "certificates.get", "traffic.flush", "config.validate"}
+var CommandNames = []string{AutomaticLeaseCommand, "firewall.protected.sync", "firewall.geoip.sync", "firewall.bans.sync", "firewall.bans.update", "firewall.bans.get", "connections.list", "connections.close", "users.active_ips", "ips.control", "metrics.get", "jobs.list", "firewall.status", "firewall.confirm", "firewall.apply", "speedtest", "update.check", "update.status", "update.install", "update.rollback", "runtime.reload", "geodata.refresh", "ddns.run", "certificates.get", "traffic.flush", "config.validate"}

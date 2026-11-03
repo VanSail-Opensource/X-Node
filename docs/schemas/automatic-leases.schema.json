@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "epoch": {
+      "maxLength": 64,
+      "minLength": 1,
+      "type": "string"
+    },
+    "leases": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "generation": {
+            "pattern": "^[1-9][0-9]*$",
+            "type": "string"
+          },
+          "ip": {
+            "anyOf": [
+              {
+                "format": "ipv4",
+                "type": "string"
+              },
+              {
+                "format": "ipv6",
+                "type": "string"
+              }
+            ]
+          },
+          "until": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ip",
+          "generation",
+          "until"
+        ],
+        "type": "object"
+      },
+      "maxItems": 256,
+      "minItems": 1,
+      "type": "array"
+    }
+  },
+  "required": [
+    "epoch",
+    "leases"
+  ],
+  "title": "Volatile exact-address automatic firewall leases",
+  "type": "object"
+}

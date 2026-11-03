@@ -113,6 +113,9 @@ func firewallControlChecks(ctx context.Context, manager *firewall.Manager, polic
 	if err = cidrExemptionChecks(ctx, guard, runner); err != nil {
 		return err
 	}
+	if err = automaticLeaseChecks(ctx, guard, manager, policy, runner); err != nil {
+		return err
+	}
 	persisted := protocol.FirewallBan{Prefix: "203.0.113.90", Generation: "vm-persist", Until: now.Add(time.Hour), RefreshSeconds: 3600}
 	source := protocol.FirewallSource{ID: "vm-source", Generation: "vm-source", Until: now.Add(time.Hour), RefreshSeconds: 3600, Prefixes: []string{"8.0.0.0/8", "2001:4860::/32"}}
 	if err = guard.Update(ctx, protocol.FirewallUpdate{Version: 4, SnapshotID: "vm-persist", Bans: []protocol.FirewallBan{persisted}, Remove: []string{"198.18.0.2", "2001:db8:1::/64"}, RemoveExemptions: []string{"2001:db8:1::2", "2001:db8:1::/64"}}); err != nil {

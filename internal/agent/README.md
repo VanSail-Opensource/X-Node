@@ -79,3 +79,10 @@ remain owned by the actor while activation runs in the serialized worker.
 `cadence.go` owns independent actor sampling/report tickers, reset only when master intervals change. `cadence_test.go` verifies start-to-start ticks, unchanged state and interval changes in hosted fake-time tests. The one-second maintenance ticker handles expiry, activation retries, utilities and watchdog independently. Active IP reporting is mandatory; the deprecated saved switch is ignored. `status_socket.go` exposes current non-secret state through the private `localstatus` query; reporting never writes status files.
 
 `activity_test.go` verifies flush/sample independence with fake time. `activity.go` keeps throughput/activity sampling baselines independent of manual accounting captures, so a flush cannot consume the next configured rate sample. `accounting.go` returns queue-pressure barriers as retryable command failures without pausing admission.
+
+`automatic_leases.go` dispatches `firewall.leases.update` to the existing reserved
+control executor and guard. Its bounded replay receipts remain memory-only;
+`jobs.go` skips filesystem writes for this volatile command and `job_privacy.go`
+filters it from later durable histories. `automatic_leases_test.go` verifies
+completion even when the history path cannot be written. Credentials, ordinary
+commands, desired configuration and bans retain their durable contracts.

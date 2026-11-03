@@ -10,6 +10,9 @@ import (
 )
 
 func (g *Guard) exempt(ip netip.Addr, now time.Time) bool {
+	if item := g.automatic.entries[ip.Unmap()]; item != nil && item.deadline().After(now) {
+		return true
+	}
 	if g.nodeIPs[ip.String()] || g.memberIPs[ip.String()].After(now) {
 		return true
 	}

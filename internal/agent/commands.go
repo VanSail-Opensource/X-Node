@@ -43,7 +43,7 @@ func (a *Agent) command(ctx context.Context, m protocol.Message) error {
 	}
 	start := a.Jobs.Start
 	switch request.Name {
-	case "traffic.flush", "firewall.confirm", "firewall.bans.update", "firewall.protected.sync":
+	case "traffic.flush", "firewall.confirm", "firewall.bans.update", "firewall.protected.sync", protocol.AutomaticLeaseCommand:
 		start = a.Jobs.StartControl
 	case "firewall.bans.sync":
 		var chunk struct {
@@ -57,6 +57,8 @@ func (a *Agent) command(ctx context.Context, m protocol.Message) error {
 		ctx, cancel := context.WithTimeout(ctx, protocol.CommandTimeout(request.Name))
 		defer cancel()
 		switch request.Name {
+		case protocol.AutomaticLeaseCommand:
+			return a.automaticLeaseCommand(ctx, args)
 		case "traffic.flush":
 			return a.flushTraffic(ctx, args)
 		case "config.validate":

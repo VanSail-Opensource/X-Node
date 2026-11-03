@@ -56,3 +56,11 @@ their sample. Full and compact formats retain the same observations and exact
 decimal-string counters, covered by `activity_test.go`. `schema.go` respects
 unsigned integer JSON string encoding; `cmd/schema/activity.go` publishes both
 the full report schema and activity negotiation metadata.
+
+`automatic_leases.go` publishes `volatile_firewall_leases_v1`, the bounded
+`firewall.leases.update` command and exact generation/deadline acknowledgments.
+`AutomaticLeaseAddress` shares pre-parsed public-address exclusions with masters.
+Epochs and canonical exact IPs validate before mutation; generations are decimal
+strings and batches contain at most 256 unique addresses. Expired in-flight
+grants are harmless no-ops. `automatic_leases_test.go` protects precision, public
+address scope, conflict inputs and capacity bounds.

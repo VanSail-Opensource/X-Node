@@ -74,6 +74,14 @@ type UserRate = wire.UserRate
 type AgentHello = wire.AgentHello
 type UserMetrics = wire.UserMetrics
 type IPActivity = wire.IPActivity
+type AutomaticLeaseGrant = wire.AutomaticLeaseGrant
+type AutomaticLeaseUpdate = wire.AutomaticLeaseUpdate
+type AutomaticLeaseAck = wire.AutomaticLeaseAck
+
+const AutomaticLeaseCapability = wire.AutomaticLeaseCapability
+const AutomaticLeaseCommand = wire.AutomaticLeaseCommand
+const MaxAutomaticLeaseBatch = wire.MaxAutomaticLeaseBatch
+const MaxAutomaticLeases = wire.MaxAutomaticLeases
 
 const ActivityObservationsCapability = wire.ActivityObservationsCapability
 const ActivityObservationsHeader = wire.ActivityObservationsHeader

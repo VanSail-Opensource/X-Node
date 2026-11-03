@@ -28,3 +28,10 @@ asyncapi = json.loads((root / "docs/asyncapi.json").read_text())
 assert asyncapi["asyncapi"] == "3.1.0"
 assert asyncapi["servers"]["master"]["protocol"] == "wss"
 print("API documents and example schemas validated")
+
+automatic = json.loads((root / "docs/schemas/automatic-leases.schema.json").read_text())
+Draft202012Validator.check_schema(automatic)
+automatic_validator = Draft202012Validator(automatic)
+automatic_validator.validate({"epoch": "master", "leases": [{"ip": "8.8.8.8", "generation": "9007199254740993", "until": "2026-11-04T00:00:00Z"}]})
+assert not automatic_validator.is_valid({"epoch": "master", "leases": []})
+assert not automatic_validator.is_valid({"epoch": "master", "leases": [{"ip": "8.8.8.8", "generation": 1, "until": "2026-11-04T00:00:00Z"}]})

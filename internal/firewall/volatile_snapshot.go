@@ -29,7 +29,7 @@ func withoutVolatileProtection(raw []byte) ([]byte, error) {
 		}
 		if !trusted {
 			fields := strings.Fields(trim)
-			trusted = len(fields) == 3 && fields[0] == "set" && (fields[1] == "trusted_v4" || fields[1] == "trusted_v6") && fields[2] == "{"
+			trusted = len(fields) == 3 && fields[0] == "set" && (fields[1] == "trusted_v4" || fields[1] == "trusted_v6" || fields[1] == "leased_v4" || fields[1] == "leased_v6") && fields[2] == "{"
 			if line == "}" {
 				managed = false
 			}

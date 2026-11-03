@@ -3,6 +3,7 @@ package protocol
 import (
 	"encoding/json"
 	wire "github.com/VanSail-Opensource/X-Node/internal/protocol"
+	"net/netip"
 	"time"
 )
 
@@ -10,12 +11,13 @@ func New(kind, id string, revision uint64, data any) Message {
 	return wire.New(kind, id, revision, data)
 }
 
-func Parse(raw []byte) (Message, error)          { return wire.Parse(raw) }
-func Decode(raw []byte, target any) error        { return wire.Decode(raw, target) }
-func ParseConfig(raw []byte) (Config, error)     { return wire.ParseConfig(raw) }
-func ValidateUsers(users []User) error           { return wire.ValidateUsers(users) }
-func ValidateActivity(metrics UserMetrics) error { return wire.ValidateActivity(metrics) }
-func UserEmail(user User, tag string) string     { return wire.UserEmail(user, tag) }
+func Parse(raw []byte) (Message, error)                    { return wire.Parse(raw) }
+func Decode(raw []byte, target any) error                  { return wire.Decode(raw, target) }
+func ParseConfig(raw []byte) (Config, error)               { return wire.ParseConfig(raw) }
+func ValidateUsers(users []User) error                     { return wire.ValidateUsers(users) }
+func ValidateActivity(metrics UserMetrics) error           { return wire.ValidateActivity(metrics) }
+func AutomaticLeaseAddress(raw string) (netip.Addr, error) { return wire.AutomaticLeaseAddress(raw) }
+func UserEmail(user User, tag string) string               { return wire.UserEmail(user, tag) }
 
 func TransitEmail(userID int, binding TransitCredential) string {
 	return wire.TransitEmail(userID, binding)

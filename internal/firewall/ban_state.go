@@ -54,6 +54,7 @@ type hitWindow struct {
 // Hot inbound paths only enqueue bounded observations; all filesystem/kernel
 // work runs outside Xray payload handling and the control socket reader.
 type Guard struct {
+	automatic         automaticBank
 	nodeIPs           map[string]bool
 	memberIPs         map[string]time.Time
 	enforceRetryAt    time.Time
@@ -145,6 +146,7 @@ func (g *Guard) Configure(policy protocol.FirewallPolicy) {
 	copy := protocol.Clone(policy)
 	g.policy.Store(&copy)
 	g.mu.Lock()
+	g.automatic.dirty = len(g.automatic.entries) > 0
 	g.dirty = true
 	g.sourcesDirty = true
 	g.state.Revision++

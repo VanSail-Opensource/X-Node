@@ -16,6 +16,7 @@ const (
 )
 
 var actionEffects = map[string]ActionEffect{
+	AutomaticLeaseCommand:     FirewallAction,
 	"firewall.protected.sync": FirewallAction,
 	"firewall.geoip.sync":     FirewallAction, "firewall.bans.sync": FirewallAction,
 	"firewall.bans.update": FirewallAction, "firewall.bans.get": ObserveAction,

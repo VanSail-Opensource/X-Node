@@ -72,3 +72,7 @@ These checks run only in hosted disposable VMs.
 
 `firewall_control.go` requires a first count delta below the retired local
 threshold and verifies packet hits cannot extend a master-issued deadline.
+
+`firewall_automatic.go` exercises real IPv4/IPv6 automatic kernel grants, replay,
+process/master restart hydration and local timeout expiry in each hosted Debian
+firewall ownership mode. It never stores lease IPs or changes member admission.

@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-func TestIPReportingOptInAndScopedBlock(t *testing.T) {
+func TestMandatoryIPReportingAndScopedBlock(t *testing.T) {
 	r := New()
 	u := testUser()
 	r.SetUsers([]protocol.User{u})
@@ -17,16 +17,12 @@ func TestIPReportingOptInAndScopedBlock(t *testing.T) {
 	defer l.Close()
 	l.Account(true, 1)
 	r.SampleActivity()
-	if r.Summary().ActiveIPs != nil {
-		t.Fatal("IP leaked without request")
+	if len(r.Summary().ActiveIPs[1]) != 1 {
+		t.Fatal("sampled IP missing from mandatory report")
 	}
 	ips := r.ActiveIPs(1)
 	if len(ips) != 1 || ips[0].UserID != 1 || ips[0].SourceIP != "192.0.2.1" {
 		t.Fatal("requested IP/user report incomplete")
-	}
-	r.SetReportIPs(true)
-	if len(r.Summary().ActiveIPs[1]) != 1 {
-		t.Fatal("opted-in report missing IP")
 	}
 	var event AdmissionEvent
 	r.OnReject = func(e AdmissionEvent) { event = e }

@@ -9,6 +9,7 @@ import (
 	"github.com/VanSail-Opensource/X-Node/internal/config"
 	"github.com/VanSail-Opensource/X-Node/internal/firewall"
 	"github.com/VanSail-Opensource/X-Node/internal/host"
+	"github.com/VanSail-Opensource/X-Node/internal/localstatus"
 	"github.com/VanSail-Opensource/X-Node/internal/state"
 	"github.com/VanSail-Opensource/X-Node/internal/update"
 	"io"
@@ -70,16 +71,14 @@ func run(args []string) error {
 		fmt.Println("Connection bootstrap configured.")
 		return nil
 	case "status":
-		path := "/var/lib/x-node/status.json"
 		if len(args) > 1 {
 			return errors.New("status takes no arguments")
 		}
-		b, e := os.ReadFile(path)
+		status, e := localstatus.Query(ctx, filepath.Join("/var/lib/x-node", localstatus.SocketName))
 		if e != nil {
 			return errors.New("agent status is not available")
 		}
-		_, e = os.Stdout.Write(append(b, '\n'))
-		return e
+		return json.NewEncoder(os.Stdout).Encode(status)
 	case "service":
 		if len(args) != 2 {
 			return errors.New("service requires start, stop, restart, enable, disable, status or logs")

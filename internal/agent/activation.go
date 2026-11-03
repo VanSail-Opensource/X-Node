@@ -64,7 +64,6 @@ func (a *Agent) activate(lifetime context.Context, job applyJob) error {
 	if err = job.Context.Err(); err != nil {
 		return err
 	}
-	a.Sampler.Interval(c.SampleInterval())
 	a.scheduleGeodata(p)
 	if err = a.activateFirewall(job, c); err != nil {
 		return err

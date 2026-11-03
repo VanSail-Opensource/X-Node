@@ -22,7 +22,6 @@ type accountingResult struct {
 }
 
 func (a *Agent) captureTraffic() error {
-	a.Registry.SampleActivity()
 	now := time.Now()
 	from := a.lastCapture
 	if from.IsZero() {
@@ -135,5 +134,5 @@ func (a *Agent) handleAccounting(request accountingRequest) {
 	barrier.Quiesced = request.quiesced
 	barrier.AccountingPeriod = request.period
 	request.result <- accountingResult{barrier, err}
-	a.lastReport = time.Time{}
+	a.requestReports(reportPeriodic)
 }

@@ -28,6 +28,8 @@ type Client struct {
 	compactTelemetry atomic.Bool
 	openConnections  atomic.Bool
 	ddnsChanges      atomic.Bool
+	reportFraming    atomic.Bool
+	reportEncoder    *protocol.ReportEncoder // serialized socket writer only
 }
 
 func New(url, token string) *Client {
@@ -41,6 +43,7 @@ func (c *Client) CompactTelemetry() bool { return c.compactTelemetry.Load() }
 func (c *Client) OpenConnections() bool  { return c.openConnections.Load() }
 func (c *Client) ComputePool() bool      { return c.computePool.Load() }
 func (c *Client) DDNSChanges() bool      { return c.ddnsChanges.Load() }
+func (c *Client) ReportFraming() bool    { return c.reportFraming.Load() }
 func (c *Client) Send(m protocol.Message, critical bool) bool {
 	lane := 3
 	if critical {
@@ -85,6 +88,12 @@ func (c *Client) status(v bool) {
 	}
 }
 func (c *Client) Run(ctx context.Context) {
+	defer func() {
+		if c.reportEncoder != nil {
+			_ = c.reportEncoder.Close()
+			c.reportEncoder = nil
+		}
+	}()
 	backoff := time.Second
 	for ctx.Err() == nil {
 		if c.connect(ctx) {

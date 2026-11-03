@@ -44,3 +44,9 @@ serialized concurrent producers. Automated regressions run only in hosted CI
 for this delivery; local verification uses static checks and permitted builds.
 
 An overflowing ordered inbound queue closes the connection to trigger authenticated reconciliation, rather than silently losing a command or acknowledgement. `overflow_test.go` verifies disconnect at saturation.
+
+`report_frame_test.go` covers negotiated binary reports and legacy text fallback.
+`message.go` chooses framing at the serialized writer after each handshake, so
+queued reports follow the current peer's capabilities. `client.go` reuses one
+encoder across reconnects and closes it when Run exits; no reporting path spools
+to disk. Binary report writes explicitly disable permessage-deflate.

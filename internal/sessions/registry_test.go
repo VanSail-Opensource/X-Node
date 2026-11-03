@@ -18,7 +18,6 @@ func acquire(r *Registry, u protocol.User, ip, network string) (*Lease, error) {
 }
 func TestConcurrentAdmissionAndRelease(t *testing.T) {
 	r := New()
-	r.SetReportIPs(true)
 	u := testUser()
 	r.SetUsers([]protocol.User{u})
 	var wg sync.WaitGroup

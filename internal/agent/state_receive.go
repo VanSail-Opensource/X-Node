@@ -119,7 +119,7 @@ func (a *Agent) handle(ctx context.Context, m protocol.Message) {
 		a.registerSecrets(c)
 		a.Registry.SetUsers(c.Users)
 		a.Registry.SetPorts(c.BlockedPorts)
-		a.Registry.SetReportIPs(c.Telemetry.IncludeActiveIPs)
+		a.Sampler.Interval(c.SampleInterval())
 		changes := protocol.Classify(a.desired, c)
 		a.desired = c
 		a.hasDesired = true

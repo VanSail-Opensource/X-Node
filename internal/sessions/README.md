@@ -41,3 +41,5 @@ transient. Hosted cases cover quota races, expiry, counters and quiescence.
 credentials, including transit. Registry replacement closes leases whose address
 was removed. `source_whitelist_test.go` and `whitelist_transit_test.go` cover
 source isolation, immediate revocation and preserved non-Reality country checks.
+
+Active IPs are always present in sampled activity projections. Reporting never changes admission policy, and idle total-open counts remain independent of sampled byte activity.

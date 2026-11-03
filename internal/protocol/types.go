@@ -189,6 +189,7 @@ type UpdatePolicy struct {
 	Version string `json:"version,omitempty"`
 }
 type TelemetryPolicy struct {
+	// Deprecated: active IPs are always sampled and reported. Retained for wire compatibility.
 	IncludeActiveIPs bool `json:"include_active_ips,omitempty"`
 	SampleSeconds    int  `json:"sample_seconds,omitempty"`
 	ReportSeconds    int  `json:"report_seconds,omitempty"`

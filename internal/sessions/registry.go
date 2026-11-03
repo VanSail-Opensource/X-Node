@@ -50,7 +50,6 @@ type Registry struct {
 	OnBan           func(int, time.Time)
 	OnReject        func(AdmissionEvent)
 	ipBlocks        map[string]protocol.IPBlock
-	reportIPs       bool
 	accounting      map[accountingKey]*accountingCounters
 	inflight        map[string]*Lease
 	rates           map[int]protocol.UserRate
@@ -295,9 +294,7 @@ func (r *Registry) acquire(ctx context.Context, id int, identity, tag, ip, desti
 			if reason == "active_ip_limit" {
 				event.Scope = "new_ip"
 			}
-			if r.reportIPs {
-				event.SourceIP = ip
-			}
+			event.SourceIP = ip
 			rejection = &event
 		}
 		return nil, errors.New(reason)
@@ -439,9 +436,7 @@ func (r *Registry) Summary() Summary {
 	defer r.mu.RUnlock()
 	s := Summary{Connections: map[int]int{}, TotalConnections: r.totalConnections(), Rejections: protocol.Clone(r.rejects), Status: map[int]LimitStatus{}, Speed: map[int]SpeedStatus{}}
 	s.Rates = protocol.Clone(r.rates)
-	if r.reportIPs {
-		s.ActiveIPs = map[int][]string{}
-	}
+	s.ActiveIPs = map[int][]string{}
 	for id, u := range r.users {
 		s.Speed[id] = u.speed.status()
 		status := LimitStatus{UserID: id}
@@ -481,12 +476,10 @@ func (r *Registry) Summary() Summary {
 		s.Status[id] = status
 		if count := r.activeCount(id); count > 0 {
 			s.Connections[id] = count
-			if r.reportIPs {
-				for ip := range r.activeIPs(id) {
-					s.ActiveIPs[id] = append(s.ActiveIPs[id], ip)
-				}
-				sort.Strings(s.ActiveIPs[id])
+			for ip := range r.activeIPs(id) {
+				s.ActiveIPs[id] = append(s.ActiveIPs[id], ip)
 			}
+			sort.Strings(s.ActiveIPs[id])
 		}
 	}
 	return s

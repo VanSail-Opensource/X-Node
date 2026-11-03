@@ -27,3 +27,22 @@ transfers use `GeoIPPrefixesPerChunk` to bound each staged command.
 `runtime_reload.go` defines typed optional forced recovery; generated command
 schemas reject unrecognized reload arguments. Normal reload requires
 `incremental_reload_v1` for masters adopting the incremental contract.
+
+## Negotiated compressed reports
+
+`report_frame.go` exposes `report_zstd_l6_v1` and `X-XNode-Reports: zstd-l6-v1`.
+A master echoes this offer before an updated agent uses binary report frames.
+The first four bytes are 58 4e 5a 01 (XNZ and binary version 1), followed by a
+four-byte big-endian decoded JSON length, then independent Zstandard data with
+checksum. The JSON envelope and payload schemas remain unchanged. Controls,
+commands, acknowledgements and agent.hello remain text frames. Never combine
+binary report framing with WebSocket permessage-deflate. Legacy peers retain
+bounded text/deflate decoding.
+
+Level 6 uses EncoderLevelFromZstd(6), one reused encoder worker, a 1 MiB window
+and low-memory operation. Decoders use one worker, enforce both the declared
+length and the 16 MiB decoded cap, and bound compressed input separately. Idle
+scratch buffers retain at most 512 KiB; larger buffers are disposable. These
+codecs never touch the filesystem. `report_frame_test.go` covers malformed sizes,
+checksums, expansion bounds and retained memory; its hosted benchmark measures
+round trips over 10,000 synthetic observations.

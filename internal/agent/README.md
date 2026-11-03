@@ -18,7 +18,7 @@ revision until the whole activation completes. Backoff also covers failures
 after Xray starts, including firewall activation. `listener_recovery_test.go`
 exercises a real occupied TCP port across restart and subsequent recovery.
 
-`accounting.go` samples logical payload counters every second, retains separate
+`accounting.go` captures logical payload counters on the configured sample interval, retaining separate
 authorization accounting periods, publishes measured byte rates, and seals
 durable flush barriers. Quiescing requires fenced admission and waits for native
 handlers, including final bytes after admission slots were released.
@@ -74,4 +74,6 @@ material and uses the existing prepared incremental runtime path. Hosted
 updates without native rebuilding. Traffic capture/ACK and authorization paths
 remain owned by the actor while activation runs in the serialized worker.
 
-`reports.go` coalesces periodic/status/replay requests in one joined worker. Report encoding and status-file writes do not occupy the actor. `status.go` uses value-only state metadata and rejects a summary built across a revision change. `reporting_test.go` covers request coalescing, shutdown and ACK-driven replay.
+`reports.go` coalesces periodic/status/replay requests in one joined worker. Report encoding runs outside the actor. Local status uses a bounded socket query. `status.go` uses value-only state metadata and rejects a summary built across a revision change. `reporting_test.go` covers request coalescing, shutdown and ACK-driven replay.
+
+`cadence.go` owns independent actor sampling/report tickers, reset only when master intervals change. `cadence_test.go` verifies start-to-start ticks, unchanged state and interval changes in hosted fake-time tests. The one-second maintenance ticker handles expiry, activation retries, utilities and watchdog independently. Active IP reporting is mandatory; the deprecated saved switch is ignored. `status_socket.go` exposes current non-secret state through the private `localstatus` query; reporting never writes status files.

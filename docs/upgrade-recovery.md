@@ -7,7 +7,7 @@ credentials, accounting journals, firewall recovery state and desired config.
 ## Diagnose before changing the host
 
 Record `systemctl status x-node.service x-node-upgrade-rollback.service`, recent
-`journalctl -u x-node.service`, `/var/lib/x-node/status.json`, and
+`journalctl -u x-node.service`, `xnodectl status`, and
 `/var/lib/x-node/updates/transaction.json`. Do not publish tokens or private state.
 Inspect `lslocks` and the rollback unit's process tree. An old helper waiting for
 `systemctl restart` while holding the update lock must exit before installing.

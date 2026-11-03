@@ -34,7 +34,6 @@ func IPBlockKey(user int, ip string) string { return fmt.Sprintf("%d:%s", user, 
 func (r *Registry) blockedIP(user int, ip string, now time.Time) bool {
 	return r.ipBlocks[IPBlockKey(user, ip)].Until.After(now) || r.ipBlocks[IPBlockKey(0, ip)].Until.After(now)
 }
-func (r *Registry) SetReportIPs(enabled bool) { r.mu.Lock(); r.reportIPs = enabled; r.mu.Unlock() }
 func (r *Registry) RestoreIPBlocks(blocks map[string]protocol.IPBlock) {
 	r.mu.Lock()
 	r.ipBlocks = protocol.Clone(blocks)

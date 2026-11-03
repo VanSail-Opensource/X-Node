@@ -64,6 +64,7 @@ type Snapshot struct {
 type Sampler struct {
 	latest   atomic.Pointer[Snapshot]
 	interval atomic.Int64
+	wake     chan struct{}
 	previous map[string]gnet.IOCountersStat
 	last     time.Time
 	slowAt   time.Time
@@ -73,34 +74,15 @@ type Sampler struct {
 }
 
 func New() *Sampler {
-	s := &Sampler{previous: map[string]gnet.IOCountersStat{}}
+	s := &Sampler{previous: map[string]gnet.IOCountersStat{}, wake: make(chan struct{}, 1)}
 	s.interval.Store(int64(time.Second))
 	return s
-}
-func (s *Sampler) Interval(d time.Duration) {
-	if d < time.Second {
-		d = time.Second
-	}
-	s.interval.Store(int64(d))
 }
 func (s *Sampler) Snapshot() Snapshot {
 	if p := s.latest.Load(); p != nil {
 		return protocol.Clone(*p)
 	}
 	return Snapshot{}
-}
-func (s *Sampler) Run(ctx context.Context) {
-	for {
-		snapshot := s.collect(ctx, time.Now())
-		s.latest.Store(&snapshot)
-		timer := time.NewTimer(time.Duration(s.interval.Load()))
-		select {
-		case <-ctx.Done():
-			timer.Stop()
-			return
-		case <-timer.C:
-		}
-	}
 }
 func (s *Sampler) collect(ctx context.Context, now time.Time) Snapshot {
 	out := Snapshot{Time: now.UTC(), Disks: []Disk{}, Interfaces: []Interface{}, Errors: map[string]string{}}

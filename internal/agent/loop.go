@@ -28,12 +28,19 @@ func (a *Agent) Run(ctx context.Context) error {
 		a.Guard.Configure(a.desired.Firewall)
 		a.registerSecrets(a.desired)
 		a.Registry.SetPorts(a.desired.BlockedPorts)
-		a.Registry.SetReportIPs(a.desired.Telemetry.IncludeActiveIPs)
 		a.desiredCached = d.DesiredConfig == nil
 		a.queue(ctx, applyJob{Revision: d.Revision, Config: a.desired, Cached: a.desiredCached})
 	}
 	child, cancel := context.WithCancel(ctx)
 	defer cancel()
+	status, err := a.listenStatus(child)
+	if err != nil {
+		return err
+	}
+	defer status.Close()
+	cadence := newCadence(a.desired)
+	defer cadence.stop()
+	a.Sampler.Interval(a.desired.SampleInterval())
 	reportsDone := make(chan struct{})
 	go func() { defer close(reportsDone); a.runReports(child) }()
 	defer func() { cancel(); <-reportsDone }()
@@ -85,8 +92,7 @@ func (a *Agent) Run(ctx context.Context) error {
 				a.compute.reset()
 			}
 			if connected {
-				a.lastReport = time.Time{}
-				a.sendStatus()
+				a.requestReports(reportStatus | reportPeriodic)
 			}
 		case event := <-a.bans:
 			a.Client.Send(protocol.New("torrent.detected", "", 0, map[string]any{"user_id": event.ID, "until": event.Until}), true)
@@ -123,11 +129,17 @@ func (a *Agent) Run(ctx context.Context) error {
 			} else {
 				finishReload(request.Done, errors.New("full baseline required before reload"))
 			}
-		case <-tick.C:
-			a.Registry.ExpireUsers(time.Now())
+		case <-cadence.sample.C:
+			a.Registry.SampleActivity()
 			if e := a.captureTraffic(); e != nil {
 				a.failStorage(e)
 			}
+		case <-cadence.report.C:
+			if a.hasDesired {
+				a.requestReports(reportStatus | reportPeriodic)
+			}
+		case <-tick.C:
+			a.Registry.ExpireUsers(time.Now())
 			for _, id := range a.Registry.ExpireBans(time.Now()) {
 				if e := a.Store.Ban(id, time.Time{}); e != nil {
 					a.failStorage(e)
@@ -141,5 +153,6 @@ func (a *Agent) Run(ctx context.Context) error {
 			}
 			a.periodic(child)
 		}
+		cadence.update(a.desired)
 	}
 }

@@ -283,4 +283,25 @@ bypass. Protected-address commands and live IP projections are private and do
 not enter durable command history. Whitelist/firewall changes update registry
 and nftables state without reconstructing native Xray.
 
-Reporting intervals are scheduling targets. A bounded coalescing worker encodes reports independently of command receipt and one-second accounting capture. Matching traffic acknowledgements immediately release the next sealed journal batch; new batches and lost-ACK retransmissions follow the configured reporting interval. Socket/process/GPU scans refresh at most once per ten seconds.
+Sampling and reporting use independent master-configured tickers. Activity IPs, connection counts and payload rates follow the sample interval; periodic frames follow the report interval. A bounded coalescing worker encodes reports independently of command receipt and sampling. The deprecated include_active_ips switch is ignored; sampled IPs are always reported. Matching traffic acknowledgements immediately release the next sealed journal batch; new batches and lost-ACK retransmissions follow the configured reporting interval. Socket/process/GPU scans refresh at most once per ten seconds.
+
+## Negotiated compressed reports
+
+`report_frame.go` exposes `report_zstd_l6_v1` and `X-XNode-Reports: zstd-l6-v1`.
+A master echoes this offer before an updated agent uses binary report frames.
+The first four bytes are 58 4e 5a 01 (XNZ and binary version 1), followed by a
+four-byte big-endian decoded JSON length, then independent Zstandard data with
+checksum. The JSON envelope and payload schemas remain unchanged. Controls,
+commands, acknowledgements and agent.hello remain text frames. Never combine
+binary report framing with WebSocket permessage-deflate. Legacy peers retain
+bounded text/deflate decoding.
+
+Level 6 uses EncoderLevelFromZstd(6), one reused encoder worker, a 1 MiB window
+and low-memory operation. Decoders use one worker, enforce both the declared
+length and the 16 MiB decoded cap, and bound compressed input separately. Idle
+scratch buffers retain at most 512 KiB; larger buffers are disposable. These
+codecs never touch the filesystem. `report_frame_test.go` covers malformed sizes,
+checksums, expansion bounds and retained memory; its hosted benchmark measures
+round trips over 10,000 synthetic observations.
+
+Local `xnodectl status` queries the permission-restricted Unix socket `/var/lib/x-node/status.sock`; no periodic status file is written. Expiry, retry and watchdog maintenance retain their one-second timer independently of report/sample settings.

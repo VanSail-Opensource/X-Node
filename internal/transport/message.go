@@ -59,7 +59,22 @@ func (c *Client) writeMessage(socket *websocket.Conn, message protocol.Message) 
 	if len(data) > protocol.MaxFrameBytes {
 		return websocket.ErrReadLimit
 	}
-	report := message.Type == "telemetry.report" || message.Type == "telemetry.compact" || message.Type == "traffic.report" || message.Type == "logs.report"
+	report := protocol.IsReport(message.Type)
+	if report && c.ReportFraming() {
+		if c.reportEncoder == nil {
+			c.reportEncoder, err = protocol.NewReportEncoder()
+			if err != nil {
+				return err
+			}
+		}
+		frame, err := c.reportEncoder.Encode(data)
+		if err != nil {
+			return err
+		}
+		// Binary zstd frames must never also use permessage-deflate.
+		socket.EnableWriteCompression(false)
+		return socket.WriteMessage(websocket.BinaryMessage, frame)
+	}
 	socket.EnableWriteCompression(report && len(message.Data) >= 1024)
 	return socket.WriteMessage(websocket.TextMessage, data)
 }

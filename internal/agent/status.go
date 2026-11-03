@@ -6,10 +6,8 @@ import (
 	"fmt"
 	"github.com/VanSail-Opensource/X-Node/internal/nlog"
 	"github.com/VanSail-Opensource/X-Node/internal/protocol"
-	"github.com/VanSail-Opensource/X-Node/internal/state"
 	"net"
 	"os"
-	"path/filepath"
 	"time"
 )
 
@@ -34,13 +32,6 @@ func (a *Agent) publishStatus() {
 	}
 	a.Client.Send(message, false)
 	notifySystemd(fmt.Sprintf("STATUS=Runtime ready=%t synchronized=%t connected=%t authorization=%d configuration=%d", a.Runtime.Ready(), synchronized, a.Client.Connected(), d.Revision, d.ConfigRevision))
-	status, err := json.Marshal(map[string]any{"liveness": true, "ready": report.Ready, "connected": report.Connected, "revision": d.Revision, "config_revision": d.ConfigRevision, "updated": report.Time})
-	if err == nil {
-		err = state.AtomicWrite(filepath.Join(a.Dir, "status.json"), status, 0600)
-	}
-	if err != nil {
-		nlog.Core().Warn("status file update failed")
-	}
 }
 
 func telemetryJSON(value any) json.RawMessage {
@@ -56,10 +47,6 @@ func (a *Agent) periodic(ctx context.Context) {
 		return
 	}
 	now := time.Now()
-	if now.Sub(a.lastReport) >= a.desired.ReportInterval() {
-		a.lastReport = now
-		a.requestReports(reportStatus | reportPeriodic)
-	}
 	if (!a.Runtime.Ready() || !a.retryAt.IsZero()) && !a.applying.Load() && !now.Before(a.retryAt) {
 		d := a.Store.Metadata()
 		a.queue(ctx, applyJob{Revision: d.Revision, Config: a.desired, Cached: a.desiredCached})

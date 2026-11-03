@@ -16,6 +16,7 @@ func (c *Client) connect(ctx context.Context) bool {
 	c.compactTelemetry.Store(false)
 	c.openConnections.Store(false)
 	c.ddnsChanges.Store(false)
+	c.reportFraming.Store(false)
 	dialer := *websocket.DefaultDialer
 	if c.Dialer != nil {
 		dialer = *c.Dialer
@@ -31,6 +32,7 @@ func (c *Client) connect(ctx context.Context) bool {
 	headers.Set(protocol.OpenConnectionsHeader, protocol.OpenConnectionsFormat)
 	headers.Set(protocol.DDNSChangesHeader, protocol.DDNSChangesFormat)
 	headers.Set(protocol.ComputePoolHeader, protocol.ComputePoolFormat)
+	headers.Set(protocol.ReportFramingHeader, protocol.ZstdReportFraming)
 	socket, response, e := dialer.DialContext(ctx, c.URL, headers)
 	if e != nil {
 		if response != nil && response.Body != nil {
@@ -49,6 +51,8 @@ func (c *Client) connect(ctx context.Context) bool {
 	defer c.openConnections.Store(false)
 	c.ddnsChanges.Store(response.Header.Get(protocol.DDNSChangesHeader) == protocol.DDNSChangesFormat)
 	defer c.ddnsChanges.Store(false)
+	c.reportFraming.Store(response.Header.Get(protocol.ReportFramingHeader) == protocol.ZstdReportFraming)
+	defer c.reportFraming.Store(false)
 	if err := socket.SetCompressionLevel(flate.BestSpeed); err != nil {
 		return true
 	}

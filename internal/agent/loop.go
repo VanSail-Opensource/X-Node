@@ -40,6 +40,8 @@ func (a *Agent) Run(ctx context.Context) error {
 	defer status.Close()
 	cadence := newCadence(a.desired)
 	defer cadence.stop()
+	a.lastCapture = time.Now()
+	a.lastSample = a.lastCapture
 	a.Sampler.Interval(a.desired.SampleInterval())
 	reportsDone := make(chan struct{})
 	go func() { defer close(reportsDone); a.runReports(child) }()
@@ -130,8 +132,7 @@ func (a *Agent) Run(ctx context.Context) error {
 				finishReload(request.Done, errors.New("full baseline required before reload"))
 			}
 		case <-cadence.sample.C:
-			a.Registry.SampleActivity()
-			if e := a.captureTraffic(); e != nil {
+			if e := a.sampleTraffic(); e != nil {
 				a.failStorage(e)
 			}
 		case <-cadence.report.C:

@@ -41,12 +41,13 @@ func TestCaptureKeepsLateClosedStreamBytesInOriginalPeriod(t *testing.T) {
 		t.Fatal(err)
 	}
 	batch, err := store.Batch()
-	if err != nil || len(batch.Samples) != 2 {
+	if err != nil || batch == nil {
 		t.Fatalf("samples=%+v,error=%v", batch, err)
 	}
 	periods := map[string][2]uint64{}
 	for _, sample := range batch.Samples {
-		periods[sample.AccountingPeriod] = [2]uint64{sample.UploadBytes, sample.DownloadBytes}
+		old := periods[sample.AccountingPeriod]
+		periods[sample.AccountingPeriod] = [2]uint64{old[0] + sample.UploadBytes, old[1] + sample.DownloadBytes}
 	}
 	if periods["old"] != [2]uint64{10, 7} || periods["new"] != [2]uint64{3, 0} {
 		t.Fatalf("mixed accounting periods: %v", periods)

@@ -1,41 +1,34 @@
-# Private state and traffic journals
+# Durable state and volatile traffic
 
-`ddns.go` and `ddns_changes.go` own the private 1 MiB `ddns.json` journal using
-the same atomic writer. Sequence, at most 1024 unacknowledged changes and 1024
-latest successful job snapshots survive reconnects, restart and rollback to an
-older agent rewriting `state.json`. Acknowledgement retires IDs but preserves the
-latest discovery; identical values in one generation do not enqueue again.
-New generations emit initial observations for changed panel bindings. Failed
-discovery or journal persistence never advances the last valid address.
-`ddns_test.go` covers replay, rollback isolation, unchanged values, acknowledgement
-idempotency, generation changes, capacity and failed writes. No traffic accounting
-fields or source-IP telemetry are added to this journal.
+`store.go` atomically persists credentials, desired/accepted configuration,
+revisions, bans and IP blocks. `desired.go` stages validated activation targets;
+acceptance clears them. `connection_controls.go` excludes connection-derived
+admission decisions from durable snapshots. `configuration.go` provides bounded
+configuration copies and metadata without copying traffic or credentials.
 
-`store.go` atomically persists authorization, accepted configuration, bans, and
-bounded private state. `traffic.go` exposes ordered immutable replay/acknowledgment.
-`desired.go` stages validated activation targets before listener binding, using
-the existing authorization revision. Acceptance clears the target; newer
-authorization supersedes it. `desired_test.go` covers restart and control privacy.
-`accounting.go` commits raw totals and period-tagged samples together and seals
-barrier batches behind an outstanding report instead of replacing it.
+`traffic_memory.go` owns a separate boot-scoped buffer that never enters `Data`.
+`accounting.go` validates a complete capture before mutation, coalesces matching
+period/minute samples and records bounded overflow loss observations. It retains
+at most 8192 accumulation entries, 64 reports and a conservative 32 MiB queued
+allocation allowance. `traffic.go` exposes immutable head copies and matching
+ACK retirement. New capture/flush/report/ACK paths never write disk. Queue
+pressure returns `ErrTrafficBusy` for a retryable barrier; durable state remains
+available. Agent admission does not stop because traffic was lost.
 
-The master must prefer `samples` for accounting-aware users, deduplicate the
-agent's immutable sequence and commit before acknowledging. Missing samples on
-legacy users remain supported. Old-period records survive resets and restart.
-The 64 MiB bound still stops admission instead of discarding recorded traffic.
+`traffic_legacy.go` seals only already persisted pre-upgrade accumulation with
+its original agent/sequence. Existing pending/backlog identities drain before
+new boot streams. Historical ACK retirement remains durable; failures preserve
+the old head. A process restart loses new uncommitted usage and creates a new
+stream ID. The master records gaps and settles surviving committed usage.
 
-Sampling timestamps have one-second granularity; an abrupt process or power
-failure can still lose bytes since the last successful sample. A quiesced barrier
-is complete only when the master has committed every batch through its sequence.
+`traffic_memory_test.go` covers file stability, configuration-write isolation,
+restart loss, capacity, loss markers, blocked paths and allocation measurements.
+`traffic_upgrade_test.go` protects historical IDs and durable retirement.
+`accounting_test.go`, `store_test.go` and `reporting_test.go` cover immutable
+replay, periods, overflow atomicity, ordinary state durability and metadata cost.
+All automated verification runs in hosted CI.
 
-`accounting_test.go` covers restart, ordered replay, stable outstanding batches,
-separate periods and transactional overflow rejection.
-
-`connection_controls.go` excludes `block_new` decisions from serialized state
-while preserving live admission controls. Previously persisted decisions are
-scrubbed on open. `connection_controls_test.go` covers restart, upgrade cleanup,
-and preservation of credential/period/expiry fields.
-
-`configuration.go` exposes bounded configuration copies and revision reads without cloning accounting journals for recovery commands.
-
-`Metadata` reads revisions without copying credentials or journals. `Acknowledge` persists matching head progress before advancing; duplicate acknowledgements are write-free. `Pending` never seals new samples. `reporting_test.go` covers persistence failures and compares full-snapshot versus metadata allocations.
+`ddns.go` and `ddns_changes.go` retain the independent private 1 MiB DDNS journal.
+It preserves at most 1024 unacknowledged changes and successful job snapshots
+across restart/rollback, deduplicates generation changes and never contains
+traffic or source-IP telemetry. `ddns_test.go` covers durable failure paths.

@@ -47,6 +47,12 @@ jobs:
         run: go test ./internal/kernel/xray -run '^$' -bench 'Benchmark(ConfigPreparation|RoutingApply|RuntimeReload)$' -benchtime=20x -benchmem | tee reload-benchmark.txt
       - name: Reporting snapshot allocation comparison
         run: go test ./internal/state -run '^$' -bench '^BenchmarkReportingMetadata$' -benchtime=100x -benchmem | tee reporting-benchmark.txt
+      - name: Volatile traffic accumulation measurements
+        run: go test ./internal/state -run '^$' -bench '^BenchmarkTrafficMemoryAccumulation$' -benchtime=100x -benchmem | tee traffic-memory-benchmark.txt
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: traffic-memory-benchmark
+          path: traffic-memory-benchmark.txt
       - name: Zstandard level-6 report measurements
         run: go test ./internal/protocol -run '^$' -bench '^BenchmarkReportFrameRoundTrip$' -benchtime=100x -benchmem | tee report-frame-benchmark.txt
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9

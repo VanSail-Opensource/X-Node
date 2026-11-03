@@ -32,11 +32,11 @@ func TestAcknowledgementNoOpAndPersistenceFailure(t *testing.T) {
 	if advanced, err := s.Acknowledge(first.ID); err != nil || advanced {
 		t.Fatalf("duplicate wrote disk: %t %v", advanced, err)
 	}
-	if advanced, err := s.Acknowledge(next.ID); err == nil || advanced {
-		t.Fatalf("failed write advanced cursor: %t %v", advanced, err)
+	if advanced, err := s.Acknowledge(next.ID); err != nil || !advanced {
+		t.Fatalf("volatile ACK attempted a disk write: %t %v", advanced, err)
 	}
-	if got := s.Pending(); got.ID != next.ID || got.Traffic[7] != [2]uint64{3, 4} {
-		t.Fatalf("journal changed: %+v", got)
+	if s.Pending() != nil {
+		t.Fatal("acknowledged volatile report retained")
 	}
 }
 

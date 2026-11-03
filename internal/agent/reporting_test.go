@@ -49,7 +49,9 @@ func TestTrafficAcknowledgementsDrainSealedBacklogWithoutTimer(t *testing.T) {
 	frames := make(chan protocol.Message, 8)
 	upgrader := websocket.Upgrader{Subprotocols: []string{"x-node.v1"}}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		socket, err := upgrader.Upgrade(w, r, nil)
+		headers := http.Header{}
+		headers.Set(protocol.TrafficStreamHeader, protocol.TrafficStreamFormat)
+		socket, err := upgrader.Upgrade(w, r, headers)
 		if err != nil {
 			return
 		}

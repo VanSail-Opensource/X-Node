@@ -152,5 +152,27 @@
     {
       "url": "https://master.example.com"
     }
-  ]
+  ],
+  "x-report-framing": {
+    "capability": "report_zstd_l6_v1",
+    "codec": "zstandard",
+    "decodedLength": "uint32-big-endian",
+    "level": 6,
+    "magicHex": "584e5a01",
+    "maxDecodedBytes": 16777216,
+    "maxEncodedBytes": 16909312,
+    "offerHeader": "X-XNode-Reports",
+    "offerValue": "zstd-l6-v1",
+    "permessageDeflate": false
+  },
+  "x-traffic-streams": {
+    "acknowledgement": "after atomic usage, financial effects and cursor commit",
+    "barrierSchema": "schemas/traffic-barrier.schema.json",
+    "capability": "traffic_stream_v1",
+    "identity": "agent_id:boot_id:sequence",
+    "lossPolicy": "settle surviving committed usage; never fabricate missing bytes or advance a cursor for lost reports",
+    "offerHeader": "X-XNode-Traffic",
+    "offerValue": "stream-v1",
+    "reportSchema": "schemas/traffic-report.schema.json"
+  }
 }

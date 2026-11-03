@@ -34,9 +34,10 @@ type Data struct {
 	Backlog        []*Batch                          `json:"backlog,omitempty"`
 }
 type Store struct {
-	mu   sync.Mutex
-	path string
-	data Data
+	mu      sync.Mutex
+	path    string
+	data    Data
+	traffic memoryTraffic // New usage never enters Data or its persistence path.
 }
 
 func ID() string {
@@ -79,6 +80,9 @@ func Open(dir string) (*Store, error) {
 	}
 	if s.data.Accumulated == nil {
 		s.data.Accumulated = Traffic{}
+	}
+	if err := s.openTraffic(); err != nil {
+		return nil, err
 	}
 	return s, nil
 }

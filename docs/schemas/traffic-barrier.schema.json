@@ -1,0 +1,36 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "accounting_period": {
+      "type": "string"
+    },
+    "agent_id": {
+      "type": "string"
+    },
+    "legacy_sequence": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "quiesced": {
+      "type": "boolean"
+    },
+    "sequence": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "stream_id": {
+      "type": "string"
+    },
+    "through": {
+      "format": "date-time",
+      "type": "string"
+    }
+  },
+  "required": [
+    "agent_id",
+    "sequence",
+    "through",
+    "quiesced"
+  ],
+  "type": "object"
+}

@@ -305,3 +305,35 @@ checksums, expansion bounds and retained memory; its hosted benchmark measures
 round trips over 10,000 synthetic observations.
 
 Local `xnodectl status` queries the permission-restricted Unix socket `/var/lib/x-node/status.sock`; no periodic status file is written. Expiry, retry and watchdog maintenance retain their one-second timer independently of report/sample settings.
+
+## Volatile boot traffic streams
+
+Updated peers negotiate `X-XNode-Traffic: stream-v1` and `traffic_stream_v1`.
+The stream ID is the authenticated 32-character lowercase hex boot ID. New report
+IDs are `agent_id:boot_id:sequence`, starting at one per process. The canonical
+report payload is immutable for its ID. Legacy persisted `agent_id:sequence`
+reports drain first without changing identities. A legacy master receives only
+those historical reports; new stream usage is never relabeled as legacy usage.
+
+New raw totals, period samples and sealed reports remain bounded memory: at most
+8192 accumulation entries, 64 sealed reports and a conservative 32 MiB queued
+allocation allowance. Compatible period samples coalesce only within matching
+capture minute boundaries. A rate-change flush seals the prior batch. Overflow
+may lose uncommitted samples; `dropped_samples` records loss observations without
+inventing a lost byte quantity. Queue pressure makes flush retryable and never
+pauses admission or changes the durability of credentials, commands or bans.
+Configuration writes cannot serialize volatile buffers. New traffic captures,
+reports, retries and acknowledgments never spill to disk on disconnect/failure.
+
+The master durably closes replaced boot streams and maintains independent
+sequence/digest cursors and rate boundaries. Duplicate/reordered reports never
+charge twice. Sequence gaps and explicit buffer loss retain known usage and
+record evidence; conflicts never rewrite settled usage. Usage, cursors and all
+financial effects commit before ACK. A closed stream cannot reopen. Settlements
+use surviving committed usage after restart, accepting underbilling or larger
+refunds. No cursor is advanced for a report that was never committed.
+
+Flush barriers name their stream plus any pending legacy sequence. Financial
+operations wait for both real cursors; ordinary command/telemetry receipt stays
+independent of that wait. The report and barrier schemas are published under
+`docs/schemas`, with negotiation/framing metadata in OpenAPI and AsyncAPI.

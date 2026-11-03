@@ -17,9 +17,11 @@ type TrafficSample struct {
 
 // TrafficReport is an immutable journal batch. Samples replace legacy totals for billing.
 type TrafficReport struct {
-	ID      string          `json:"id"`
-	Traffic Traffic         `json:"traffic"`
-	Samples []TrafficSample `json:"samples,omitempty"`
+	ID             string          `json:"id"`
+	Traffic        Traffic         `json:"traffic"`
+	Samples        []TrafficSample `json:"samples,omitempty"`
+	StreamID       string          `json:"stream_id,omitempty"`
+	DroppedSamples uint64          `json:"dropped_samples,omitempty"`
 }
 
 // UserRate is measured payload throughput; it is independent of configured speed caps.
@@ -38,6 +40,8 @@ type TrafficFlush struct {
 // TrafficBarrier identifies the journal sequence covering a serialized capture.
 type TrafficBarrier struct {
 	AgentID          string    `json:"agent_id"`
+	StreamID         string    `json:"stream_id,omitempty"`
+	LegacySequence   uint64    `json:"legacy_sequence,omitempty"`
 	Sequence         uint64    `json:"sequence"`
 	Through          time.Time `json:"through"`
 	Quiesced         bool      `json:"quiesced"`

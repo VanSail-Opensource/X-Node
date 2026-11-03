@@ -20,10 +20,10 @@ exercises a real occupied TCP port across restart and subsequent recovery.
 
 `accounting.go` captures logical payload counters on the configured sample interval, retaining separate
 authorization accounting periods, publishes measured byte rates, and seals
-durable flush barriers. Quiescing requires fenced admission and waits for native
-handlers, including final bytes after admission slots were released.
+boot-scoped flush barriers. Quiescing requires fenced admission and waits for native
+handlers, including final bytes after admission slots were released. New traffic remains bounded memory independently of durable credentials, commands and bans.
 Capture baselines include the registry's transient counter generation. Only
-successfully persisted, unchanged snapshots can be pruned. Admission-stop logs
+successfully accepted, unchanged snapshots can be pruned. Admission-stop logs
 and `agent.error` retain the redacted underlying failure for storage diagnostics.
 
 `jobs.go` persists bounded mutation replay history. `job_privacy.go` excludes
@@ -77,3 +77,5 @@ remain owned by the actor while activation runs in the serialized worker.
 `reports.go` coalesces periodic/status/replay requests in one joined worker. Report encoding runs outside the actor. Local status uses a bounded socket query. `status.go` uses value-only state metadata and rejects a summary built across a revision change. `reporting_test.go` covers request coalescing, shutdown and ACK-driven replay.
 
 `cadence.go` owns independent actor sampling/report tickers, reset only when master intervals change. `cadence_test.go` verifies start-to-start ticks, unchanged state and interval changes in hosted fake-time tests. The one-second maintenance ticker handles expiry, activation retries, utilities and watchdog independently. Active IP reporting is mandatory; the deprecated saved switch is ignored. `status_socket.go` exposes current non-secret state through the private `localstatus` query; reporting never writes status files.
+
+`activity_test.go` verifies flush/sample independence with fake time. `activity.go` keeps throughput/activity sampling baselines independent of manual accounting captures, so a flush cannot consume the next configured rate sample. `accounting.go` returns queue-pressure barriers as retryable command failures without pausing admission.

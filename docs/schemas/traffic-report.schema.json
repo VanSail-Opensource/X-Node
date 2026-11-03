@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "dropped_samples": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "id": {
+      "type": "string"
+    },
+    "samples": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "accounting_period": {
+            "type": "string"
+          },
+          "download_bytes": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "from": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "through": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "upload_bytes": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "user_id": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "user_id",
+          "accounting_period",
+          "from",
+          "through",
+          "upload_bytes",
+          "download_bytes"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "stream_id": {
+      "pattern": "^[0-9a-f]{32}$",
+      "type": "string"
+    },
+    "traffic": {
+      "additionalProperties": {
+        "items": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "type": "array"
+      },
+      "type": "object"
+    }
+  },
+  "required": [
+    "id",
+    "traffic"
+  ],
+  "title": "X-Node immutable traffic report",
+  "type": "object"
+}

@@ -29,6 +29,7 @@ type Client struct {
 	openConnections  atomic.Bool
 	ddnsChanges      atomic.Bool
 	reportFraming    atomic.Bool
+	trafficStreams   atomic.Bool
 	reportEncoder    *protocol.ReportEncoder // serialized socket writer only
 }
 
@@ -44,6 +45,7 @@ func (c *Client) OpenConnections() bool  { return c.openConnections.Load() }
 func (c *Client) ComputePool() bool      { return c.computePool.Load() }
 func (c *Client) DDNSChanges() bool      { return c.ddnsChanges.Load() }
 func (c *Client) ReportFraming() bool    { return c.reportFraming.Load() }
+func (c *Client) TrafficStreams() bool   { return c.trafficStreams.Load() }
 func (c *Client) Send(m protocol.Message, critical bool) bool {
 	lane := 3
 	if critical {

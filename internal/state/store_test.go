@@ -23,23 +23,19 @@ func TestJournalReplayAndAcknowledgement(t *testing.T) {
 	if e = s.AddTraffic(Traffic{1: {3, 4}}); e != nil {
 		t.Fatal(e)
 	}
-	reopened, e := Open(dir)
-	if e != nil {
-		t.Fatal(e)
-	}
-	pending, _ := reopened.Batch()
+	pending, _ := s.Batch()
 	if pending.ID != a.ID || pending.Traffic[1] != [2]uint64{10, 20} {
-		t.Fatal("pending batch was mutated or lost")
+		t.Fatal("pending batch was mutated")
 	}
-	_ = reopened.Ack("wrong")
-	still, _ := reopened.Batch()
+	_ = s.Ack("wrong")
+	still, _ := s.Batch()
 	if still.ID != pending.ID {
 		t.Fatal("wrong ack removed traffic")
 	}
-	if e = reopened.Ack(pending.ID); e != nil {
+	if e = s.Ack(pending.ID); e != nil {
 		t.Fatal(e)
 	}
-	next, _ := reopened.Batch()
+	next, _ := s.Batch()
 	if next.ID == pending.ID || next.Traffic[1] != [2]uint64{3, 4} {
 		t.Fatal("unsent traffic missing")
 	}

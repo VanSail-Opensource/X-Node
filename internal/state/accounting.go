@@ -3,101 +3,94 @@ package state
 import (
 	"errors"
 	"fmt"
-	"sort"
 	"time"
 
 	"github.com/VanSail-Opensource/X-Node/internal/protocol"
 )
 
-// AddAccounting commits legacy totals and period samples in one durable mutation.
+// AddAccounting changes only bounded volatile storage. Validate the complete
+// capture before mutation; overflow cannot partially change accepted counters.
 func (s *Store) AddAccounting(delta Traffic, samples []protocol.TrafficSample) error {
-	if len(delta) == 0 && len(samples) == 0 {
+	if len(delta)+len(samples) == 0 {
 		return nil
 	}
-	return s.change(func(d *Data) error {
-		if err := addTraffic(d, delta); err != nil {
-			return err
-		}
-		if d.Accounting == nil {
-			d.Accounting = map[string]protocol.TrafficSample{}
-		}
-		for _, sample := range samples {
-			if sample.UserID <= 0 || !protocol.ValidName(sample.AccountingPeriod) || sample.From.IsZero() || sample.Through.Before(sample.From) {
-				return errors.New("invalid accounting sample")
-			}
-			key := fmt.Sprintf("%d:%s:%s", sample.UserID, sample.AccountingPeriod, sample.Through.UTC().Format(time.DateOnly))
-			old, exists := d.Accounting[key]
-			if !exists {
-				d.Accounting[key] = sample
-				continue
-			}
-			if ^uint64(0)-old.UploadBytes < sample.UploadBytes || ^uint64(0)-old.DownloadBytes < sample.DownloadBytes {
-				return errors.New("accounting counter overflow")
-			}
-			old.UploadBytes += sample.UploadBytes
-			old.DownloadBytes += sample.DownloadBytes
-			if sample.From.Before(old.From) {
-				old.From = sample.From
-			}
-			if sample.Through.After(old.Through) {
-				old.Through = sample.Through
-			}
-			d.Accounting[key] = old
-		}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	m := &s.traffic
+	if len(delta) > MaxTrafficEntries || len(samples) > MaxTrafficEntries {
+		m.drop(uint64(max(1, len(samples))))
 		return nil
-	})
-}
-
-func addTraffic(d *Data, delta Traffic) error {
-	if d.Accumulated == nil {
-		d.Accumulated = Traffic{}
 	}
-	for id, bytes := range delta {
-		old := d.Accumulated[id]
-		if ^uint64(0)-old[0] < bytes[0] || ^uint64(0)-old[1] < bytes[1] {
-			return errors.New("traffic counter overflow")
+	totals := make(Traffic, len(delta))
+	for id, value := range delta {
+		old := m.totals[id]
+		if id <= 0 || ^uint64(0)-old[0] < value[0] || ^uint64(0)-old[1] < value[1] {
+			return errors.New("invalid or overflowing traffic counter")
 		}
-		d.Accumulated[id] = [2]uint64{old[0] + bytes[0], old[1] + bytes[1]}
+		totals[id] = [2]uint64{old[0] + value[0], old[1] + value[1]}
+	}
+	updates := make(map[string]protocol.TrafficSample, len(samples))
+	for _, sample := range samples {
+		if sample.UserID <= 0 || !protocol.ValidName(sample.AccountingPeriod) || len(sample.AccountingPeriod) > 128 || sample.From.IsZero() || sample.Through.Before(sample.From) {
+			return errors.New("invalid accounting sample")
+		}
+		// Never coalesce across a period, capture minute or a sample spanning a
+		// different minute. A rate-change flush seals the entire prior batch.
+		key := fmt.Sprintf("%d:%s:%d:%d", sample.UserID, sample.AccountingPeriod, sample.From.UTC().Unix()/60, sample.Through.UTC().Unix()/60)
+		old, exists := updates[key]
+		if !exists {
+			old, exists = m.samples[key]
+		}
+		if !exists {
+			updates[key] = sample
+			continue
+		}
+		if ^uint64(0)-old.UploadBytes < sample.UploadBytes || ^uint64(0)-old.DownloadBytes < sample.DownloadBytes {
+			return errors.New("accounting counter overflow")
+		}
+		old.UploadBytes += sample.UploadBytes
+		old.DownloadBytes += sample.DownloadBytes
+		if sample.From.Before(old.From) {
+			old.From = sample.From
+		}
+		if sample.Through.After(old.Through) {
+			old.Through = sample.Through
+		}
+		updates[key] = old
+	}
+	entries := len(m.totals) + len(m.samples)
+	for id := range totals {
+		if _, ok := m.totals[id]; !ok {
+			entries++
+		}
+	}
+	for key := range updates {
+		if _, ok := m.samples[key]; !ok {
+			entries++
+		}
+	}
+	if entries > MaxTrafficEntries {
+		m.drop(uint64(max(1, len(samples))))
+		return nil
+	}
+	for id, value := range totals {
+		m.totals[id] = value
+	}
+	for key, value := range updates {
+		m.samples[key] = value
 	}
 	return nil
 }
 
-func sealTraffic(d *Data) error {
-	if len(d.Accumulated) == 0 && len(d.Accounting) == 0 {
-		return nil
-	}
-	if d.Sequence == ^uint64(0) {
-		return errors.New("traffic sequence exhausted")
-	}
-	d.Sequence++
-	batch := &Batch{ID: fmt.Sprintf("%s:%d", d.AgentID, d.Sequence), Traffic: d.Accumulated}
-	keys := make([]string, 0, len(d.Accounting))
-	for key := range d.Accounting {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
-	for _, key := range keys {
-		batch.Samples = append(batch.Samples, d.Accounting[key])
-	}
-	d.Accumulated = Traffic{}
-	d.Accounting = nil
-	if d.Pending == nil {
-		d.Pending = batch
-	} else {
-		d.Backlog = append(d.Backlog, batch)
-	}
-	return nil
-}
-
-// Flush seals all captured data without replacing an outstanding replay batch.
+// Flush seals known usage. Queue pressure is a retryable barrier failure, never a
+// durable-storage failure and never permission to pause member admission.
 func (s *Store) Flush() (protocol.TrafficBarrier, error) {
-	var barrier protocol.TrafficBarrier
-	err := s.change(func(d *Data) error {
-		if err := sealTraffic(d); err != nil {
-			return err
-		}
-		barrier = protocol.TrafficBarrier{AgentID: d.AgentID, Sequence: d.Sequence, Through: time.Now().UTC()}
-		return nil
-	})
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	err := s.traffic.seal(s.data.AgentID)
+	barrier := protocol.TrafficBarrier{AgentID: s.data.AgentID, StreamID: s.traffic.stream, Sequence: s.traffic.sequence, Through: time.Now().UTC()}
+	if s.data.Pending != nil {
+		barrier.LegacySequence = s.data.Sequence
+	}
 	return barrier, err
 }

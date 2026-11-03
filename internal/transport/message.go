@@ -17,6 +17,15 @@ func (c *Client) writeMessage(socket *websocket.Conn, message protocol.Message) 
 	if message.Type == "ddns.changes" && !c.DDNSChanges() {
 		return nil
 	}
+	if message.Type == "traffic.report" && !c.TrafficStreams() {
+		var report protocol.TrafficReport
+		if err := protocol.Decode(message.Data, &report); err != nil {
+			return err
+		}
+		if report.StreamID != "" {
+			return nil // Preserve legacy journals; never relabel boot-scoped usage.
+		}
+	}
 	// A snapshot queued by an earlier connection can outlive negotiation. Always
 	// fall back before writing it to a legacy master, including reconnect races.
 	if message.Type == "telemetry.compact" && !c.CompactTelemetry() {

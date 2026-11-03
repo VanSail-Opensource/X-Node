@@ -53,3 +53,5 @@ scratch buffers retain at most 512 KiB; larger buffers are disposable. These
 codecs never touch the filesystem. `report_frame_test.go` covers malformed sizes,
 checksums, expansion bounds and retained memory; its hosted benchmark measures
 round trips over 10,000 synthetic observations.
+
+`traffic_stream.go` exposes independent boot-stream negotiation and canonical report identity validation. Traffic report/barrier aliases carry stream and legacy replay references; dropped samples signal bounded-memory loss without a fabricated byte count.

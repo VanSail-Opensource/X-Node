@@ -7,7 +7,7 @@ import (
 	"github.com/VanSail-Opensource/X-Node/internal/protocol"
 )
 
-func TestAccountingBarrierPreservesPendingAndPeriodReplay(t *testing.T) {
+func TestVolatileBarrierPreservesPendingAndPeriodReplay(t *testing.T) {
 	dir := t.TempDir()
 	store, err := Open(dir)
 	if err != nil {
@@ -32,21 +32,17 @@ func TestAccountingBarrierPreservesPendingAndPeriodReplay(t *testing.T) {
 	if err != nil || barrier.Sequence != 2 {
 		t.Fatalf("barrier=%+v,error=%v", barrier, err)
 	}
-	reopened, err := Open(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	pending, err := reopened.Batch()
+	pending, err := store.Batch()
 	if err != nil || pending.ID != first.ID || pending.Traffic[7][0] != 10 || pending.Samples[0].AccountingPeriod != "old-period" {
-		t.Fatalf("old immutable batch changed: %+v,%v", pending, err)
+		t.Fatalf("immutable batch changed: %+v,%v", pending, err)
 	}
-	if err = reopened.Ack("wrong-batch"); err != nil {
+	if err = store.Ack("wrong-batch"); err != nil {
 		t.Fatal(err)
 	}
-	if err = reopened.Ack(first.ID); err != nil {
+	if err = store.Ack(first.ID); err != nil {
 		t.Fatal(err)
 	}
-	next, err := reopened.Batch()
+	next, err := store.Batch()
 	if err != nil || next.ID == first.ID || len(next.Samples) != 2 || next.Traffic[7][0] != 5 {
 		t.Fatalf("queued periods lost: %+v,%v", next, err)
 	}

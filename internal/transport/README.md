@@ -50,3 +50,5 @@ An overflowing ordered inbound queue closes the connection to trigger authentica
 queued reports follow the current peer's capabilities. `client.go` reuses one
 encoder across reconnects and closes it when Run exits; no reporting path spools
 to disk. Binary report writes explicitly disable permessage-deflate.
+
+Boot-scoped traffic has its own handshake. Serialized writing suppresses new stream reports to legacy masters, retaining old journal framing and IDs. This never converts volatile traffic into legacy sequences. Both kinds share the bounded existing traffic lane.

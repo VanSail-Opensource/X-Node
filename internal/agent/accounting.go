@@ -22,16 +22,19 @@ type accountingResult struct {
 }
 
 func (a *Agent) captureTraffic() error {
+	return a.captureTrafficFrom(a.Registry.Counters())
+}
+
+func (a *Agent) captureTrafficFrom(current state.Traffic) error {
 	now := time.Now()
 	from := a.lastCapture
 	if from.IsZero() {
 		from = now.Add(-time.Second)
 	}
-	elapsed := now.Sub(from).Seconds()
 	if now.UTC().Before(from.UTC()) {
 		from = now
 	}
-	current, delta := a.Registry.Counters(), state.Traffic{}
+	delta := state.Traffic{}
 	for id, bytes := range current {
 		old := a.previous[id]
 		up, down := bytes[0], bytes[1]
@@ -74,13 +77,15 @@ func (a *Agent) captureTraffic() error {
 		return err
 	}
 	a.previous, a.previousAccounting, a.lastCapture = current, nextAccounting, now
-	a.Registry.SetRates(delta, elapsed)
 	a.Registry.PruneAccounting(captured)
 	a.Registry.PruneCounters()
 	return nil
 }
 
 func (a *Agent) flushTraffic(ctx context.Context, raw []byte) (any, error) {
+	if !a.Client.TrafficStreams() {
+		return nil, errors.New("traffic stream negotiation is required for a flush")
+	}
 	var args protocol.TrafficFlush
 	if err := protocol.Decode(raw, &args); err != nil {
 		return nil, err
@@ -128,7 +133,7 @@ func (a *Agent) handleAccounting(request accountingRequest) {
 		return
 	}
 	barrier, err := a.Store.Flush()
-	if err != nil {
+	if err != nil && !errors.Is(err, state.ErrTrafficBusy) {
 		a.failStorage(err)
 	}
 	barrier.Quiesced = request.quiesced

@@ -943,6 +943,53 @@
           "203.0.113.10"
         ]
       }
+    },
+    {
+      "name": "firewall.leases.update",
+      "description": "Apply a bounded batch of volatile exact-address automatic firewall leases.",
+      "body": "## Automatic firewall leases\nRequires volatile_firewall_leases_v1. The existing control executor applies at most 256 canonical public IPv4/IPv6 addresses with absolute deadlines and decimal-string generations. The result contains the accepted epoch and largest processed generation. Unchanged replay performs no kernel write; conflicting same-epoch generations reject atomically. New master epochs and agent process restart preserve previously delivered deadlines. Local timeout expiry requires no removal command. Lease IPs and replay receipts remain memory-only, and rollback snapshots omit their kernel elements. Manual/paid grants and member admission remain independent.",
+      "fields": [
+        [
+          "epoch",
+          "string",
+          "Required",
+          "Unique master process epoch, at most 64 name-safe characters."
+        ],
+        [
+          "leases",
+          "array",
+          "Required",
+          "Between 1 and 256 unique exact canonical public IP grants."
+        ],
+        [
+          "leases[].ip",
+          "string",
+          "Required",
+          "An exact IPv4/IPv6 address; CIDR ranges are not accepted."
+        ],
+        [
+          "leases[].generation",
+          "decimal string",
+          "Required",
+          "Positive generation counter, preserved exactly beyond JavaScript integer precision."
+        ],
+        [
+          "leases[].until",
+          "RFC 3339 timestamp",
+          "Required",
+          "Absolute UTC expiry. Already expired in-flight grants are harmless no-ops."
+        ]
+      ],
+      "args": {
+        "epoch": "example-master-epoch",
+        "leases": [
+          {
+            "ip": "8.8.8.8",
+            "generation": "9007199254740993",
+            "until": "2026-11-05T00:00:00Z"
+          }
+        ]
+      }
     }
   ]
 }

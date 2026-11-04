@@ -1,3 +1,32 @@
+# X-Node v2.0.19
+
+Adds negotiated Zstandard level-6 report framing with one reused worker and
+bounded encoding/decompression. Sampling of active IPs, connection counts and
+throughput follows the master's sample interval; reporting follows its separate
+report interval. Expensive host maintenance remains on an independent cadence.
+Actual sampled IP activity carries timestamps and bounded observation history.
+
+New traffic accumulation and pending reports stay in bounded memory, without
+telemetry or traffic spooling on disconnection. Boot-scoped streams identify
+replay, gaps and conflicts; surviving usage is committed before acknowledgement.
+Existing durable traffic journals drain with their original identities. Upgrade
+the panel before agents: new boot-scoped traffic needs a compatible master.
+Credentials, configuration, ordinary command receipts and committed financial
+accounting retain their durable behavior.
+
+Adds `volatile_firewall_leases_v1` and private, batched
+`firewall.leases.update` commands. A separate indexed, memory-only bank enforces
+exact IPv4/IPv6 blacklist exemptions with absolute kernel expiry, epoch/generation
+replay handling and recovery of unexpired kernel deadlines after agent restart.
+Broader bans, manual/paid grants and member admission remain independent. Lease
+IP payloads are excluded from durable command history and firewall snapshots.
+
+Replaces periodic status-file writes with a permission-restricted Unix socket
+queried by `xnodectl`. Hosted regressions cover disconnected memory bounds,
+framing/cadence, replay/conflict handling, lease expiry and both Debian firewall
+VM configurations. This release requires coordinated panel support for the new
+traffic and automatic lease capabilities.
+
 # X-Node v2.0.18
 
 Updates the pinned Xray core to upstream v26.10.29 (commit `0afec66085a8`),

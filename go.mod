@@ -7,7 +7,7 @@ require (
 	github.com/caddyserver/certmagic v0.25.6
 	github.com/google/nftables v0.3.1-0.20260430172505-f9b52ed2ba65
 	github.com/gorilla/websocket v1.5.3
-	github.com/klauspost/compress v1.20.0
+	github.com/klauspost/compress v1.20.3
 	github.com/libdns/alidns v1.0.7
 	github.com/libdns/azure v0.5.0
 	github.com/libdns/bunny v1.6.1
@@ -32,7 +32,7 @@ require (
 	github.com/mdlayher/netlink v1.11.2
 	github.com/miekg/dns v1.1.73
 	github.com/robfig/cron/v3 v3.0.1
-	github.com/shirou/gopsutil/v4 v4.26.9
+	github.com/shirou/gopsutil/v4 v4.26.10
 	github.com/xtls/xray-core v1.260327.1-0.20261029083850-0afec66085a8
 	go.uber.org/zap v1.28.0
 	go4.org/netipx v0.0.0-20231129151722-fdeea329fbba
@@ -72,7 +72,7 @@ require (
 	github.com/caddyserver/zerossl v0.1.6 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/digitalocean/godo v1.225.0 // indirect
-	github.com/ebitengine/purego v0.11.1 // indirect
+	github.com/ebitengine/purego v0.11.2 // indirect
 	github.com/felixge/httpsnoop v1.1.0 // indirect
 	github.com/ghodss/yaml v1.0.1-0.20220118164431-d8423dcdf344 // indirect
 	github.com/go-logr/logr v1.4.4 // indirect

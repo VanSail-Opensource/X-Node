@@ -27,6 +27,8 @@ checks that managed revocation neither restarts utility listeners nor charges
 their bytes to a member. `runtime_test.go`, `streams_test.go` and
 `shadowsocks_accounts_test.go` cover actual managed streams, accounting barriers,
 credential rotation, expiry and SS-2022 authentication in hosted Linux CI.
+Stream assertions wait for successful server writes to publish their counters;
+receiving a response on the client can precede that publication.
 
 `dns.go` adds authenticated-inbound-only port-53 routing and a reserved core DNS
 identity. Internal queries use their own freedom outbound with explicit local

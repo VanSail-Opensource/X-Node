@@ -214,9 +214,7 @@ func TestRealTLSVisionXHTTPAndREALITYAccounting(t *testing.T) {
 			if e != nil || n != 128<<10 {
 				t.Fatalf("stream payload %d: %v", n, e)
 			}
-			if registry.Counters()[1][1] < 128<<10 {
-				t.Fatal("TLS/Vision/XHTTP payload bypassed accounting")
-			}
+			awaitMeteredTraffic(t, registry, 1, 0, 128<<10)
 			if mode == "reality-vision" {
 				probes := []struct {
 					name    string

@@ -1,3 +1,28 @@
+# X-Node v2.0.21
+
+Adds the independently negotiated `hourly_account_limits_v1` capability for
+shared member-ingress accounting, centrally reserved full-speed byte credits,
+and one account speed bucket across its hourly identities. Transit traffic
+does not consume this additional allowance or speed ceiling. The master must
+support the complete contract before enabling hourly sales.
+
+Session-bound grants use original demand deadlines, monotonic sequences and
+empty initial token buckets. Missing authority pauses idle and waiting streams;
+fresh grants resume them without restoring stale capacity. Paid expiry and
+authorization revocation close native transports, including idle connections.
+Rate redistribution drains started handoffs before releasing allocations.
+
+Private, bounded credit journals retain exact obligations, immutable proofs,
+replay tombstones and compaction evidence with checked durability barriers and
+whole-document integrity. Successful admission consumes bytes once; financial
+sealing preserves that consumption without interrupting an active transfer.
+Restart retains unknown obligations rather than inventing unused credit.
+Unhealthy journals or changed agent identities disable hourly support while
+legacy service continues. Existing purchases require no conversion.
+
+See the [hourly contract](hourly-account-limits.md) for units, negotiation,
+accounting boundaries and coordinated rollout requirements.
+
 # X-Node v2.0.20
 
 Hardens the privileged process boundary: native Xray environment keys are

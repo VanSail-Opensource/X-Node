@@ -33,6 +33,14 @@ The installer asks for the token without echoing it. For automation, use `--toke
 
 Release descriptions are extracted by `scripts/release_notes.py` from the matching version heading in `docs/release-notes.md`. Publication fails if the section is missing, duplicated, or empty; the cumulative document remains the source of release history.
 
+Signed publication requires a manual workflow dispatch from protected `main`, an
+existing immutable stable tag, and the exact successful canonical Quality push
+run for that commit. Separate build, sign and publish jobs verify both architecture
+pairs and uploaded release bytes before publication. See
+[repository policy](docs/repository-protection.md),
+[release provenance](docs/release-provenance.md) and
+[bundle validation](docs/release-bundle.md) for the operator workflow.
+
 Installation checks the required package manager, service manager and architecture rather than a distribution name or version. The agent, CLI and updater also accept Linux without a distribution/version gate. Package repositories must provide the installer dependencies, including `minisign` ([Ubuntu 24.04 universe](https://packages.ubuntu.com/en/noble/misc/minisign)). Hosted Ubuntu 24.04 checks exercise CLI bootstrap after token entry; privileged firewall/reboot integration remains covered on Debian 13.
 
 Only two local fields are required in `/etc/x-node/bootstrap.json`:

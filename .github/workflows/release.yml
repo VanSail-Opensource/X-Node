@@ -1,54 +1,532 @@
 name: Signed Debian release
 on:
-  push:
-    tags: ['v*.*.*']
   workflow_dispatch:
     inputs:
       version:
-        description: Stable release tag
+        description: Existing immutable stable tag
         required: true
+        type: string
+      quality_run_id:
+        description: Successful canonical main push Quality run
+        required: true
+        type: string
 permissions:
-  contents: write
+  contents: read
+  actions: read
+concurrency:
+  group: signed-release-${{ inputs.version }}
+  cancel-in-progress: false
 jobs:
-  release:
-    if: github.repository == 'VanSail-Opensource/X-Node'
+  build:
+    if: github.repository_id == '1416770902' && github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-24.04
-    # The signing secret is restricted to release tags by environment policy.
-    environment: release
-    timeout-minutes: 15
+    timeout-minutes: 20
+    outputs:
+      source_sha: ${{ steps.provenance.outputs.source_sha }}
+    env: &release_env
+      RELEASE_VERSION: ${{ inputs.version }}
+      QUALITY_RUN_ID: ${{ inputs.quality_run_id }}
+      GH_TOKEN: ${{ github.token }}
+      BUNDLE_DIR: ${{ github.workspace }}/release-data
     steps:
+      - name: Verify protected main and exact successful Quality provenance
+        id: provenance
+        run: &verify_provenance |
+          source_sha=$(python3 -I - "$RELEASE_VERSION" "$QUALITY_RUN_ID" <<'PY_RELEASE_PROVENANCE'
+          #!/usr/bin/env python3
+          """Read-only, canonical-main release provenance gate; stdout contains only a SHA."""
+
+          import json
+          import os
+          import re
+          import sys
+          import urllib.request
+
+          REPOSITORY = "VanSail-Opensource/X-Node"
+          REPOSITORY_ID = 1416770902
+          WORKFLOW_ID = 383872953
+          WORKFLOW_PATH = ".github/workflows/ci.yml"
+          JOBS = frozenset(("Tests and schemas", "Debian binary amd64", "Debian binary arm64",
+                            "Vulnerability scan", "Host debian / nftables-on", "Host debian / nftables-off"))
+          ROOT = "/repos/" + REPOSITORY
+          TAG_POLICY = "Immutable release tags"
+          SHA = re.compile(r"[0-9a-f]{40}", re.ASCII)
+
+
+          class ProvenanceError(ValueError):
+              """Metadata does not prove the required release provenance."""
+
+
+          def require(condition):
+              if not condition:
+                  raise ProvenanceError("release provenance rejected")
+
+
+          def validate_context(version, run_id, context):
+              require(isinstance(version, str) and len(version) <= 64
+                      and re.fullmatch(r"v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)", version))
+              require(isinstance(run_id, str) and re.fullmatch(r"[1-9][0-9]{0,19}", run_id))
+              require(context.get("GITHUB_REPOSITORY") == REPOSITORY
+                      and context.get("GITHUB_REPOSITORY_ID") == str(REPOSITORY_ID)
+                      and context.get("GITHUB_REF") == "refs/heads/main"
+                      and context.get("GITHUB_EVENT_NAME") == "workflow_dispatch")
+              return version, int(run_id)
+
+
+          def _canonical(repository):
+              require(repository["id"] == REPOSITORY_ID and repository["full_name"] == REPOSITORY)
+
+
+          def _tag_sha(reference, objects, version):
+              require(reference["ref"] == "refs/tags/" + version and len(objects) <= 5)
+              obj = reference["object"]
+              for tag in objects:
+                  require(obj["type"] == "tag" and SHA.fullmatch(obj["sha"]) and tag["sha"] == obj["sha"])
+                  obj = tag["object"]
+              require(obj["type"] == "commit" and SHA.fullmatch(obj["sha"]))
+              return obj["sha"]
+
+
+          def validate_provenance(metadata):
+              """Validate fetched snapshots without I/O; malformed or incomplete metadata rejects."""
+              try:
+                  return _validate(metadata)
+              except (KeyError, TypeError, AttributeError, IndexError, ValueError):
+                  raise ProvenanceError("release provenance rejected") from None
+
+
+          def _validate(m):
+              version, run_id = validate_context(m["version"], m["run_id"], m["context"])
+              _canonical(m["repository"])
+              workflow, run = m["workflow"], m["run"]
+              require(workflow["id"] == WORKFLOW_ID and workflow["path"] == WORKFLOW_PATH
+                      and workflow["name"] == "Quality" and workflow["state"] == "active")
+              sha = _tag_sha(m["tag_ref"], m["tag_objects"], version)
+              require(m["tag_ref_after"]["ref"] == m["tag_ref"]["ref"]
+                      and m["tag_ref_after"]["object"] == m["tag_ref"]["object"])
+              _canonical(run["repository"])
+              _canonical(run["head_repository"])
+              expected = {"id": run_id, "workflow_id": WORKFLOW_ID, "path": WORKFLOW_PATH,
+                          "name": "Quality", "event": "push", "head_branch": "main",
+                          "head_sha": sha, "status": "completed", "conclusion": "success"}
+              require(all(run[key] == value and m["run_after"][key] == value for key, value in expected.items()))
+              attempt = run["run_attempt"]
+              require(type(attempt) is int and 0 < attempt <= 100000
+                      and type(m["run_after"]["run_attempt"]) is int and m["run_after"]["run_attempt"] == attempt)
+              _canonical(m["run_after"]["repository"])
+              _canonical(m["run_after"]["head_repository"])
+              jobs = m["jobs"]
+              require(type(m["jobs_total"]) is int and m["jobs_total"] == len(jobs) == len(JOBS)
+                      and {job["name"] for job in jobs} == JOBS)
+              require(len({job["id"] for job in jobs}) == len(jobs))
+              for job in jobs:
+                  require(type(job["id"]) is int and job["id"] > 0 and job["run_id"] == run_id
+                          and job["head_sha"] == sha and type(job.get("run_attempt", attempt)) is int
+                          and job.get("run_attempt", attempt) == attempt
+                          and job["status"] == "completed" and job["conclusion"] == "success")
+              main, comparison = m["main"], m["comparison"]
+              require(main["name"] == "main" and main["protected"] is True and SHA.fullmatch(main["commit"]["sha"]))
+              checks = main["protection"]["required_status_checks"]
+              require(checks["enforcement_level"] in ("non_admins", "all")
+                      and len(checks["checks"]) == len(JOBS)
+                      and {check["context"] for check in checks["checks"]} == JOBS
+                      and all(check["app_id"] == 15368 for check in checks["checks"]))
+              require(comparison["status"] in ("ahead", "identical")
+                      and comparison["base_commit"]["sha"] == sha and comparison["merge_base_commit"]["sha"] == sha)
+              require(len(m["rulesets"]) == 1)
+              ruleset = m["rulesets"][0]
+              require(ruleset["name"] == TAG_POLICY and ruleset["target"] == "tag"
+                      and ruleset["source_type"] == "Repository" and ruleset["source"] == REPOSITORY
+                      and ruleset["enforcement"] == "active" and ruleset.get("bypass_actors", []) == []
+                      and ruleset["conditions"]["ref_name"] == {"include": ["refs/tags/v*"], "exclude": []}
+                      and len(ruleset["rules"]) == 2 and {rule["type"] for rule in ruleset["rules"]} == {"update", "deletion"})
+              return sha
+
+
+          def _pages(api, path, key=None):
+              result, total = [], None
+              for page in range(1, 11):
+                  data = api(path + ("&" if "?" in path else "?") + f"per_page=100&page={page}")
+                  items = data[key] if key else data
+                  require(isinstance(items, list) and len(items) <= 100)
+                  if key:
+                      count = data["total_count"]
+                      require(type(count) is int and 0 <= count <= 1000 and (total is None or total == count))
+                      total = count
+                  result.extend(items)
+                  if len(items) < 100 or (key and len(result) >= total):
+                      require(not key or len(result) == total)
+                      return result, total
+              raise ProvenanceError("release provenance rejected")
+
+
+          def fetch_metadata(api, version, run_id, context):
+              """Fetch bounded snapshots; api accepts only fixed-origin repository API paths."""
+              version, number = validate_context(version, run_id, context)
+              m = {"version": version, "run_id": run_id, "context": context}
+              for key, path in (("repository", ""), ("workflow", f"/actions/workflows/{WORKFLOW_ID}"),
+                                ("run", f"/actions/runs/{number}"), ("main", "/branches/main"),
+                                ("tag_ref", "/git/ref/tags/" + version)):
+                  m[key] = api(ROOT + path)
+              obj, tags = m["tag_ref"]["object"], []
+              while obj["type"] == "tag":
+                  require(len(tags) < 5 and SHA.fullmatch(obj["sha"]))
+                  tags.append(api(ROOT + "/git/tags/" + obj["sha"]))
+                  obj = tags[-1]["object"]
+              m["tag_objects"] = tags
+              sha, main_sha = _tag_sha(m["tag_ref"], tags, version), m["main"]["commit"]["sha"]
+              require(SHA.fullmatch(main_sha))
+              m["comparison"] = api(ROOT + f"/compare/{sha}...{main_sha}")
+              attempt = m["run"]["run_attempt"]
+              require(type(attempt) is int and 0 < attempt <= 100000)
+              m["jobs"], m["jobs_total"] = _pages(api, ROOT + f"/actions/runs/{number}/attempts/{attempt}/jobs", "jobs")
+              summaries, _ = _pages(api, ROOT + "/rulesets?includes_parents=false")
+              managed = [rule for rule in summaries if rule["name"] == TAG_POLICY]
+              require(len(managed) == 1)
+              rule = managed[0]
+              require(type(rule["id"]) is int and rule["id"] > 0)
+              m["rulesets"] = [api(ROOT + "/rulesets/" + str(rule["id"]))]
+              require(m["rulesets"][0]["id"] == rule["id"])
+              m["tag_ref_after"] = api(ROOT + "/git/ref/tags/" + version)
+              m["run_after"] = api(ROOT + f"/actions/runs/{number}")
+              return m
+
+
+          class _NoRedirect(urllib.request.HTTPRedirectHandler):
+              def redirect_request(self, request, fp, code, message, headers, new_url):
+                  raise ProvenanceError("release provenance rejected")
+
+
+          def main():
+              try:
+                  require(len(sys.argv) == 3 and bool(os.environ.get("GH_TOKEN")))
+                  opener = urllib.request.build_opener(_NoRedirect())
+                  budget = 8 << 20
+
+                  def api(path):
+                      nonlocal budget
+                      require((path == ROOT or path.startswith(ROOT + "/")) and "\r" not in path and "\n" not in path)
+                      request = urllib.request.Request("https://api.github.com" + path, headers={
+                          "Authorization": "Bearer " + os.environ["GH_TOKEN"], "Accept": "application/vnd.github+json",
+                          "X-GitHub-Api-Version": "2022-11-28", "User-Agent": "X-Node-release-provenance"})
+                      with opener.open(request, timeout=20) as response:
+                          require(response.status == 200)
+                          raw = response.read(min(2 << 20, budget) + 1)
+                      budget -= len(raw)
+                      require(len(raw) <= 2 << 20 and budget >= 0)
+                      return json.loads(raw)
+
+                  print(validate_provenance(fetch_metadata(api, sys.argv[1], sys.argv[2], os.environ)))
+                  return 0
+              except Exception:
+                  print("release provenance rejected", file=sys.stderr)
+                  return 1
+
+
+          if __name__ == "__main__":
+              sys.exit(main())
+          PY_RELEASE_PROVENANCE
+          )
+          [[ "$source_sha" =~ ^[0-9a-f]{40}$ ]]
+          if [[ -n "${EXPECTED_SOURCE_SHA:-}" ]]; then [[ "$source_sha" == "$EXPECTED_SOURCE_SHA" ]]; fi
+          printf 'source_sha=%s\n' "$source_sha" >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ steps.provenance.outputs.source_sha }}
+          persist-credentials: false
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
         with:
           go-version-file: go.mod
           cache: true
-      - name: Verify the release commit passed Quality
+      - name: Build approved source without signing credentials
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SOURCE_SHA: ${{ steps.provenance.outputs.source_sha }}
         run: |
-          gh api "repos/$GITHUB_REPOSITORY/actions/runs?head_sha=$GITHUB_SHA&status=success" --jq '.workflow_runs[] | select(.name == "Quality" and .conclusion == "success") | .id' > /tmp/quality-runs
-          test -s /tmp/quality-runs
-      - name: Build release binaries
-        env:
-          RELEASE_VERSION: ${{ inputs.version || github.ref_name }}
-        run: |
-          [[ "$RELEASE_VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
           python3 scripts/release_notes.py "$RELEASE_VERSION" > "$RUNNER_TEMP/x-node-release-notes.md"
+          printf '\nSource: https://github.com/%s/commit/%s\nQuality: https://github.com/%s/actions/runs/%s\n' "$GITHUB_REPOSITORY" "$SOURCE_SHA" "$GITHUB_REPOSITORY" "$QUALITY_RUN_ID" >> "$RUNNER_TEMP/x-node-release-notes.md"
           make build VERSION="$RELEASE_VERSION"
           python3 scripts/build_docs.py
           (cd docs-site/dist && zip -q -r ../../dist/x-node-api-docs.zip .)
           cp install.sh dist/install.sh
-          cd dist
-          sha256sum x-node-linux-* xnodectl-linux-* install.sh x-node-api-docs.zip > SHA256SUMS
-      - name: Sign and publish
+          mkdir -p "$BUNDLE_DIR"
+          cp dist/x-node-linux-amd64 dist/x-node-linux-arm64 dist/xnodectl-linux-amd64 dist/xnodectl-linux-arm64 dist/install.sh dist/x-node-api-docs.zip "$BUNDLE_DIR/"
+          (cd "$BUNDLE_DIR" && sha256sum x-node-linux-amd64 x-node-linux-arm64 xnodectl-linux-amd64 xnodectl-linux-arm64 install.sh x-node-api-docs.zip > SHA256SUMS)
+      - name: Verify unsigned bundle
+        run: &verify_bundle |
+          cat > "$RUNNER_TEMP/release_bundle.py" <<'PY_RELEASE_BUNDLE'
+          #!/usr/bin/env python3
+          """Validate release assets without importing or executing their contents."""
+
+          import argparse
+          from contextlib import contextmanager
+          import hashlib
+          import os
+          from pathlib import Path
+          import re
+          import stat
+          import struct
+          import subprocess
+
+          PUBLIC_KEY = "RWQ6HaDFAVc2u+yR4zuGuTn+wHojhxW7s7DxO1W22yj5r5yYwZgPt3qL"
+          MACHINES = {
+              "x-node-linux-amd64": 62,
+              "x-node-linux-arm64": 183,
+              "xnodectl-linux-amd64": 62,
+              "xnodectl-linux-arm64": 183,
+          }
+          PAYLOADS = frozenset((*MACHINES, "install.sh", "x-node-api-docs.zip"))
+          MANIFEST = "SHA256SUMS"
+          SIGNATURE = "SHA256SUMS.minisig"
+          MAX_PAYLOAD = 2 << 30
+          MAX_DOCS = 128 << 20
+          MAX_MANIFEST = 4096
+          MAX_SIGNATURE = 4096
+          STABLE_VERSION = re.compile(r"v[0-9]+\.[0-9]+\.[0-9]+", re.ASCII)
+
+
+          class BundleError(ValueError):
+              """A release bundle failed a structural or cryptographic check."""
+
+
+          def _identity(info):
+              return info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns
+
+
+          @contextmanager
+          def _regular_file(path, limit):
+              before = path.lstat()
+              if not stat.S_ISREG(before.st_mode) or not 0 < before.st_size <= limit:
+                  raise BundleError(f"invalid file type or size: {path.name}")
+              with path.open("rb") as stream:
+                  opened = os.fstat(stream.fileno())
+                  if _identity(before) != _identity(opened):
+                      raise BundleError(f"file changed while opening: {path.name}")
+                  yield stream
+                  if (_identity(opened) != _identity(os.fstat(stream.fileno()))
+                          or _identity(opened) != _identity(path.lstat())):
+                      raise BundleError(f"file changed during validation: {path.name}")
+
+
+          def _small_file(path, limit):
+              with _regular_file(path, limit) as stream:
+                  data = stream.read(limit + 1)
+              if len(data) > limit:
+                  raise BundleError(f"file exceeds limit: {path.name}")
+              return data
+
+
+          def _manifest_entries(raw):
+              try:
+                  lines = raw.decode("ascii").splitlines()
+              except UnicodeDecodeError as error:
+                  raise BundleError("manifest is not ASCII") from error
+              entries = {}
+              for line in lines:
+                  match = re.fullmatch(r"([0-9a-f]{64})  ([a-zA-Z0-9.-]+)", line)
+                  if not match:
+                      raise BundleError("invalid manifest entry")
+                  digest, name = match.groups()
+                  if name not in PAYLOADS or name in entries:
+                      raise BundleError("unexpected or duplicate manifest entry")
+                  entries[name] = digest
+              if entries.keys() != PAYLOADS:
+                  raise BundleError("manifest must list exactly six release payloads")
+              return entries
+
+
+          def _payload_digest(path):
+              limit = MAX_DOCS if path.name == "x-node-api-docs.zip" else MAX_PAYLOAD
+              digest = hashlib.sha256()
+              with _regular_file(path, limit) as stream:
+                  header = stream.read(64)
+                  if path.name in MACHINES:
+                      if (len(header) != 64 or header[:7] != b"\x7fELF\x02\x01\x01"
+                              or struct.unpack_from("<H", header, 16)[0] not in (2, 3)
+                              or struct.unpack_from("<H", header, 18)[0] != MACHINES[path.name]
+                              or struct.unpack_from("<I", header, 20)[0] != 1
+                              or struct.unpack_from("<H", header, 52)[0] != 64):
+                          raise BundleError(f"invalid ELF64 architecture: {path.name}")
+                  digest.update(header)
+                  total = len(header)
+                  while chunk := stream.read(1 << 20):
+                      total += len(chunk)
+                      if total > limit:
+                          raise BundleError(f"file exceeds limit: {path.name}")
+                      digest.update(chunk)
+              return digest.hexdigest()
+
+
+          def _verify_signature(directory, version):
+              raw = _small_file(directory / SIGNATURE, MAX_SIGNATURE)
+              try:
+                  result = subprocess.run(
+                      ["minisign", "-V", "-H", "-P", PUBLIC_KEY,
+                       "-m", str(directory / MANIFEST), "-x", str(directory / SIGNATURE)],
+                      capture_output=True, check=False, timeout=30,
+                      env={"PATH": "/usr/bin:/bin", "LANG": "C", "LC_ALL": "C"},
+                  )
+              except (OSError, subprocess.TimeoutExpired) as error:
+                  raise BundleError("minisign verification could not run") from error
+              if result.returncode:
+                  raise BundleError("release signature verification failed")
+              if raw != _small_file(directory / SIGNATURE, MAX_SIGNATURE):
+                  raise BundleError("signature changed during verification")
+              try:
+                  lines = raw.decode("ascii").splitlines()
+              except UnicodeDecodeError as error:
+                  raise BundleError("signature is not ASCII") from error
+              if len(lines) != 4 or lines[2] != "trusted comment: version:" + version:
+                  raise BundleError("signed release version differs")
+
+
+          def validate_bundle(directory: Path, version: str, signed: bool = False) -> None:
+              """Require a complete, bounded, architecture-correct release bundle."""
+              if not STABLE_VERSION.fullmatch(version):
+                  raise BundleError("expected a stable vMAJOR.MINOR.PATCH version")
+              directory = Path(directory).absolute()
+              if not stat.S_ISDIR(directory.lstat().st_mode):
+                  raise BundleError("bundle must be a regular directory")
+              expected = PAYLOADS | {MANIFEST} | ({SIGNATURE} if signed else set())
+              if {entry.name for entry in directory.iterdir()} != expected:
+                  raise BundleError("bundle contains missing or unexpected files")
+              raw = _small_file(directory / MANIFEST, MAX_MANIFEST)
+              entries = _manifest_entries(raw)
+              if signed:
+                  _verify_signature(directory, version)
+                  if raw != _small_file(directory / MANIFEST, MAX_MANIFEST):
+                      raise BundleError("manifest changed during signature verification")
+              for name, digest in entries.items():
+                  if _payload_digest(directory / name) != digest:
+                      raise BundleError(f"SHA-256 mismatch: {name}")
+
+
+          def main():
+              parser = argparse.ArgumentParser(description=__doc__)
+              parser.add_argument("directory", type=Path)
+              parser.add_argument("--version", required=True)
+              parser.add_argument("--signed", action="store_true")
+              args = parser.parse_args()
+              try:
+                  validate_bundle(args.directory, args.version, args.signed)
+              except (BundleError, OSError) as error:
+                  parser.exit(1, f"release bundle rejected: {error}\n")
+              print(f"Verified {'signed' if args.signed else 'unsigned'} release bundle {args.version}")
+
+
+          if __name__ == "__main__":
+              main()
+          PY_RELEASE_BUNDLE
+          arguments=("$BUNDLE_DIR" --version "$RELEASE_VERSION")
+          if [[ "${VERIFY_SIGNED:-}" == 1 ]]; then arguments+=(--signed); fi
+          python3 -I "$RUNNER_TEMP/release_bundle.py" "${arguments[@]}"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: release-unsigned-${{ github.run_id }}
+          path: ${{ env.BUNDLE_DIR }}/*
+          if-no-files-found: error
+          retention-days: 7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: release-notes-${{ github.run_id }}
+          path: ${{ runner.temp }}/x-node-release-notes.md
+          if-no-files-found: error
+          retention-days: 7
+  sign:
+    needs: build
+    if: github.repository_id == '1416770902' && github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    environment: release
+    timeout-minutes: 10
+    env: *release_env
+    steps:
+      - name: Install distribution verifier before exposing the signing key
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq minisign
+      - name: Recheck immutable tag and Quality provenance
+        id: provenance
+        env:
+          EXPECTED_SOURCE_SHA: ${{ needs.build.outputs.source_sha }}
+        run: *verify_provenance
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          name: release-unsigned-${{ github.run_id }}
+          path: ${{ env.BUNDLE_DIR }}
+      - name: Verify unsigned data before signing
+        run: *verify_bundle
+      - name: Recheck provenance immediately before key use
+        env:
+          EXPECTED_SOURCE_SHA: ${{ needs.build.outputs.source_sha }}
+        run: *verify_provenance
+      - name: Sign manifest with the distribution utility
         env:
           RELEASE_KEY: ${{ secrets.RELEASE_MINISIGN_SECRET_KEY }}
-          RELEASE_VERSION: ${{ inputs.version || github.ref_name }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           test -n "$RELEASE_KEY"
           umask 077
-          printf '%s' "$RELEASE_KEY" > /tmp/x-node-release.key
-          trap 'rm -f /tmp/x-node-release.key' EXIT
-          go run ./cmd/release-sign --key-file /tmp/x-node-release.key --manifest dist/SHA256SUMS --version "$RELEASE_VERSION"
-          gh release create "$RELEASE_VERSION" dist/* --verify-tag --title "X-Node $RELEASE_VERSION" --notes-file "$RUNNER_TEMP/x-node-release-notes.md"
+          key_file="$RUNNER_TEMP/x-node-release.key"
+          trap 'rm -f -- "$key_file"' EXIT
+          printf '%s' "$RELEASE_KEY" > "$key_file"
+          unset RELEASE_KEY
+          /usr/bin/env -i PATH=/usr/bin:/bin LANG=C LC_ALL=C /usr/bin/minisign -S -s "$key_file" -m "$BUNDLE_DIR/SHA256SUMS" -x "$BUNDLE_DIR/SHA256SUMS.minisig" -t "version:$RELEASE_VERSION" -c 'X-Node release' -q </dev/null
+      - name: Verify both architecture artifacts and the pinned signature
+        env:
+          VERIFY_SIGNED: '1'
+        run: *verify_bundle
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: release-signed-${{ github.run_id }}
+          path: ${{ env.BUNDLE_DIR }}/*
+          if-no-files-found: error
+          retention-days: 7
+  publish:
+    needs: [build, sign]
+    if: github.repository_id == '1416770902' && github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      actions: read
+    env: *release_env
+    steps:
+      - name: Install public verifier
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq minisign
+      - name: Recheck source provenance before publication
+        id: provenance
+        env:
+          EXPECTED_SOURCE_SHA: ${{ needs.build.outputs.source_sha }}
+        run: *verify_provenance
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          name: release-signed-${{ github.run_id }}
+          path: ${{ env.BUNDLE_DIR }}
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          name: release-notes-${{ github.run_id }}
+          path: ${{ runner.temp }}/notes
+      - name: Verify signed publication data
+        env:
+          VERIFY_SIGNED: '1'
+        run: *verify_bundle
+      - name: Recheck provenance before creating the draft
+        env:
+          EXPECTED_SOURCE_SHA: ${{ needs.build.outputs.source_sha }}
+        run: *verify_provenance
+      - name: Create draft release
+        env:
+          SOURCE_SHA: ${{ needs.build.outputs.source_sha }}
+        run: |
+          gh release create "$RELEASE_VERSION" "$BUNDLE_DIR/"* --repo "$GITHUB_REPOSITORY" --verify-tag --target "$SOURCE_SHA" --draft --title "X-Node $RELEASE_VERSION" --notes-file "$RUNNER_TEMP/notes/x-node-release-notes.md"
+      - name: Download uploaded draft assets
+        run: |
+          mkdir "$RUNNER_TEMP/published-release"
+          gh release download "$RELEASE_VERSION" --repo "$GITHUB_REPOSITORY" --pattern '*' --dir "$RUNNER_TEMP/published-release"
+      - name: Verify uploaded bytes before making the release public
+        env:
+          VERIFY_SIGNED: '1'
+          BUNDLE_DIR: ${{ runner.temp }}/published-release
+        run: *verify_bundle
+      - name: Recheck provenance after uploaded-byte verification
+        env:
+          EXPECTED_SOURCE_SHA: ${{ needs.build.outputs.source_sha }}
+        run: *verify_provenance
+      - name: Publish verified release
+        run: gh release edit "$RELEASE_VERSION" --repo "$GITHUB_REPOSITORY" --draft=false

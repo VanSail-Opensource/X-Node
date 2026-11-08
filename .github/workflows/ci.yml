@@ -16,16 +16,20 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
           cache: true
+      - name: Install distribution signing verifier
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq minisign
       - name: Formatting and module integrity
         run: |
           test -z "$(gofmt -l $(git ls-files '*.go'))"
           go mod verify
           git diff --check
-          python3 -m unittest discover -s scripts -p test_release_notes.py
+          python3 scripts/sync_release_validators.py --check
       - name: Race and real-kernel regressions
         # Xray's VLESS TLS splice paths use uintptr-based field offsets that checkptr rejects.
         run: go test -race -gcflags='github.com/xtls/xray-core/proxy/vless/...=-d=checkptr=0' -count=1 -coverprofile=coverage.out ./...
@@ -82,6 +86,7 @@ jobs:
           python3 -m venv .cache/schema-venv
           .cache/schema-venv/bin/pip install -r scripts/requirements.txt
           go run ./cmd/schema
+          .cache/schema-venv/bin/python -m unittest discover -s scripts -p 'test_release_*.py'
           .cache/schema-venv/bin/python scripts/check_schema.py
           .cache/schema-venv/bin/python scripts/build_docs.py
           bash -n install.sh scripts/debian-vm.sh scripts/linux-check.sh
@@ -103,6 +108,8 @@ jobs:
         arch: [amd64, arm64]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
         with:
           go-version-file: go.mod
@@ -130,6 +137,8 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
         with:
           go-version-file: go.mod
@@ -150,6 +159,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
         with:
           go-version-file: go.mod

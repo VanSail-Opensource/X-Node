@@ -1,11 +1,18 @@
 name: Routine dependency automerge
 on: pull_request
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
 jobs:
   enable:
-    if: github.actor == 'dependabot[bot]'
+    if: >-
+      github.repository_id == '1416770902' &&
+      github.actor == 'dependabot[bot]' &&
+      github.event.pull_request.user.login == 'dependabot[bot]' &&
+      github.event.pull_request.head.repo.id == 1416770902 &&
+      github.event.pull_request.base.ref == 'main'
+    permissions:
+      contents: write
+      pull-requests: write
     runs-on: ubuntu-24.04
     steps:
       - uses: dependabot/fetch-metadata@25dd0e34f4fe68f24cc83900b1fe3fe149efef98 # v3.1.0

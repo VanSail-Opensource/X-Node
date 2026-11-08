@@ -28,20 +28,23 @@ func TestSampledActivityWithoutGrace(t *testing.T) {
 				t.Fatal("sample projections diverged")
 			}
 			if _, err := acquire(r, u, "192.0.2.2", network); err == nil {
-				t.Fatal("sampled limit was ignored")
+				t.Fatal("live connection limit was ignored")
 			}
 			r.SampleActivity()
 			if r.Summary().Connections[1] != 0 || r.Summary().TotalConnections[1] != 1 || len(r.ActiveIPs(1)) != 0 {
 				t.Fatal("idle lease retained a grace period")
 			}
-			idle, err := acquire(r, u, "192.0.2.2", network)
-			if err != nil {
-				t.Fatal("idle open lease consumed the sampled limit", err)
+			if _, err := acquire(r, u, "192.0.2.2", network); err == nil {
+				t.Fatal("idle open lease bypassed the live connection limit")
 			}
-			idle.Close()
 			lease.Account(false, 4)
 			r.SampleActivity()
 			lease.Close()
+			fresh, err := acquire(r, u, "192.0.2.2", network)
+			if err != nil {
+				t.Fatal("logical close leaked the connection reservation", err)
+			}
+			fresh.Close()
 			if r.Summary().Connections[1] != 0 || r.Summary().TotalConnections[1] != 0 || len(r.ActiveIPs(1)) != 0 {
 				t.Fatal("closed lease remained active")
 			}

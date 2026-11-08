@@ -40,7 +40,7 @@ func TestConcurrentAdmissionAndRelease(t *testing.T) {
 		}(i)
 	}
 	wg.Wait()
-	if accepted.Load() > 200 || len(r.users[1].ips) > 2 || r.Summary().Connections[1] != 0 {
+	if accepted.Load() != int64(u.ConnectionLimit) || len(r.users[1].ips) > 2 || r.Summary().Connections[1] != 0 || r.Summary().TotalConnections[1] != u.ConnectionLimit {
 		t.Fatal("admission exceeded limits")
 	}
 	for _, l := range leases {

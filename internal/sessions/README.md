@@ -2,7 +2,8 @@
 
 Summary `TotalConnections` derives all logically open client flows from the same
 locked registry, including idle flows and excluding transit. It adds no persistent
-state and never feeds connection limits. Logical close removes its contribution
+state. A per-user client reservation counter enforces connection limits under
+the admission lock. Logical close removes its contribution
 while unfinished native handlers retain their accounting/capacity reservations.
 
 The registry atomically reserves shared per-user TCP/UDP connections and active
@@ -35,7 +36,18 @@ transient. Hosted cases cover quota races, expiry, counters and quiescence.
 `period_barrier.go` finishes revoked period handlers without closing renewed streams.
 `period_barrier_test.go` covers late old bytes, active-period rejection and renewal continuity in hosted CI.
 
-`activity.go` samples per-lease payload counters without an idle grace period. Summaries, active IPs, lists and local connection limits share that snapshot; close invalidations remove closed flows immediately. Hard capacity remains reserved until both logical close and native completion. `transit.go` authenticates master-only peer credentials: transit skips connection/IP admission counts and volatile global blocks while retaining expiry, restrictions, speed policies and exact owner-period accounting. Hosted regressions live in `activity_test.go`.
+`activity.go` samples per-lease payload counters without an idle grace period.
+Active connection/IP telemetry and lists share that snapshot; admission and
+limit status instead use atomically reserved logically open client flows,
+including idle flows. Close releases a client slot exactly once; native-handler
+capacity and accounting remain reserved until completion. `transit.go`
+authenticates master-only peer credentials: transit skips client connection/IP
+counts and volatile global blocks while retaining expiry, restrictions, speed
+policies and exact owner-period accounting. Hosted regressions in
+`connection_limits_test.go`, `registry_test.go` and `activity_test.go` cover
+concurrent TCP/UDP admission, idle samples, transit exclusion, policy/replacement
+continuity and duplicate close/finish. Real Xray TCP/mux cases live in
+`internal/kernel/xray/connection_limits_test.go`.
 
 `source_whitelist.go` binds exact canonical IPs to the authenticated user's
 credentials, including transit. Registry replacement closes leases whose address

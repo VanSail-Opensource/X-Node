@@ -48,9 +48,9 @@ func (r *Registry) activeCount(user int) int {
 // Logical close removes a flow even if its native handler is still finishing.
 func (r *Registry) totalConnections() map[int]int {
 	counts := map[int]int{}
-	for _, lease := range r.connections {
-		if !lease.transit {
-			counts[lease.Info.UserID]++
+	for id, user := range r.users {
+		if user.clients > 0 {
+			counts[id] = user.clients
 		}
 	}
 	return counts

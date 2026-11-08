@@ -1,5 +1,9 @@
 # Embedded Xray runtime
 
+`connection_limits_test.go` exercises real TCP and mux streams: an idle first
+flow still denies a second, existing traffic survives, and closing allows a new
+flow. Each logical dispatch uses the existing atomic session reservation.
+
 `environment_test.go` verifies that rejected native environment input cannot
 partially mutate the privileged process. Environment rules are shared through
 the protocol validator; see `docs/process-environment.md`.

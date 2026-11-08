@@ -31,6 +31,7 @@ type userState struct {
 	identities       identityIndex
 	ips              map[string]int
 	count            int
+	clients          int
 	handlers         int
 	speed            *speedPolicy
 	upload, download atomic.Uint64
@@ -283,7 +284,7 @@ func (r *Registry) acquire(ctx context.Context, id int, identity, tag, ip, desti
 		reason = "ip_temp_block"
 	case r.blocked(port, network):
 		reason = "blocked_port"
-	case !transit && u.policy.ConnectionLimit > 0 && r.activeCount(id) >= u.policy.ConnectionLimit:
+	case !transit && u.policy.ConnectionLimit > 0 && u.clients >= u.policy.ConnectionLimit:
 		reason = "connection_limit"
 	case !transit && u.policy.ActiveIPLimit > 0 && u.ips[ip] == 0 && len(u.ips) >= u.policy.ActiveIPLimit:
 		reason = "active_ip_limit"
@@ -306,6 +307,7 @@ func (r *Registry) acquire(ctx context.Context, id int, identity, tag, ip, desti
 	r.resources++
 	u.count++
 	if !transit {
+		u.clients++
 		u.ips[ip]++
 	}
 	r.connections[l.Info.ID] = l
@@ -322,6 +324,7 @@ func (l *Lease) Close() {
 		l.releaseResource()
 		l.user.count--
 		if !l.transit {
+			l.user.clients--
 			l.user.ips[l.Info.SourceIP]--
 			if l.user.ips[l.Info.SourceIP] <= 0 {
 				delete(l.user.ips, l.Info.SourceIP)
@@ -465,7 +468,7 @@ func (r *Registry) Summary() Summary {
 		case r.bans[id].After(time.Now()):
 			status.Limited = true
 			status.Reason = "torrent_ban"
-		case u.policy.ConnectionLimit > 0 && r.activeCount(id) >= u.policy.ConnectionLimit:
+		case u.policy.ConnectionLimit > 0 && u.clients >= u.policy.ConnectionLimit:
 			status.Limited = true
 			status.Reason = "connection_limit"
 		case u.policy.ActiveIPLimit > 0 && len(u.ips) >= u.policy.ActiveIPLimit:

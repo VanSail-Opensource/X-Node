@@ -1,5 +1,10 @@
 # Agent orchestration
 
+Authorization reception, IP controls and expiry publish complete committed
+store views to the registry. Positive IP commands capture and recheck their
+credential/period subject; expiry compares persisted deadlines before publication.
+See `docs/ip-block-authorization.md` for replacement and replay constraints.
+
 `asset_client.go` retains lazy native download transports. Redirect protection
 is owned by the outer geodata HTTP client; `asset_redirect_test.go` verifies that
 using the inner RoundTripper cannot bypass it. See `docs/http-redirects.md`.

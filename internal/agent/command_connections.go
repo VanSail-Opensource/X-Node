@@ -42,20 +42,33 @@ func (a *Agent) connectionCommand(name string, args []byte) (any, error) {
 		if p.UserID < 0 || p.BlockSeconds < 0 || p.BlockSeconds > 604800 || p.Unblock && p.BlockSeconds > 0 || !p.Drop && !p.Unblock && p.BlockSeconds == 0 {
 			return nil, errors.New("invalid IP control")
 		}
+		var subject *protocol.User
+		if p.UserID > 0 {
+			user, authorization, err := a.Store.SubjectView(p.UserID)
+			if err != nil {
+				return nil, err
+			}
+			subject = &user
+			a.Registry.ApplyAuthorization(authorization)
+		}
 		key := sessions.IPBlockKey(p.UserID, ip)
 		block := protocol.IPBlock{SourceIP: ip, UserID: p.UserID}
 		if p.BlockSeconds > 0 {
 			block.Until = time.Now().Add(time.Duration(p.BlockSeconds) * time.Second)
 		}
 		if p.BlockSeconds > 0 || p.Unblock {
-			if e = a.Store.BlockIP(key, block); e != nil {
-				return nil, e
+			authorization, err := a.Store.BlockIPView(key, block, subject)
+			if err != nil {
+				return nil, err
 			}
-			a.Registry.SetIPBlock(key, block)
+			a.Registry.ApplyAuthorization(authorization)
 		}
 		dropped := 0
 		if p.Drop {
-			dropped = a.Registry.DropIP(ip, p.UserID)
+			dropped, e = a.Registry.DropIPSubject(ip, subject)
+			if e != nil {
+				return nil, e
+			}
 		}
 		return map[string]any{"source_ip": ip, "user_id": p.UserID, "dropped": dropped, "blocked_until": block.Until}, nil
 	case "connections.close":

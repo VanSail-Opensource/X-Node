@@ -49,11 +49,11 @@ func TestTemporaryIPBlockAndLimitsSurviveRestart(t *testing.T) {
 	}
 	until := time.Now().UTC().Add(time.Minute)
 	block := protocol.IPBlock{SourceIP: "192.0.2.1", UserID: 7, Until: until}
-	if e = s.BlockIP("7:192.0.2.1", block); e != nil {
-		t.Fatal(e)
-	}
 	user := protocol.User{ID: 7, UUID: "credential", InboundTags: []string{"in"}, BlockNew: true, SpeedLimitMbps: 100, BurstSpeedLimitMbps: 500, SpeedLimitAfterSeconds: 10}
 	if e = s.Authorize([]protocol.User{user}, 1); e != nil {
+		t.Fatal(e)
+	}
+	if e = s.BlockIP("7:192.0.2.1", block); e != nil {
 		t.Fatal(e)
 	}
 	reopened, e := Open(dir)

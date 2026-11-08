@@ -1,5 +1,19 @@
 # Module
 
+`user_identity.go` shares credential/accounting identity equality and validates
+existing `replaces_id` moves against the original authorization snapshots.
+Historical hints with no old subject grant no new transfer proof and do not
+block later renewal or credential rotation. Occupied targets, retained sources
+and changed source identities are rejected. `user_identity_test.go` and
+`user_replacements_test.go` cover mutable controls, malformed relations and
+the panel's persistent alias metadata.
+
+`ip_blocks.go` remaps exact user-scoped restrictions from original records,
+preserving the latest colliding expiry, global scope and input immutability.
+`ip_blocks_test.go` covers scope isolation, IPv6, collisions and non-cascading
+remapping. These helpers add no wire fields or account-relinking interface and
+never rewrite historical traffic or financial evidence.
+
 `xray_environment.go` rejects unreviewed process variables before native
 preparation through `ValidateNativePolicies`; `xray_environment_test.go` covers
 unsafe names, malformed values and supported options. This policy is shared by

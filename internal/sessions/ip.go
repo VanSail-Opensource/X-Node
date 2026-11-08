@@ -2,11 +2,11 @@ package sessions
 
 import (
 	"errors"
-	"fmt"
-	"github.com/VanSail-Opensource/X-Node/internal/protocol"
 	"net/netip"
 	"sort"
 	"time"
+
+	"github.com/VanSail-Opensource/X-Node/internal/protocol"
 )
 
 type AdmissionEvent struct {
@@ -30,7 +30,7 @@ func CanonicalIP(raw string) (string, error) {
 	}
 	return ip.Unmap().String(), nil
 }
-func IPBlockKey(user int, ip string) string { return fmt.Sprintf("%d:%s", user, ip) }
+func IPBlockKey(user int, ip string) string { return protocol.IPBlockKey(user, ip) }
 func (r *Registry) blockedIP(user int, ip string, now time.Time) bool {
 	return r.ipBlocks[IPBlockKey(user, ip)].Until.After(now) || r.ipBlocks[IPBlockKey(0, ip)].Until.After(now)
 }

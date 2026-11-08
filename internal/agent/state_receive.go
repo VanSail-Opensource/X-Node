@@ -112,12 +112,13 @@ func (a *Agent) handle(ctx context.Context, m protocol.Message) {
 			fail(errors.New("upgrade confirmation is required before adopting managed extensions"))
 			return
 		}
-		if e = a.Store.Authorize(c.Users, m.Revision); e != nil {
+		authorization, e := a.Store.AuthorizeView(c.Users, m.Revision)
+		if e != nil {
 			fail(e)
 			return
 		}
 		a.registerSecrets(c)
-		a.Registry.SetUsers(c.Users)
+		a.Registry.ApplyAuthorization(authorization)
 		a.Registry.SetPorts(c.BlockedPorts)
 		a.Sampler.Interval(c.SampleInterval())
 		changes := protocol.Classify(a.desired, c)

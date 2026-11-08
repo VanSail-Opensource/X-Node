@@ -5,26 +5,15 @@ import "github.com/VanSail-Opensource/X-Node/internal/protocol"
 // rekeyUsers runs under the registry lock before ordinary reconciliation. Lease
 // counters retain their original period/sample keys until the sampler drains
 // them, so an identity change cannot replay cumulative bytes as fresh traffic.
-func (r *Registry) rekeyUsers(users []protocol.User) {
+func (r *Registry) rekeyUsers(replacements map[int]int) {
 	targets := map[*userState]int{}
 	moved := map[int]*userState{}
-	for _, policy := range users {
-		if policy.ReplacesID == 0 {
+	for previous, next := range replacements {
+		old := r.users[previous]
+		if old == nil {
 			continue
 		}
-		old := r.users[policy.ReplacesID]
-		if old == nil || old.policy.ID != policy.ReplacesID || old.policy.UUID != policy.UUID || old.policy.AccountingPeriod != policy.AccountingPeriod {
-			continue
-		}
-		candidate := old.policy
-		candidate.ID, candidate.ReplacesID = policy.ID, policy.ReplacesID
-		if !sameIdentity(candidate, policy) {
-			continue
-		}
-		targets[old], moved[policy.ID] = policy.ID, old
-	}
-	if len(moved) == 0 {
-		return
+		targets[old], moved[next] = next, old
 	}
 	for id, old := range r.users {
 		if _, moving := targets[old]; moving {
@@ -36,7 +25,9 @@ func (r *Registry) rekeyUsers(users []protocol.User) {
 		old.policy.ID, old.policy.ReplacesID = id, previous
 		r.users[id] = old
 		if until := r.bans[previous]; !until.IsZero() {
-			r.bans[id] = until
+			if until.After(r.bans[id]) {
+				r.bans[id] = until
+			}
 			delete(r.bans, previous)
 		}
 	}
@@ -50,6 +41,23 @@ func (r *Registry) rekeyUsers(users []protocol.User) {
 			lease.Info.UserID = id
 		}
 	}
+}
+
+// Retain only verified aliases or an exact replay of an existing alias. Merely
+// declaring replaces_id for a new unrelated principal is never live proof.
+func (r *Registry) reconcileAliases(users []protocol.User, replacements map[int]int) {
+	aliases := map[int]int{}
+	for previous, next := range replacements {
+		aliases[previous] = next
+	}
+	for _, policy := range users {
+		previous := policy.ReplacesID
+		current := r.users[policy.ID]
+		if previous > 0 && r.identityAliases[previous] == policy.ID && current != nil && sameIdentity(current.policy, policy) {
+			aliases[previous] = policy.ID
+		}
+	}
+	r.identityAliases = aliases
 }
 
 // A stale mux transport is accepted only when its complete credential-bound

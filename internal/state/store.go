@@ -34,10 +34,11 @@ type Data struct {
 	Backlog        []*Batch                          `json:"backlog,omitempty"`
 }
 type Store struct {
-	mu      sync.Mutex
-	path    string
-	data    Data
-	traffic memoryTraffic // New usage never enters Data or its persistence path.
+	mu                    sync.Mutex
+	path                  string
+	data                  Data
+	authorizationSequence uint64        // Process-local ordering, never persisted.
+	traffic               memoryTraffic // New usage never enters Data or its persistence path.
 }
 
 func ID() string {
@@ -84,6 +85,7 @@ func Open(dir string) (*Store, error) {
 	if err := s.openTraffic(); err != nil {
 		return nil, err
 	}
+	s.authorizationSequence = 1
 	return s, nil
 }
 func (s *Store) Snapshot() Data { s.mu.Lock(); defer s.mu.Unlock(); return protocol.Clone(s.data) }
@@ -111,20 +113,6 @@ func (s *Store) persist(d Data) error {
 	}
 	return AtomicWrite(s.path, b, 0600)
 }
-func (s *Store) Authorize(users []protocol.User, revision uint64) error {
-	return s.change(func(d *Data) error {
-		if revision <= d.Revision {
-			return errors.New("stale revision")
-		}
-		d.Users = protocol.Clone(users)
-		if d.Users == nil {
-			d.Users = []protocol.User{}
-		}
-		d.Revision = revision
-		d.DesiredConfig = nil
-		return nil
-	})
-}
 func (s *Store) Accept(c protocol.Config, revision uint64) error {
 	return s.change(func(d *Data) error {
 		if revision != d.Revision {
@@ -147,24 +135,6 @@ func (s *Store) Ban(id int, until time.Time) error {
 		} else {
 			d.Bans[id] = until
 		}
-		return nil
-	})
-}
-func (s *Store) BlockIP(key string, block protocol.IPBlock) error {
-	return s.change(func(d *Data) error {
-		if d.IPBlocks == nil {
-			d.IPBlocks = map[string]protocol.IPBlock{}
-		}
-		if block.Until.IsZero() {
-			delete(d.IPBlocks, key)
-			return nil
-		}
-		if len(d.IPBlocks) >= 4096 {
-			if _, exists := d.IPBlocks[key]; !exists {
-				return errors.New("IP block capacity exhausted")
-			}
-		}
-		d.IPBlocks[key] = block
 		return nil
 	})
 }

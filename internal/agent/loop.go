@@ -14,9 +14,8 @@ func (a *Agent) Run(ctx context.Context) error {
 		return fmt.Errorf("restore confirmed firewall: %w", err)
 	}
 	d := a.Store.Snapshot()
-	a.Registry.SetUsers(d.Users)
+	a.Registry.ApplyAuthorization(a.Store.CurrentAuthorization())
 	a.Registry.RestoreBans(d.Bans)
-	a.Registry.RestoreIPBlocks(d.IPBlocks)
 	startup := d.Config
 	if d.DesiredConfig != nil {
 		startup = d.DesiredConfig
@@ -147,10 +146,10 @@ func (a *Agent) Run(ctx context.Context) error {
 				}
 				a.Client.Send(protocol.New("torrent.expired", "", 0, map[string]int{"user_id": id}), true)
 			}
-			for _, key := range a.Registry.ExpireIPBlocks(time.Now()) {
-				if e := a.Store.BlockIP(key, protocol.IPBlock{}); e != nil {
-					a.failStorage(e)
-				}
+			if authorization, e := a.Store.ExpireIPBlocks(time.Now()); e != nil {
+				a.failStorage(e)
+			} else if authorization.Sequence > 0 {
+				a.Registry.ApplyAuthorization(authorization)
 			}
 			a.periodic(child)
 		}

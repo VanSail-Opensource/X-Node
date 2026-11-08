@@ -1,5 +1,12 @@
 # Logical sessions
 
+`authorization.go` publishes committed users and IP blocks together using a
+process-local monotonic store sequence. Delayed publications cannot restore old
+authorization or restrictions. `identity.go` transfers leases only after the
+shared protocol validator proves the replacement; `ip_subject.go` binds drops to
+the captured credential/period. See `docs/ip-block-authorization.md` for ordering,
+restart, expiry and accounting constraints.
+
 Summary `TotalConnections` derives all logically open client flows from the same
 locked registry, including idle flows and excluding transit. It adds no persistent
 state. A per-user client reservation counter enforces connection limits under
@@ -13,7 +20,9 @@ users or listener epochs change; admission performs a bounded map lookup while
 the registry lock still protects the atomic reservation.
 Hosted `BenchmarkIdentityLookup` compares the original repeated credential
 derivation with the cached lookup for the same member and transit bindings.
-`registry.go` owns admission/release and current limit projections; `accounting.go`
+`registry.go` owns admission; `lease.go` owns logical close/release and payload
+accounting; `snapshot.go` provides current limit projections. Shared state types
+live in `types.go`. `accounting.go`
 keeps a separate native-handler lifetime and period counter after logical release.
 
 Each period counter carries its first lease's process-local generation. The

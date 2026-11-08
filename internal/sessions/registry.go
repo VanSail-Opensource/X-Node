@@ -3,115 +3,20 @@ package sessions
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/netip"
 	"sort"
-	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/VanSail-Opensource/X-Node/internal/protocol"
 	"github.com/VanSail-Opensource/X-Node/internal/state"
 )
 
-type Connection struct {
-	ID              string    `json:"id"`
-	UserID          int       `json:"user_id"`
-	InboundTag      string    `json:"inbound_tag"`
-	SourceIP        string    `json:"source_ip"`
-	Destination     string    `json:"destination"`
-	DestinationPort int       `json:"destination_port"`
-	Network         string    `json:"network"`
-	Started         time.Time `json:"started"`
-}
-type userState struct {
-	policy           protocol.User
-	identities       identityIndex
-	ips              map[string]int
-	count            int
-	clients          int
-	handlers         int
-	speed            *speedPolicy
-	upload, download atomic.Uint64
-}
-type Registry struct {
-	mu              sync.RWMutex
-	prefix          string
-	sequence        uint64
-	users           map[int]*userState
-	identityAliases map[int]int
-	connections     map[string]*Lease
-	bans            map[int]time.Time
-	ports           []protocol.PortRange
-	rejects         map[string]uint64
-	paused          bool
-	epochs          map[string]string
-	OnBan           func(int, time.Time)
-	OnReject        func(AdmissionEvent)
-	ipBlocks        map[string]protocol.IPBlock
-	accounting      map[accountingKey]*accountingCounters
-	inflight        map[string]*Lease
-	rates           map[int]protocol.UserRate
-	fences          map[int]int
-	periodFences    map[accountingKey]int
-	activity        activitySnapshot
-	activityHistory activityHistory
-	closedActivity  map[int]map[string]int
-	resources       int
-	outboundFences  map[string]int
-}
-type Lease struct {
-	Info                                     Connection
-	once                                     sync.Once
-	registry                                 *Registry
-	user                                     *userState
-	cancel                                   func()
-	accounting                               *accountingCounters
-	accountingPeriod                         string
-	tracked                                  bool
-	finished                                 chan struct{}
-	finishOnce                               sync.Once
-	identity                                 string
-	outbounds                                map[string]bool
-	transit                                  bool
-	bytes                                    atomic.Uint64
-	sampledBytes                             uint64
-	closed, nativeFinished, resourceReleased bool
-}
-
 func New() *Registry {
 	return &Registry{prefix: state.ID(), users: map[int]*userState{}, connections: map[string]*Lease{}, bans: map[int]time.Time{}, rejects: map[string]uint64{}, epochs: map[string]string{}, ipBlocks: map[string]protocol.IPBlock{}}
 }
-func sameIdentity(a, b protocol.User) bool {
-	a.WhitelistEnabled, b.WhitelistEnabled = false, false
-	a.WhitelistedIPs, b.WhitelistedIPs = nil, nil
-	a.ID, b.ID = 0, 0
-	a.ReplacesID, b.ReplacesID = 0, 0
-	a.TransitCredentials, b.TransitCredentials = nil, nil
-	a.ValidUntil = nil
-	b.ValidUntil = nil
-	a.ActiveIPLimit = 0
-	a.ConnectionLimit = 0
-	a.SpeedLimitMbps = 0
-	a.BurstSpeedLimitMbps = 0
-	a.SpeedLimitAfterSeconds = 0
-	a.SpeedLimitResetSeconds = 0
-	a.BlockNew = false
-	a.InboundTags = nil
-	b.ActiveIPLimit = 0
-	b.ConnectionLimit = 0
-	b.SpeedLimitMbps = 0
-	b.BurstSpeedLimitMbps = 0
-	b.SpeedLimitAfterSeconds = 0
-	b.SpeedLimitResetSeconds = 0
-	b.BlockNew = false
-	b.InboundTags = nil
-	aa, _ := json.Marshal(a)
-	bb, _ := json.Marshal(b)
-	return string(aa) == string(bb)
-}
+func sameIdentity(a, b protocol.User) bool { return protocol.SameUserIdentity(a, b) }
 func eligible(u protocol.User, tag string) bool {
 	for _, t := range u.InboundTags {
 		if t == tag {
@@ -119,62 +24,6 @@ func eligible(u protocol.User, tag string) bool {
 		}
 	}
 	return false
-}
-func (r *Registry) SetUsers(users []protocol.User) {
-	r.mu.Lock()
-	r.rekeyUsers(users)
-	r.identityAliases = map[int]int{}
-	for _, user := range users {
-		if user.ReplacesID != 0 {
-			r.identityAliases[user.ReplacesID] = user.ID
-		}
-	}
-	next := map[int]*userState{}
-	policies := map[int]protocol.User{}
-	identities := map[int]identityIndex{}
-	unchanged := map[int]bool{}
-	for _, p := range users {
-		policies[p.ID] = p
-		identities[p.ID] = r.identities(p)
-		old := r.users[p.ID]
-		if old == nil {
-			old = &userState{ips: map[string]int{}}
-		}
-		if old.speed == nil || !sameSpeed(old.policy, p) {
-			old.speed = newSpeedPolicy(p)
-		}
-		next[p.ID] = old
-	}
-	var close []*Lease
-	for _, l := range r.connections {
-		p, ok := policies[l.Info.UserID]
-		same, checked := unchanged[l.Info.UserID]
-		if ok && !checked {
-			same = sameIdentity(l.user.policy, p)
-			unchanged[l.Info.UserID] = same
-		}
-		_, valid := identities[l.Info.UserID].lookup(l.identity, l.Info.InboundTag)
-		if !ok || !same || !valid || !l.transit && !sourceAllowed(p, l.Info.SourceIP) {
-			close = append(close, l)
-		}
-	}
-	for _, p := range users {
-		next[p.ID].policy = protocol.Clone(p)
-		next[p.ID].identities = identities[p.ID]
-	}
-	// Retain removed counters until all associated leases finish and the sampler consumes them.
-	for id, u := range r.users {
-		if _, ok := next[id]; !ok {
-			u.policy.InboundTags = nil
-			u.identities = nil
-			next[id] = u
-		}
-	}
-	r.users = next
-	r.mu.Unlock()
-	for _, l := range close {
-		l.Close()
-	}
 }
 func (r *Registry) SetInboundEpochs(epochs map[string]string) {
 	r.mu.Lock()
@@ -200,19 +49,6 @@ func (r *Registry) PruneCounters() {
 		if len(u.policy.InboundTags) == 0 && u.count == 0 && u.handlers == 0 {
 			delete(r.users, id)
 		}
-	}
-}
-func (r *Registry) CloseUserInbound(tag string) {
-	r.mu.RLock()
-	var close []*Lease
-	for _, l := range r.connections {
-		if l.Info.InboundTag == tag {
-			close = append(close, l)
-		}
-	}
-	r.mu.RUnlock()
-	for _, l := range close {
-		l.Close()
 	}
 }
 func (r *Registry) Pause(v bool) { r.mu.Lock(); r.paused = v; r.mu.Unlock() }
@@ -313,86 +149,6 @@ func (r *Registry) acquire(ctx context.Context, id int, identity, tag, ip, desti
 	r.connections[l.Info.ID] = l
 	return l, nil
 }
-func (l *Lease) Close() {
-	l.once.Do(func() {
-		r := l.registry
-		r.mu.Lock()
-		delete(r.connections, l.Info.ID)
-		l.closed = true
-		r.activityHistory.close(l)
-		r.invalidateActivity(l)
-		l.releaseResource()
-		l.user.count--
-		if !l.transit {
-			l.user.clients--
-			l.user.ips[l.Info.SourceIP]--
-			if l.user.ips[l.Info.SourceIP] <= 0 {
-				delete(l.user.ips, l.Info.SourceIP)
-			}
-		}
-		r.mu.Unlock()
-		if l.cancel != nil {
-			l.cancel()
-		}
-		if !l.tracked {
-			l.Finish()
-		}
-	})
-}
-func (l *Lease) Account(upload bool, n uint64) {
-	l.bytes.Add(n)
-	if upload {
-		l.user.upload.Add(n)
-		if l.accounting != nil {
-			l.accounting.upload.Add(n)
-		}
-	} else {
-		l.user.download.Add(n)
-		if l.accounting != nil {
-			l.accounting.download.Add(n)
-		}
-	}
-}
-func (l *Lease) Wait(ctx context.Context, n int) error {
-	l.registry.mu.RLock()
-	policy := l.user.speed
-	l.registry.mu.RUnlock()
-	return policy.wait(ctx, n)
-}
-func (r *Registry) CloseUser(id int, tag string) {
-	r.mu.RLock()
-	var close []*Lease
-	for _, l := range r.connections {
-		if l.Info.UserID == id && (tag == "" || l.Info.InboundTag == tag) {
-			close = append(close, l)
-		}
-	}
-	r.mu.RUnlock()
-	for _, l := range close {
-		l.Close()
-	}
-}
-func (r *Registry) CloseConnection(id string) bool {
-	r.mu.RLock()
-	l := r.connections[id]
-	r.mu.RUnlock()
-	if l == nil {
-		return false
-	}
-	l.Close()
-	return true
-}
-func (r *Registry) CloseAll() {
-	r.mu.RLock()
-	var close []*Lease
-	for _, l := range r.connections {
-		close = append(close, l)
-	}
-	r.mu.RUnlock()
-	for _, l := range close {
-		l.Close()
-	}
-}
 func (r *Registry) Ban(id int, until time.Time) {
 	r.mu.Lock()
 	r.bans[id] = until
@@ -430,81 +186,6 @@ func (r *Registry) Counters() state.Traffic {
 	out := state.Traffic{}
 	for id, u := range r.users {
 		out[id] = [2]uint64{u.upload.Load(), u.download.Load()}
-	}
-	return out
-}
-
-type Summary = protocol.UserMetrics
-
-func (r *Registry) Summary() Summary {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	s := Summary{Connections: map[int]int{}, TotalConnections: r.totalConnections(), Rejections: protocol.Clone(r.rejects), Status: map[int]LimitStatus{}, Speed: map[int]SpeedStatus{}}
-	s.Rates = protocol.Clone(r.rates)
-	s.ActiveIPs = map[int][]string{}
-	r.activityHistory.snapshot(&s)
-	for id, u := range r.users {
-		s.Speed[id] = u.speed.status()
-		status := LimitStatus{UserID: id}
-		switch {
-		case r.paused:
-			status.Limited = true
-			status.Reason = "storage_backpressure"
-		case r.resources >= 100000:
-			status.Limited = true
-			status.Reason = "agent_capacity"
-		case len(u.policy.InboundTags) == 0:
-			status.Limited = true
-			status.Reason = "ineligible"
-		case u.policy.ValidUntil != nil && !u.policy.ValidUntil.After(time.Now()):
-			status.Limited = true
-			status.Reason = "expired"
-		case r.fences[id] > 0 || r.fences[0] > 0 || r.periodFences[accountingKey{id, u.policy.AccountingPeriod}] > 0:
-			status.Limited = true
-			status.Reason = "block_new"
-		case u.policy.BlockNew:
-			status.Limited = true
-			status.Reason = "block_new"
-		case r.bans[id].After(time.Now()):
-			status.Limited = true
-			status.Reason = "torrent_ban"
-		case u.policy.ConnectionLimit > 0 && u.clients >= u.policy.ConnectionLimit:
-			status.Limited = true
-			status.Reason = "connection_limit"
-		case u.policy.ActiveIPLimit > 0 && len(u.ips) >= u.policy.ActiveIPLimit:
-			status.Limited = true
-			status.Reason = "active_ip_limit"
-			status.Scope = "new_ip"
-		}
-		if status.Scope == "" {
-			status.Scope = "new_connection"
-		}
-		s.Status[id] = status
-		if count := r.activeCount(id); count > 0 {
-			s.Connections[id] = count
-			for ip := range r.activeIPs(id) {
-				s.ActiveIPs[id] = append(s.ActiveIPs[id], ip)
-			}
-			sort.Strings(s.ActiveIPs[id])
-		}
-	}
-	return s
-}
-func (r *Registry) List(after string, limit int) []Connection {
-	if limit <= 0 || limit > 1000 {
-		limit = 100
-	}
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	var out []Connection
-	for id, l := range r.connections {
-		if id > after && r.activity.connections[id] {
-			out = append(out, l.Info)
-		}
-	}
-	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
-	if len(out) > limit {
-		out = out[:limit]
 	}
 	return out
 }

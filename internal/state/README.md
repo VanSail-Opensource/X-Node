@@ -6,6 +6,30 @@ acceptance clears them. `connection_controls.go` excludes connection-derived
 admission decisions from durable snapshots. `configuration.go` provides bounded
 configuration copies and metadata without copying traffic or credentials.
 
+`authorization.go` publishes detached `AuthorizationView` snapshots containing
+users, scoped IP blocks, the durable authorization revision and a process-local
+monotonic publication sequence. `AuthorizeView` validates identity replacements
+against the original users and atomically transfers IP restrictions before
+installing the new authorization. The sequence starts at one after opening the
+store and is never serialized or shared with traffic counters. Failed writes
+return no publication; consumers reject delayed views by sequence.
+
+`ip_blocks.go` checks each positive command subject against its captured
+credential/accounting identity and current eligible inbounds under the store
+lock. Unknown, removed, inactive or changed subjects cannot mutate a restriction.
+Global scope remains explicit. Error-only `Authorize`/`BlockIP` wrappers retain
+existing call shapes, including key-only scoped unblocks. Conditional batch
+expiry rechecks persisted deadlines, so an older sweep cannot erase an extension;
+an unchanged sweep returns a zero view without cloning or writing state.
+
+These operations use the existing copy-on-write persistence boundary. Registry
+publication happens after disk work, without a shared agent lock spanning I/O.
+`authorization_test.go`, `authorization_failure_test.go` and `ip_blocks_test.go`
+cover restart, merge/global preservation, detached views, stale subjects,
+conditional expiry, failed writes and publication order. Pure replacement and
+block mapping helpers belong to `protocol`; no account-relinking UI or stored
+publication sequence is introduced.
+
 `traffic_memory.go` owns a separate boot-scoped buffer that never enters `Data`.
 `accounting.go` validates a complete capture before mutation, coalesces matching
 period/minute samples and records bounded overflow loss observations. It retains

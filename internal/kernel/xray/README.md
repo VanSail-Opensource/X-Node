@@ -16,6 +16,10 @@ buffer and datagram metadata intact; only successful `Begin` admits bytes.
 Native revocation cancels the lease and interrupts both original link endpoints.
 Controller fencing also closes the authenticated inbound connection when Xray
 provides it, because socket-backed VLESS buffer wrappers may not forward close.
+Paid/auth revocation closes even idle connections. Grant/session loss and rate
+shrink retain authorized idle/waiting flows, pausing payload until fresh control;
+only already-started native handoffs need interruption and a rate drain.
+Financial credit sealing freezes admission without interrupting delivery.
 Mux children inherit one authenticated principal and connection. Ordinary flow
 completion keeps that connection open for its healthy siblings; legacy/transit
 flows never use the additional hourly transport fence.
@@ -25,7 +29,8 @@ Hosted `hourly_reader_test.go`, `hourly_writer_test.go` and their
 `hourly_test_helpers_test.go` cover slicing, EOF, cancellation, packet metadata
 and write-error ownership. `hourly_native_helpers_test.go`,
 `hourly_native_test.go` and `hourly_expiry_test.go` exercise real TCP/mux and
-UDP/XUDP, exact raw admissions, session revocation and idle paid-boundary closure.
+UDP/XUDP, exact raw admissions, idle control pause/resume, credit rollover during
+blocked delivery and strict idle paid-boundary closure.
 
 `xhttp_validation_test.go` sends real XHTTP traffic while rejecting malformed
 direct, `extra` and nested-download HTTP/2 settings. Forced invalid reloads must

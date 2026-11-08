@@ -33,7 +33,7 @@ func TestHourlyTransportFenceRunsOnlyForControllerRevocation(t *testing.T) {
 	if fenced != 0 || r.Summary().TotalConnections[user.ID] != 1 {
 		t.Fatal("normal completion fenced its authenticated transport sibling")
 	}
-	controller.SetSession("")
+	controller.ApplyAuthorization(100, 100, nil)
 	if fenced != 1 || r.Summary().TotalConnections[user.ID] != 0 {
 		t.Fatal("controller revocation did not fence the remaining hourly transport")
 	}

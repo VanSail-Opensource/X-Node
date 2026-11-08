@@ -30,7 +30,7 @@ func (c *Controller) ApplyGrant(grant protocol.HourlyGrant) (*Drain, error) {
 		return drain, nil
 	}
 	if b.grant != nil && !b.grant.deadline.After(now) {
-		actions := o.fenceFlows(func(*Flow) bool { return true }, nil)
+		actions := o.retirePermits(func(p *Permit) bool { return p.bucket == b }, nil)
 		if b.grant.timer != nil {
 			b.grant.timer.Stop()
 		}
@@ -71,7 +71,7 @@ func (c *Controller) ApplyGrant(grant protocol.HourlyGrant) (*Drain, error) {
 	var actions []fenceAction
 	shrink := old != nil && (grant.RateBytesPerSecond < old.grant.RateBytesPerSecond || grant.BurstBytes < old.grant.BurstBytes)
 	if shrink {
-		actions = o.fenceFlows(func(*Flow) bool { return true }, drain)
+		actions = o.retirePermits(func(p *Permit) bool { return p.bucket == b }, drain)
 	} else {
 		for p := range o.permits {
 			if p.bucket == b && !p.started {

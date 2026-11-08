@@ -137,6 +137,7 @@ executor for durable install, seal and exact proof ACK commands. It never waits
 on the reserved traffic/control executor. `hourly_publish.go` coalesces bounded
 demand/progress frames and replays immutable credit proofs. Live progress records
 admitted bytes; only a frozen and durably sealed proof can return unused credit.
-`hourly_retire.go` seals old sessions/days after their actual native barriers;
-disconnect alone does not authorize a refund. A damaged hourly journal disables
+`hourly_retire.go` seals old sessions/days after freezing their admission state;
+already-admitted native delivery does not delay financial proof or refund bytes.
+Disconnect alone does not authorize a refund. A damaged hourly journal disables
 this feature and preserves its evidence without stopping legacy traffic.

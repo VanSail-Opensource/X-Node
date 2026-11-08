@@ -46,6 +46,23 @@ func (o *ownerState) fence(match func(*Permit) bool, _ string, drain *Drain) []f
 	return o.fenceFlows(func(flow *Flow) bool { return flows[flow] }, drain)
 }
 
+// Retire control authority without disconnecting idle/waiting flows. Only an
+// already-started native handoff needs interruption and a completion barrier.
+func (o *ownerState) retirePermits(match func(*Permit) bool, drain *Drain) []fenceAction {
+	started := map[*Flow]bool{}
+	for permit := range o.permits {
+		if !match(permit) {
+			continue
+		}
+		if permit.started {
+			started[permit.flow] = true
+		} else {
+			permit.cancelLocked()
+		}
+	}
+	return o.fenceFlows(func(flow *Flow) bool { return started[flow] }, drain)
+}
+
 func (o *ownerState) fenceFlows(match func(*Flow) bool, drain *Drain) []fenceAction {
 	local := drain == nil
 	if local {

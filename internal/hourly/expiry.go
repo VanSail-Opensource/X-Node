@@ -67,7 +67,8 @@ func (c *Controller) expireGrant(o *ownerState, grant *grantState) {
 	o.mu.Lock()
 	var actions []fenceAction
 	if o.bucket != nil && o.bucket.grant == grant && !grant.deadline.After(c.options.Now()) {
-		actions = o.fenceFlows(func(*Flow) bool { return true }, nil)
+		bucket := o.bucket
+		actions = o.retirePermits(func(p *Permit) bool { return p.bucket == bucket }, nil)
 		o.bucket.grant = nil
 		o.bucket.tokens, o.bucket.remainder = 0, 0
 		o.signal()

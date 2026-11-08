@@ -45,18 +45,20 @@ func (c *Controller) FreezeCredit(id string) (*Drain, error) {
 	drain := newDrain()
 	credit.sealDrain = drain
 	drain.owner, drain.credit = o, credit
-	actions := o.fence(func(p *Permit) bool {
+	for p := range o.permits {
+		if p.started {
+			continue
+		}
 		for _, a := range p.credits {
 			if a.credit == credit {
-				return true
+				p.cancelLocked()
+				break
 			}
 		}
-		return false
-	}, id, drain)
+	}
 	o.signal()
 	o.mu.Unlock()
 	drain.finishAdmission()
-	runFences(actions)
 	return drain, nil
 }
 

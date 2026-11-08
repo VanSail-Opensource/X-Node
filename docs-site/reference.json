@@ -136,6 +136,12 @@
       "body": "Contains session_id, owner, original demand nonce, decimal sequence, applied and optional reason. Match the current authenticated node and offered session. A successful shrink acknowledgment authorizes the master to release the corresponding allocation; disconnect alone does not. A queued old-session acknowledgment is suppressed after reconnect. Already-admitted operating-system/network bytes cannot be withdrawn instantaneously."
     },
     {
+      "name": "hourly.grant.acks",
+      "direction": "Agent → master",
+      "description": "Acknowledge bounded groups of drained grants without losing owner fairness.",
+      "body": "Contains the current session_id and up to 128 individual acks within a 64 KiB payload. Each acknowledgment retains its original owner, nonce and exact decimal sequence, and every entry must match the batch session. Owners cannot repeat within one batch. Successful native drain acknowledgments may release their corresponding rate allocations; rejected or stale acknowledgments never prove an older grant was revoked. The batch cannot cross reconnect sessions. Durable credit proofs use their separate financial acknowledgment path."
+    },
+    {
       "name": "hourly.credit.proofs",
       "direction": "Agent → master",
       "description": "Replay immutable final credit partitions until exact financial acknowledgment.",
@@ -529,16 +535,19 @@
     {
       "name": "hourly.credit.install",
       "description": "Durably install one centrally reserved full-speed byte-credit obligation.",
+      "args": {"reservation_id": "reservation-example", "issue_sequence": "1", "owner": {"id": "account-example", "generation": "0"}, "day_utc": "2026-11-09", "agent_id": "11111111111111111111111111111111", "boot_id": "22222222222222222222222222222222", "session_id": "33333333333333333333333333333333", "byte_ceiling": "1000000000", "kind": "free"},
       "body": "Requires negotiated hourly_account_limits_v1. Arguments identify reservation_id, decimal globally monotonic issue_sequence, owner generation, day_utc, exact agent_id/boot_id/session_id, positive decimal byte_ceiling and kind free or extra. Persist before credit becomes usable; replay cannot mint a second obligation. Uses the existing utility executor with a 30-second execution timeout. Reserve centrally before sending. See [the hourly contract](hourly-account-limits.md)."
     },
     {
       "name": "hourly.credit.seal",
-      "description": "Freeze credit admission and seal a final proof after native handoffs drain.",
-      "body": "Arguments contain reservation_id only. Uses the utility executor with a two-minute execution bound, leaving traffic/control work available. The final proof preserves exact admitted bytes and authenticated unused evidence. Retry conservatively using durable receipts; timeout, disconnect or uncertain delivery cannot authorize reclaiming a reservation."
+      "description": "Freeze credit admission and seal its exact final financial partition.",
+      "args": {"reservation_id": "reservation-example"},
+      "body": "Arguments contain reservation_id and optional expected original installation. Uses the utility executor with a two-minute execution bound, leaving traffic/control work available. The financial admission barrier cancels unstarted reservations and preserves every byte already admitted by Begin. Native writer completion cannot refund those bytes. An exact never-issued installation can be proved wholly unused only through retained, checksummed sequence evidence. Timeout, disconnect or missing evidence never authorizes reclaiming a reservation."
     },
     {
       "name": "hourly.credit.ack",
       "description": "Retire the exact immutable proof already settled by the master.",
+      "args": {"reservation_id": "reservation-example", "issue_sequence": "1", "digest": "1111111111111111111111111111111111111111111111111111111111111111"},
       "body": "Arguments contain reservation_id, decimal issue_sequence and exact digest. Settle the final proof durably and idempotently before acknowledging it. A mismatched acknowledgment cannot erase an obligation or proof. Uses the utility executor with a 30-second execution timeout; replay retains tombstone protection."
     },
     {

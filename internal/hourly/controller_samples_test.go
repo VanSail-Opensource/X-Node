@@ -86,16 +86,11 @@ func TestAdmissionSamplesAndGrantStopAtUTCMidnight(t *testing.T) {
 	}
 	p.Complete(Accepted)
 	f.clock.Advance(time.Second)
-	if f.interrupted.Load() != 1 {
-		t.Fatal("old-day grant remained live at midnight")
+	if f.interrupted.Load() != 0 {
+		t.Fatal("UTC midnight disconnected an idle flow")
 	}
-	flow, err := f.c.OpenFlow(f.binding, func() {})
-	if err != nil {
-		t.Fatal(err)
-	}
-	f.flow = flow
 	f.grant(t, 2, 0, 0)
-	if q, _, err := flow.TryAcquire(Download, 1, 1); q != nil || err != nil {
+	if q, _, err := f.flow.TryAcquire(Download, 1, 1); q != nil || err != nil {
 		t.Fatal("old credit crossed midnight", q, err)
 	}
 	s := f.c.Samples()

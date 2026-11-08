@@ -11,7 +11,7 @@ import (
 	"github.com/xtls/xray-core/core"
 )
 
-func TestRealHourlyTCPAndMuxGateAndSessionRevocation(t *testing.T) {
+func TestRealHourlyTCPAndMuxGateAndAuthorizationRevocation(t *testing.T) {
 	for _, mux := range []bool{false, true} {
 		t.Run(fmt.Sprintf("mux=%t", mux), func(t *testing.T) {
 			echo := echoListener(t)
@@ -40,15 +40,15 @@ func TestRealHourlyTCPAndMuxGateAndSessionRevocation(t *testing.T) {
 				t.Fatal("logical hourly flow missing")
 			}
 			stopGrants()
-			controller.SetSession("")
+			controller.ApplyAuthorization(100, 100, nil)
 			if registry.Summary().TotalConnections[1] != 0 {
-				t.Fatal("session fence retained native lease")
+				t.Fatal("authorization fence retained native lease")
 			}
 			_ = conn.SetDeadline(time.Now().Add(2 * time.Second))
 			defer boundHourlyIO(t, conn)()
 			_, _ = conn.Write([]byte("late"))
 			if _, err = conn.Read(make([]byte, 4)); err == nil {
-				t.Fatal("session revocation retained the real native stream")
+				t.Fatal("authorization revocation retained the real native stream")
 			}
 			if deadline, ok := err.(net.Error); ok && deadline.Timeout() {
 				t.Fatal("native stream only stopped at the test deadline")

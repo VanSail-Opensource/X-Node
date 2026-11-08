@@ -52,8 +52,8 @@ func TestRealHourlyMuxNormalCompletionPreservesIdleSibling(t *testing.T) {
 	assertNativeHourlySamples(t, controller, 12)
 	stopGrants()
 	defer boundHourlyIO(t, sibling)()
-	controller.SetSession("")
+	controller.ApplyAuthorization(100, 100, nil)
 	if _, err := sibling.Read(make([]byte, 1)); err == nil {
-		t.Fatal("session fence left the idle authenticated mux transport readable")
+		t.Fatal("authorization revoke left the idle authenticated mux transport readable")
 	}
 }

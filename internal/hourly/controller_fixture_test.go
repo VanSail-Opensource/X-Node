@@ -91,7 +91,7 @@ func (f *admissionFixture) grant(t *testing.T, sequence, rate uint64, burst uint
 	if len(demands) != 1 {
 		t.Fatalf("demand missing: %#v", demands)
 	}
-	g := protocol.HourlyGrant{SessionID: "33333333333333333333333333333333", Owner: demands[0].Owner, Nonce: demands[0].Nonce, Sequence: sequence, DayUTC: f.clock.Now().UTC().Format(time.DateOnly), LifetimeMillis: 10000, RateBytesPerSecond: rate, BurstBytes: burst}
+	g := protocol.HourlyGrant{SessionID: f.c.session, Owner: demands[0].Owner, Nonce: demands[0].Nonce, Sequence: sequence, DayUTC: f.clock.Now().UTC().Format(time.DateOnly), LifetimeMillis: 10000, RateBytesPerSecond: rate, BurstBytes: burst}
 	if _, err = f.c.ApplyGrant(g); err != nil {
 		t.Fatal(err)
 	}

@@ -92,7 +92,7 @@ func TestConcurrentFlowsCannotOverspendSharedCredit(t *testing.T) {
 	}
 }
 
-func TestRepeatedCreditFreezeReusesOneUnfinishedDrain(t *testing.T) {
+func TestRepeatedCreditFreezeReusesCompletedAdmissionBarrier(t *testing.T) {
 	f := newAdmissionFixture(t)
 	f.grant(t, 1, 0, 0)
 	f.credit(t, 10)
@@ -110,18 +110,20 @@ func TestRepeatedCreditFreezeReusesOneUnfinishedDrain(t *testing.T) {
 			t.Fatal("freeze replaced pending drain", err)
 		}
 	}
-	if len(p.drains) != 1 {
-		t.Fatal("freeze retries grew native waiters", len(p.drains))
+	if len(p.drains) != 0 || f.flow.fenced || f.interrupted.Load() != 0 {
+		t.Fatal("financial freeze changed native handoff lifetime")
 	}
 	select {
 	case <-first.Done():
-		t.Fatal("unfinished handoff was acknowledged")
 	default:
+		t.Fatal("admitted bytes waited for native delivery")
+	}
+	candidate, err := f.c.PrepareSeal(first)
+	if err != nil || candidate.admitted != [2]uint64{1, 0} || candidate.unused != 9 {
+		t.Fatal("freeze lost the exact admission partition", err)
 	}
 	p.Complete(Uncertain)
-	select {
-	case <-first.Done():
-	default:
-		t.Fatal("completion failed to close cached drain")
+	if got := f.c.CreditProgress(1)[0].AdmittedUploadBytes; got != 1 {
+		t.Fatal("late completion refunded an admitted byte", got)
 	}
 }

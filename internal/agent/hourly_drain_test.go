@@ -44,10 +44,14 @@ func TestAgentShrinkAcknowledgmentAndOtherCreditWorkRespectNativeDrain(t *testin
 	case <-time.After(3 * time.Second):
 		t.Fatal("shrink did not interrupt native handoff")
 	}
-	peer.send(t, protocol.New("command", "seal-held", 0, map[string]any{"name": protocol.HourlyCreditSealCommand, "args": protocol.HourlyCreditSeal{ReservationID: "held-credit"}}))
-	f.frame(t, peer, "command.accepted", "seal-held")
+	heldResult := f.command(t, peer, "seal-held", protocol.HourlyCreditSealCommand, protocol.HourlyCreditSeal{ReservationID: "held-credit"})
+	heldRaw, err := json.Marshal(heldResult.Data)
+	var heldProof protocol.HourlyCreditProof
+	if err != nil || heldResult.Status != "completed" || protocol.Decode(heldRaw, &heldProof) != nil || heldProof.AdmittedDownloadBytes != 7 || heldProof.UnusedBytes != 993 {
+		t.Fatal("financial seal waited for or miscounted an admitted handoff", heldResult.Status, err)
+	}
 	// Another reservation can install, seal and acknowledge while the first
-	// native barrier remains pending; no global runtime lock may wait on it.
+	// native rate barrier remains pending. Financial credit already settled.
 	other := f.install(peer, "other-credit", 2)
 	if r := f.command(t, peer, "install-other", protocol.HourlyCreditInstallCommand, other); r.Status != "completed" {
 		t.Fatal(r.Status, r.Error)
@@ -82,18 +86,15 @@ checking:
 					t.Fatal("shrink ACK escaped native drain")
 				}
 			}
-			if event.message.Type == "command.result" && event.message.ID == "seal-held" {
-				t.Fatal("seal escaped native drain")
-			}
 		case <-timer.C:
 			break checking
 		}
 	}
 	p.Complete(hourly.Uncertain)
-	gotGrant, gotSeal := false, false
+	gotGrant := false
 	deadline := time.NewTimer(8 * time.Second)
 	defer deadline.Stop()
-	for !gotGrant || !gotSeal {
+	for !gotGrant {
 		select {
 		case event := <-f.frames:
 			if event.peer != peer {
@@ -105,15 +106,8 @@ checking:
 					gotGrant = true
 				}
 			}
-			if event.message.Type == "command.result" && event.message.ID == "seal-held" {
-				var result JobResult
-				if protocol.Decode(event.message.Data, &result) != nil || result.Status != "completed" {
-					t.Fatal("held seal failed", result.Status)
-				}
-				gotSeal = true
-			}
 		case <-deadline.C:
-			t.Fatal("native completion did not release grant/seal acknowledgments")
+			t.Fatal("native completion did not release the rate grant acknowledgment")
 		}
 	}
 }

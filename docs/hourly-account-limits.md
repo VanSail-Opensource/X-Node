@@ -49,8 +49,12 @@ seconds. Shrink existing allocations and wait for their acknowledgment before
 increasing others. Disconnected allocations remain reserved until their original
 deadline or a confirmed revocation. Aggregate burst allowance is at most 16 KiB;
 a single node may receive the whole allocation. Rate allocations remain in memory.
-No valid grant means hourly payload pauses. Expiry, session change and paid
-boundaries interrupt native flow readers and writers, including idle flows.
+No valid grant means hourly payload pauses. Grant expiry, session change and
+shrink cancel unstarted tickets and drain started handoffs. Authorized idle or
+waiting connections survive and need fresh authority before another admission.
+Paid expiry and authorization revocation interrupt their native transports,
+including idle connections. New sessions start with empty rate buckets and
+cannot reuse old-session full-speed credit.
 
 Stale queued demand and grant acknowledgments cannot cross session boundaries.
 Final credit proofs deliberately retain their original installation session and
@@ -66,7 +70,7 @@ keeping disk writes and draining off the reserved traffic/control executor.
 | Command | Arguments and result | Execution bound |
 | --- | --- | --- |
 | `hourly.credit.install` | Reservation ID, globally monotonic issue sequence, owner generation, UTC day, agent/boot/session identities, byte ceiling and `free`/`extra` kind; installs the exact obligation durably before use | 30 seconds |
-| `hourly.credit.seal` | Reservation ID and optional exact expected installation; freezes known credit and returns a proof after native draining, or proves a never-issued obligation absent using retained sequence evidence | 2 minutes |
+| `hourly.credit.seal` | Reservation ID and optional exact expected installation; freezes admission and returns its financial partition, or proves a never-issued obligation absent using retained sequence evidence | 2 minutes |
 | `hourly.credit.ack` | Reservation ID, issue sequence and exact proof digest; retires the matching accepted proof | 30 seconds |
 
 Masters reserve full-speed credits centrally before installation. Replay cannot
@@ -77,6 +81,12 @@ Normal proofs have no unknown residual. Crash recovery retains unknown residual
 and reports no newly inferred unused bytes. A disconnect alone never proves unused
 credit; reclaim only authenticated barrier/proof evidence. Acknowledge a proof
 only after durable, idempotent financial settlement.
+
+Financial sealing cancels matching unstarted tickets under the admission lock.
+Started handoffs already consumed their bytes irrevocably at `Begin`, so their
+later completion or write failure cannot change the proof. Sealing does not
+interrupt an active transfer or wait for its delivery. This admission barrier
+is separate from the native draining required for rate-allocation retirement.
 
 The private credit journal retains a compaction floor for acknowledged issue
 sequences. An expected obligation missing above that floor is provably unissued

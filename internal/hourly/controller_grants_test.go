@@ -18,11 +18,14 @@ func TestDemandReplayCannotExtendOriginalDeadline(t *testing.T) {
 	g := f.grant(t, 1, 0, 0)
 	f.credit(t, 10)
 	f.clock.Advance(time.Second)
-	if f.interrupted.Load() != 1 {
-		t.Fatal("idle flow survived grant deadline")
+	if f.interrupted.Load() != 0 {
+		t.Fatal("grant deadline disconnected an idle flow")
 	}
 	if _, err := f.c.ApplyGrant(g); !errors.Is(err, ErrRevoked) {
 		t.Fatal("expired replay restored permission", err)
+	}
+	if p, _, err := f.flow.TryAcquire(Upload, 1, 1); p != nil || err != nil {
+		t.Fatal("expired grant did not pause existing flow", err)
 	}
 }
 
@@ -82,17 +85,20 @@ func TestShrinkWaitsForInterruptAndStartedHandoffOutsideLocks(t *testing.T) {
 	}
 }
 
-func TestSessionAndPaidExpiryFenceIdleFlowsWithoutPermits(t *testing.T) {
+func TestSessionPausesIdleFlowAndPaidExpiryInterrupts(t *testing.T) {
 	t.Run("session", func(t *testing.T) {
 		f := newAdmissionFixture(t)
 		drain := f.c.SetSession("44444444444444444444444444444444")
 		select {
 		case <-drain.Done():
 		default:
-			t.Fatal("idle interrupt not acknowledged")
+			t.Fatal("idle session admission barrier did not complete")
 		}
-		if f.interrupted.Load() != 1 {
-			t.Fatal("session reset left idle flow")
+		if f.interrupted.Load() != 0 {
+			t.Fatal("session reset disconnected an idle flow")
+		}
+		if p, _, err := f.flow.TryAcquire(Upload, 1, 1); p != nil || err != nil {
+			t.Fatal("new session did not pause for a fresh grant", err)
 		}
 	})
 	t.Run("paid", func(t *testing.T) {
@@ -131,7 +137,7 @@ func TestExpiredGrantCannotBeReplayedBeforeTimerCallbackRuns(t *testing.T) {
 	if _, err := f.c.ApplyGrant(grant); !errors.Is(err, ErrRevoked) {
 		t.Fatal("expired grant replay acknowledged", err)
 	}
-	if f.interrupted.Load() != 1 {
-		t.Fatal("expired replay left idle native flow")
+	if f.interrupted.Load() != 0 {
+		t.Fatal("expired replay disconnected an idle flow")
 	}
 }

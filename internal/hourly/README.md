@@ -16,8 +16,11 @@ this contract does not promise a physical wire cutoff.
 
 The controller locks authorization before the individual owner. No controller
 lock is held during native interrupt hooks, disk operations or drain waits.
-Session changes, grant expiry and paid expiry fence idle flows as well as active
-ones. Shrink acknowledgments wait for synchronous hooks and started handoffs.
+Paid expiry and authorization revocation fence idle flows as well as active
+ones. Missing grants and session changes pause authorized idle/waiting flows;
+they require fresh authority before any further admission. Control retirement
+and shrink interrupt only flows with started native handoffs, and rate/session
+drains wait for those hooks and handoffs. Idle connections can resume afterward.
 Permits retain their original bucket incarnation, so late callbacks cannot mutate
 a new session/day bucket. Token buckets start empty; held permits count against
 burst capacity and grant refreshes never create fresh tokens.
@@ -29,7 +32,10 @@ reservations never authorize purchases by themselves. `CreditProgress` reports
 cumulative confirmed admission, including payload whose later delivery failed.
 
 Only durable store-issued, one-shot markers can install credits. `FreezeCredit`
-and `PrepareSeal` retain old-session totals for durable proof. After successful
+and `PrepareSeal` retain old-session totals for durable proof. This financial
+admission barrier freezes the credit and cancels unstarted reservations without
+closing a flow or waiting for delivery: successful `Begin` already consumed its
+bytes irrevocably. It is separate from native rate/session drains. After successful
 store sealing, `ForgetCredit` removes only the controller's credit object; its
 marker cannot activate again. Samples remain independent. `Samples` returns
 cumulative directional snapshots with process-local counter generations and real

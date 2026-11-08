@@ -19,7 +19,13 @@ func (l *Lease) captureHourly(user protocol.User, controller *hourly.Controller,
 	}
 }
 
-func (r *Registry) acquireHourly(ctx context.Context, id int, identity, tag, ip, destination, network string, port int, cancel func(), tracked bool) (*Lease, error) {
+// AcquireTrackedWithHourlyFence adds a native transport interruption used only
+// by controller fencing. Normal completion, legacy and transit never invoke it.
+func (r *Registry) AcquireTrackedWithHourlyFence(ctx context.Context, id int, identity, tag, ip, destination, network string, port int, cancel, fence func()) (*Lease, error) {
+	return r.acquireHourly(ctx, id, identity, tag, ip, destination, network, port, cancel, true, fence)
+}
+
+func (r *Registry) acquireHourly(ctx context.Context, id int, identity, tag, ip, destination, network string, port int, cancel func(), tracked bool, fence func()) (*Lease, error) {
 	lease, err := r.acquire(ctx, id, identity, tag, ip, destination, network, port, cancel, tracked)
 	if err != nil || lease.hourlyBinding == nil {
 		return lease, err
@@ -29,7 +35,11 @@ func (r *Registry) acquireHourly(ctx context.Context, id int, identity, tag, ip,
 			err = hourly.ErrUnavailable
 		} else {
 			var flow *hourly.Flow
-			flow, err = lease.hourlyController.OpenFlow(*lease.hourlyBinding, lease.Close)
+			interrupt := lease.Close
+			if fence != nil {
+				interrupt = func() { defer lease.Close(); fence() }
+			}
+			flow, err = lease.hourlyController.OpenFlow(*lease.hourlyBinding, interrupt)
 			if err == nil {
 				r.mu.RLock()
 				current := r.hourly == lease.hourlyController && r.hourlySequence == lease.hourlySequence && r.hourlyApplied == lease.hourlySequence

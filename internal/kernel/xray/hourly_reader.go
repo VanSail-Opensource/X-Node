@@ -28,7 +28,7 @@ func (r *hourlyReader) ReadMultiBuffer() (buf.MultiBuffer, error) {
 	if err := r.ctx.Err(); err != nil {
 		return r.fail(err)
 	}
-	want, minimum, present := hourlyFront(&r.pending, r.datagram)
+	_, _, present := hourlyFront(&r.pending, r.datagram)
 	if !present {
 		if r.terminal != nil {
 			return nil, r.terminal
@@ -37,19 +37,13 @@ func (r *hourlyReader) ReadMultiBuffer() (buf.MultiBuffer, error) {
 		if err := validateHourlyBuffers(r.pending, r.datagram); err != nil {
 			return r.fail(err)
 		}
-		want, minimum, present = hourlyFront(&r.pending, r.datagram)
+		_, _, present = hourlyFront(&r.pending, r.datagram)
 		if !present {
 			return nil, r.terminal
 		}
 	}
-	permit, err := acquireHourlyHandoff(r.ctx, r.acquire, hourly.Upload, want, minimum)
+	head, permit, err := admitHourlyBuffer(r.ctx, r.acquire, hourly.Upload, &r.pending, r.datagram)
 	if err != nil {
-		return r.fail(err)
-	}
-	head := takeHourlyBuffer(&r.pending, permit.Bytes())
-	if err = beginHourlyHandoff(r.ctx, permit); err != nil {
-		permit.Complete(hourly.NotHandedOff)
-		buf.ReleaseMulti(head)
 		return r.fail(err)
 	}
 	if r.lease != nil {

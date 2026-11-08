@@ -2,6 +2,32 @@ package hourly
 
 import "time"
 
+// ExpirePaid shares the timer's native fence with maintenance. Recheck the live
+// authorization so a stale expiry observation cannot revoke a paid renewal.
+func (c *Controller) ExpirePaid(now time.Time) {
+	c.mu.RLock()
+	var actions []fenceAction
+	for _, owner := range c.owners {
+		owner.mu.Lock()
+		expired := false
+		for flow := range owner.flows {
+			if !flow.closed && !flow.fenced && !c.authorized(flow.binding, now) {
+				expired = true
+				break
+			}
+		}
+		if expired {
+			actions = append(actions, owner.fenceFlows(func(flow *Flow) bool {
+				return !c.authorized(flow.binding, now)
+			}, nil)...)
+			owner.signal()
+		}
+		owner.mu.Unlock()
+	}
+	c.mu.RUnlock()
+	runFences(actions)
+}
+
 func (f *Flow) setExpiry(paid time.Time) {
 	if f.timer != nil {
 		f.timer.Stop()

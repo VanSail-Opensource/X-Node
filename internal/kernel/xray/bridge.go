@@ -113,7 +113,12 @@ func (h *managedOutbound) Dispatch(ctx context.Context, link *transport.Link) {
 	copied.CanSpliceCopy = 3
 	copied.Conn = nil
 	child = session.ContextWithInbound(child, &copied)
-	lease, err := h.bridge.Registry.AcquireTracked(child, id, si.User.Email, si.Tag, si.Source.Address.IP().String(), dest.NetAddr(), strings.ToLower(dest.Network.String()), int(dest.Port), func() { cancel(); reject() })
+	connection := si.Conn
+	lease, err := h.bridge.Registry.AcquireTrackedWithHourlyFence(child, id, si.User.Email, si.Tag, si.Source.Address.IP().String(), dest.NetAddr(), strings.ToLower(dest.Network.String()), int(dest.Port), func() { cancel(); reject() }, func() {
+		if connection != nil {
+			_ = connection.Close()
+		}
+	})
 	if err != nil {
 		cancel()
 		reject()

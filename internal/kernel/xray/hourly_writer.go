@@ -30,18 +30,12 @@ func (w *hourlyWriter) WriteMultiBuffer(mb buf.MultiBuffer) error {
 		return err
 	}
 	for {
-		want, minimum, present := hourlyFront(&mb, w.datagram)
+		_, _, present := hourlyFront(&mb, w.datagram)
 		if !present {
 			return nil
 		}
-		permit, err := acquireHourlyHandoff(w.ctx, w.acquire, hourly.Download, want, minimum)
+		head, permit, err := admitHourlyBuffer(w.ctx, w.acquire, hourly.Download, &mb, w.datagram)
 		if err != nil {
-			return err
-		}
-		head := takeHourlyBuffer(&mb, permit.Bytes())
-		if err = beginHourlyHandoff(w.ctx, permit); err != nil {
-			permit.Complete(hourly.NotHandedOff)
-			buf.ReleaseMulti(head)
 			return err
 		}
 		err = w.Writer.WriteMultiBuffer(head)

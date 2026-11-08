@@ -38,6 +38,9 @@ func TestShrinkWaitsForInterruptAndStartedHandoffOutsideLocks(t *testing.T) {
 	if err = p.Begin(); err != nil {
 		t.Fatal(err)
 	}
+	// The first handoff exhausted full-speed credit. A fresh reduced-rate
+	// bucket starts empty, so earn the probe's one byte before reserving it.
+	f.clock.Advance(time.Millisecond)
 	probe := acquireAdmission(t, f.flow, Upload, 1, 1)
 	probe.Complete(NotHandedOff)
 	g.Nonce = f.c.PendingDemand(1)[0].Nonce

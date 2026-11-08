@@ -11,7 +11,14 @@ and records separate raw hourly samples; delivery failure never refunds it.
 Legacy metering remains unchanged. Chained outbounds reuse one logical flow, and
 the wrappers remain exclusively outbound-facing, preserving mux pipe readers.
 
+An unstarted permit cancelled by grant refresh is reacquired with its original
+buffer and datagram metadata intact; only successful `Begin` admits bytes.
 Native revocation cancels the lease and interrupts both original link endpoints.
+Controller fencing also closes the authenticated inbound connection when Xray
+provides it, because socket-backed VLESS buffer wrappers may not forward close.
+Mux children inherit one authenticated principal and connection. Ordinary flow
+completion keeps that connection open for its healthy siblings; legacy/transit
+flows never use the additional hourly transport fence.
 This controls admission and draining inside the runtime; it does not promise
 that already-admitted operating-system/network bytes disappear at a deadline.
 Hosted `hourly_reader_test.go`, `hourly_writer_test.go` and their

@@ -67,7 +67,12 @@ func TestHourlyWriterFailedBeginNeverHandsOff(t *testing.T) {
 	sink := &nativeHourlySink{}
 	admitted := 0
 	var outcomes []hourly.Outcome
+	calls := 0
 	w := &hourlyWriter{Writer: sink, ctx: context.Background(), acquire: func(context.Context, hourly.Direction, int, int) (hourlyHandoff, error) {
+		calls++
+		if calls > 1 {
+			return nil, hourly.ErrRevoked // A truly fenced flow also rejects reacquisition.
+		}
 		return &nativeHourlyPermit{n: 2, beginErr: hourly.ErrRevoked, admitted: &admitted, outcomes: &outcomes}, nil
 	}}
 	head := nativeHourlyBuffer("abcd")

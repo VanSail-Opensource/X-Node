@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"errors"
 	"os"
 	"testing"
 	"time"
@@ -20,8 +21,14 @@ func TestFailedResultJournalRemainsUncertainOnReplay(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Mkdir(jobs.path, 0700); err != nil {
-		t.Fatal(err)
+	writes := 0
+	write := jobs.write
+	jobs.write = func(path string, data []byte, mode os.FileMode) error {
+		writes++
+		if writes > 1 {
+			return errors.New("synthetic result persistence failure")
+		}
+		return write(path, data, mode)
 	}
 	calls := 0
 	mutate := func(context.Context, func(any)) (any, error) { calls++; return map[string]bool{"applied": true}, nil }

@@ -2,96 +2,86 @@ package agent
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
-	"github.com/VanSail-Opensource/X-Node/internal/protocol"
-	"github.com/VanSail-Opensource/X-Node/internal/state"
 	"os"
-	"path/filepath"
+	"strings"
 	"sync"
 	"time"
+
+	"github.com/VanSail-Opensource/X-Node/internal/protocol"
 )
 
 type JobResult struct {
-	ID       string    `json:"id"`
-	Command  string    `json:"command"`
-	Status   string    `json:"status"`
-	Data     any       `json:"data,omitempty"`
-	Error    string    `json:"error,omitempty"`
-	Finished time.Time `json:"finished,omitempty"`
+	ID           string    `json:"id"`
+	Command      string    `json:"command"`
+	Status       string    `json:"status"`
+	Data         any       `json:"data,omitempty"`
+	Error        string    `json:"error,omitempty"`
+	Finished     time.Time `json:"finished,omitempty"`
+	encodedBytes int
 }
+
 type Jobs struct {
-	mu      sync.Mutex
-	path    string
-	running map[string]runningJob
-	history []JobResult
-	slots   chan struct{}
-	urgent  chan struct{}
-	send    func(protocol.Message, bool) bool
-	redact  func(string) string
+	mu           sync.Mutex
+	persistMu    sync.Mutex // Workers only; never acquired by the control reader.
+	path         string
+	running      map[string]runningJob
+	history      []JobResult
+	observations []JobResult
+	recovery     string
+	slots        chan struct{}
+	urgent       chan struct{}
+	send         func(protocol.Message, bool) bool
+	redact       func(string) string
+	write        func(string, []byte, os.FileMode) error
 }
+
 type runningJob struct {
 	command string
 	cancel  context.CancelFunc
 }
 
-func NewJobs(dir string, send func(protocol.Message, bool) bool) (*Jobs, error) {
-	j := &Jobs{path: filepath.Join(dir, "jobs.json"), running: map[string]runningJob{}, slots: make(chan struct{}, 2), urgent: make(chan struct{}, 1), send: send}
-	if b, e := os.ReadFile(j.path); e == nil {
-		if len(b) >= 2<<20 || json.Unmarshal(b, &j.history) != nil {
-			return nil, errors.New("invalid persisted job history")
-		}
-		j.history = durableJobHistory(j.history)
-		cleaned, err := json.Marshal(j.history)
-		if err != nil {
-			return nil, err
-		}
-		if err = state.AtomicWrite(j.path, cleaned, 0600); err != nil {
-			return nil, err
-		}
-	} else if !os.IsNotExist(e) {
-		return nil, e
-	}
-	return j, nil
-}
 func (j *Jobs) Start(ctx context.Context, id, command string, fn func(context.Context, func(any)) (any, error)) error {
 	return j.start(ctx, id, command, false, fn)
 }
 
-// StartControl reserves one existing executor slot for urgent control work.
+// StartControl reserves one executor slot for urgent control work.
 func (j *Jobs) StartControl(ctx context.Context, id, command string, fn func(context.Context, func(any)) (any, error)) error {
 	return j.start(ctx, id, command, true, fn)
 }
+
 func (j *Jobs) start(ctx context.Context, id, command string, urgent bool, fn func(context.Context, func(any)) (any, error)) error {
-	if id == "" {
-		return errors.New("utility commands require an ID")
+	if id == "" || len(id) > 128 || command == "" || len(command) > 64 || strings.ContainsAny(id+command, "\x00\r\n") {
+		return errors.New("invalid utility command identity")
 	}
 	j.mu.Lock()
-	for _, r := range j.history {
-		if r.ID == id {
-			if r.Command != command {
-				j.mu.Unlock()
-				return errors.New("request ID was reused for another command")
-			}
-			j.mu.Unlock()
-			j.send(protocol.New("command.result", id, 0, r), true)
-			return nil
-		}
-	}
 	if running, ok := j.running[id]; ok {
+		j.mu.Unlock()
 		if running.command != command {
-			j.mu.Unlock()
 			return errors.New("request ID was reused for another command")
 		}
-		j.mu.Unlock()
 		j.send(protocol.New("command.accepted", id, 0, map[string]string{"command": command}), true)
 		return nil
 	}
+	for _, history := range [][]JobResult{j.history, j.observations} {
+		for _, result := range history {
+			if result.ID != id {
+				continue
+			}
+			j.mu.Unlock()
+			if result.Command != command {
+				return errors.New("request ID was reused for another command")
+			}
+			j.send(protocol.New("command.result", id, 0, result), true)
+			return nil
+		}
+	}
+	if j.recovery != "" && persistentJob(command) {
+		j.mu.Unlock()
+		return errors.New("job history recovery required; durable command was not executed")
+	}
 	slots := j.slots
 	if urgent {
-		if j.urgent == nil {
-			j.urgent = make(chan struct{}, 1)
-		}
 		slots = j.urgent
 	}
 	select {
@@ -104,45 +94,10 @@ func (j *Jobs) start(ctx context.Context, id, command string, urgent bool, fn fu
 	j.running[id] = runningJob{command: command, cancel: cancel}
 	j.mu.Unlock()
 	j.send(protocol.New("command.accepted", id, 0, map[string]string{"command": command}), true)
-	go func() {
-		defer func() { <-slots; cancel() }()
-		progress := func(data any) { j.send(protocol.New("command.progress", id, 0, data), false) }
-		data, e := fn(child, progress)
-		result := JobResult{ID: id, Command: command, Status: "completed", Data: data, Finished: time.Now().UTC()}
-		if e != nil {
-			result.Status = "failed"
-			result.Error = "utility operation failed"
-			if j.redact != nil {
-				result.Error = j.redact(e.Error())
-			}
-		}
-		if errors.Is(child.Err(), context.Canceled) {
-			result.Status = "cancelled"
-		}
-		j.mu.Lock()
-		delete(j.running, id)
-		j.history = append(j.history, result)
-		if len(j.history) > 128 {
-			j.history = j.history[len(j.history)-128:]
-		}
-		var persistErr error
-		if command != protocol.AutomaticLeaseCommand {
-			var b []byte
-			b, persistErr = json.Marshal(durableJobHistory(j.history))
-			if persistErr == nil {
-				persistErr = state.AtomicWrite(j.path, b, 0600)
-			}
-		}
-		if persistErr != nil {
-			result.Status = "uncertain"
-			result.Error = "job result persistence failed"
-			j.history[len(j.history)-1] = result
-		}
-		j.mu.Unlock()
-		j.send(protocol.New("command.result", id, 0, result), true)
-	}()
+	go j.execute(child, cancel, slots, id, command, fn)
 	return nil
 }
+
 func (j *Jobs) Cancel(id string) bool {
 	j.mu.Lock()
 	job := j.running[id]
@@ -153,12 +108,23 @@ func (j *Jobs) Cancel(id string) bool {
 	job.cancel()
 	return true
 }
+
 func (j *Jobs) Snapshot() []JobResult {
 	j.mu.Lock()
 	defer j.mu.Unlock()
-	out := protocol.Clone(j.history)
+	out := make([]JobResult, 0, len(j.history)+len(j.observations)+len(j.running)+1)
+	for _, history := range [][]JobResult{j.history, j.observations} {
+		for _, result := range history {
+			if _, active := j.running[result.ID]; !active {
+				out = append(out, cloneJobResult(result))
+			}
+		}
+	}
 	for id, job := range j.running {
 		out = append(out, JobResult{ID: id, Command: job.command, Status: "running"})
+	}
+	if j.recovery != "" {
+		out = append(out, JobResult{ID: "journal-recovery-required", Command: "journal.recovery", Status: "uncertain", Error: j.recovery})
 	}
 	return out
 }

@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"errors"
 	"os"
 	"strings"
 	"testing"
@@ -11,7 +12,7 @@ import (
 )
 
 func TestSessionCommandResultsRemainMemoryOnly(t *testing.T) {
-	for _, command := range []string{"connections.list", "users.active_ips", "ips.control", "connections.close", "metrics.get"} {
+	for _, command := range []string{"connections.list", "users.active_ips", "ips.control", "connections.close", "metrics.get", "firewall.status", "certificates.get", "config.validate", "update.check", "speedtest"} {
 		t.Run(command, func(t *testing.T) { testMemoryOnlyCommand(t, command) })
 	}
 }
@@ -39,7 +40,7 @@ func testMemoryOnlyCommand(t *testing.T, command string) {
 		t.Fatal("command did not finish")
 	}
 	data, err := os.ReadFile(jobs.path)
-	if err != nil || strings.Contains(string(data), "192.0.2.99") || strings.Contains(string(data), command) {
+	if err != nil && !errors.Is(err, os.ErrNotExist) || strings.Contains(string(data), "192.0.2.99") || strings.Contains(string(data), command) {
 		t.Fatalf("session telemetry persisted: %v", err)
 	}
 	if len(jobs.Snapshot()) != 1 {

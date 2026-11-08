@@ -141,7 +141,18 @@ Only the matching pending batch is retired. Status and logs are disposable snaps
 {"v":1,"type":"command","id":"operation-1","data":{"name":"connections.list","args":{"limit":100}}}
 ```
 
-Commands emit `command.accepted`, optional `command.progress`, and `command.result`. Results contain `id`, `command`, `status`, optional `data/error`, and completion time. Two utility workers run concurrently. The last 128 completed results are retained across restart for request-ID deduplication; IDs must remain unique beyond this window.
+Commands emit `command.accepted`, optional `command.progress`, and `command.result`.
+Results contain `id`, `command`, `status`, optional `data/error`, and completion
+time. Two utility workers plus the existing reserved control slot execute work.
+Durable mutations persist an uncertain intent before execution. Up to 128
+durable receipts survive restart; up to 128 volatile observations remain only in
+memory. Each history is below 2 MiB and retained results are at most 64 KiB.
+Uncertain mutation IDs cannot be evicted to admit more work. IDs remain unique
+beyond the completed-receipt window. Large read results can use the transport
+frame limit but are disposable. Unverifiable journals fence durable utilities
+while recovery reads and ordinary agent startup remain available; see
+`job-journal.md`. Never treat `uncertain` as proof of failure or replay a mutation
+to obtain a cleaner result.
 
 | Command | Arguments |
 | --- | --- |

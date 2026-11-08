@@ -30,9 +30,19 @@ Capture baselines include the registry's transient counter generation. Only
 successfully accepted, unchanged snapshots can be pruned. Admission-stop logs
 and `agent.error` retain the redacted underlying failure for storage diagnostics.
 
-`jobs.go` persists bounded mutation replay history. `job_privacy.go` excludes
-session/IP scans, machine metrics and history reads from disk. Live read replay
-data remains in process memory. Corrupt or unwritable history fails construction.
+`jobs.go` owns bounded command admission and inspection. `job_execution.go` runs
+the existing workers; `job_journal.go` persists pre-execution intents and final
+receipts outside the control-reader mutex. `job_bounds.go` limits serialized
+receipt/history bytes while preserving exact integers. `job_privacy.go` excludes
+observations and existing volatile controls from disk. `job_loader.go` and
+`job_recovery.go` recover bounded legacy metadata; `job_evidence.go` preserves
+private original bytes before compaction. Unverifiable history fences durable
+utilities without failing ordinary agent startup. See `docs/job-journal.md`.
+
+`job_bounds_test.go`, `job_loader_test.go`, `job_evidence_test.go`,
+`job_recovery_test.go`, `job_recovery_io_test.go`, `job_execution_test.go` and
+`job_execution_restart_test.go` cover limits, privacy, recovery, disk stalls,
+intent fencing, partial outcomes and restart replay in hosted CI.
 
 Hosted cases in `accounting_test.go` and `job_privacy_test.go` verify closed-stream
 attribution and transient read results. Real stream tests live with the runtime.
@@ -48,14 +58,16 @@ The firewall guard owns local kernel observations and compressed ban durability;
 its joined background tasks keep disk/kernel work off the control reader and Xray
 payload paths. New report frames are gated by `master_controlled`, protecting
 rolling upgrades with older masters. Typed firewall snapshot/delta commands use
-the existing utility executor. Read-only firewall status never enters job history.
+the existing utility executor. Read-only firewall status never enters durable job history.
 `geodata_schedule.go` owns completion-based hour intervals and bounded refresh retries; related hosted fixtures cover superseded configuration and successful/failure completion. GeoIP remains master-only.
 
 `native_prepare.go` shares asset injection across activation and command validation. Certificate preflight uses an isolated pool and never issues ACME certificates or changes active certificate status. `Jobs.StartControl` reserves one bounded utility slot for urgent bans, traffic barriers and firewall confirmation; ordinary jobs retain two slots. Session/metrics commands no longer clone configuration and accounting journals unnecessarily.
 
 `commands.go` dispatches protocol commands with execution deadlines; `command_connections.go` owns ephemeral connection/IP controls. `command_reload.go` waits for actor-owned activation, propagates supersession and keeps traffic acknowledgments available. `command_reload_test.go` covers queued versus completed activation. Immediate read-only `update.status` and `jobs.list` replies remain independent of occupied utility slots.
 
-`job_result_test.go` covers failed result-journal writes: completed mutations become uncertain and their in-process replay retains that outcome without repeating execution. Running IDs are bound to command names and remain visible in recovery inspection.
+`job_result_test.go` covers failed completion writes after a persisted intent;
+the uncertain outcome survives replay without repeating execution. Running IDs
+are bound to command names and remain visible in recovery inspection.
 
 Incremental activation uses `activation.go` and the exhaustive consumer planner in
 `internal/protocol/changes.go`/`actions.go`. Controls can acknowledge an already

@@ -514,7 +514,7 @@ jobs:
         env:
           SOURCE_SHA: ${{ needs.build.outputs.source_sha }}
         run: |
-          gh release create "$RELEASE_VERSION" "$BUNDLE_DIR/"* --repo "$GITHUB_REPOSITORY" --verify-tag --target "$SOURCE_SHA" --draft --title "X-Node $RELEASE_VERSION" --notes-file "$RUNNER_TEMP/notes/x-node-release-notes.md"
+          gh release create "$RELEASE_VERSION" "$BUNDLE_DIR/"* --repo "$GITHUB_REPOSITORY" --verify-tag --target "$SOURCE_SHA" --draft --latest=false --title "X-Node $RELEASE_VERSION" --notes-file "$RUNNER_TEMP/notes/x-node-release-notes.md"
       - name: Download uploaded draft assets
         run: |
           mkdir "$RUNNER_TEMP/published-release"
@@ -529,4 +529,4 @@ jobs:
           EXPECTED_SOURCE_SHA: ${{ needs.build.outputs.source_sha }}
         run: *verify_provenance
       - name: Publish verified release
-        run: gh release edit "$RELEASE_VERSION" --repo "$GITHUB_REPOSITORY" --draft=false
+        run: gh release edit "$RELEASE_VERSION" --repo "$GITHUB_REPOSITORY" --draft=false --latest=false

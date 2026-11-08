@@ -1,5 +1,14 @@
 # Module
 
+`native_xhttp.go` checks effective XHTTP HTTP/2 settings before certificates or
+listeners are prepared. It mirrors the pinned Xray v26.10.31 alias precedence
+and single `extra` replacement, including effective `downloadSettings`, without
+calling builders or reading node-local TLS files. HTTP/2 types come from Go's
+`net/http.HTTP2Config`. Protocol fixtures compare normalization with the actual
+upstream typed builder and cover ignored fields and certificate placeholders.
+Known HTTP/2 field types are checked wherever configured, including inactive
+transport settings; unknown fields retain the upstream JSON behavior.
+
 `user_identity.go` shares credential/accounting identity equality and validates
 existing `replaces_id` moves against the original authorization snapshots.
 Historical hints with no old subject grant no new transfer proof and do not

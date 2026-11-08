@@ -1,3 +1,45 @@
+# X-Node v2.0.20
+
+Hardens the privileged process boundary: native Xray environment keys are
+validated before preparation or side effects, and privileged utilities receive
+a minimal fixed environment. Connection limits reserve live non-transit client
+flows atomically, including idle TCP/UDP and mux streams; sampled activity
+remains telemetry, while native-handler capacity and accounting keep their
+separate completion lifetimes.
+
+Bounds command receipts by serialized bytes and isolates volatile observations
+from durable mutation history. Workers persist execution intent before mutation;
+unfinished or uncertain outcomes remain protected across replay and restart.
+Oversized legacy journals preserve their original evidence before bounded
+metadata recovery rather than replaying uncertain commands. Large observations
+can still return within the existing wire limit without entering retained
+history.
+
+Validates privileged HTTPS requests and every redirect hop, retaining exact
+origin and credential boundaries with a narrow GitHub release-asset CDN
+exception. User-scoped IP blocks move only with verified credential/accounting
+identity replacements; authorization and restrictions publish together, stale
+IP controls cannot follow numeric aliases, and late accounting remains attached
+to its original period.
+
+Signed publication now uses protected-main provenance and the exact successful
+canonical Quality run. Build, sign and publish stages are isolated, version tags
+are immutable, and both architecture bundles, manifests and signatures are
+verified before publication. Repository policy changes and signing-key rotation
+remain separate operations; redirects and diagnostics do not expose credentials.
+
+Updates Xray to upstream v26.10.31 at
+`a4a3dff5b20c2faae567b742c172c7b95e75c083`, including its default MPTCP security
+mitigation, `golang.org/x/net` to v0.62.0, and `go4.org/netipx` to
+`3075585bcbeb7a9f042662e543b03efe900018be`. Go 1.27.3 and the reviewed nftables,
+DigitalOcean provider and YAML pseudo-version pins are retained. The reachable
+Brotli dependency is fixed at v1.2.8. See [dependency evidence](dependency-security.md)
+for source links and validation boundaries.
+
+Validates the new XHTTP HTTP/2 settings before opening listeners, including
+effective extra/download settings, so a malformed reload retains the serving
+listener and existing accounted streams.
+
 # X-Node v2.0.19
 
 Adds negotiated Zstandard level-6 report framing with one reused worker and

@@ -5,6 +5,11 @@ Xray core. They do not start listeners, execute utility jobs or fetch assets.
 Referenced certificate/geodata files need to exist in the validation environment;
 masters must distinguish unavailable node-local assets from structural errors.
 Rendered JSON contains managed credentials and is an internal secret artifact.
+
+Shared protocol validation checks effective XHTTP `h2Params` before the native
+builder can defer a type error until listener activation. `xhttp_test.go` covers
+the package-level validation/rendering and preserves a cached successful
+candidate when a malformed HTTP/2 configuration is rejected.
 # Incremental validation
 
 `Validator.Validate` preserves the existing validation contract while retaining

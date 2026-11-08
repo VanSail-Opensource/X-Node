@@ -115,6 +115,8 @@ def audit_release(workflow):
             require(proofs[-2] == create - 1 and proofs[-1] == publish - 1, "fresh draft and publication provenance")
             require(re.search(r"--draft(?:=true)?(?:\s|$)", steps[create]["run"])
                     and "--verify-tag" in steps[create]["run"] and "--draft=false" in steps[publish]["run"], "draft release gate")
+            require(all("--latest=false" in steps[i]["run"] for i in (create, publish)),
+                    "publication must not trigger automatic agent rollout")
             require(all(steps[i].get("env", {}).get("VERIFY_SIGNED") == "1" for i in verify)
                     and "published-release" in steps[verify[1]].get("env", {}).get("BUNDLE_DIR", ""), "uploaded signed bytes")
 
@@ -162,6 +164,7 @@ class ReleaseWorkflowTest(unittest.TestCase):
             "signer Go code": lambda w: signer(w).update(run="go run ./cmd/release-sign"),
             "signer cache": lambda w: w["jobs"]["sign"]["steps"].append({"uses": "actions/cache@" + "a" * 40}),
             "publish early": lambda w: w["jobs"]["publish"]["steps"].insert(0, w["jobs"]["publish"]["steps"].pop()),
+            "premature rollout": lambda w: w["jobs"]["publish"]["steps"][-1].update(run='gh release edit "$RELEASE_VERSION" --draft=false --latest'),
             "missing final provenance": lambda w: w["jobs"]["publish"]["steps"].pop(-2),
             "publisher environment": lambda w: w["jobs"]["publish"].update(environment="release"),
             "signer permissions": lambda w: w["jobs"]["sign"].update(permissions={"contents": "write"}),

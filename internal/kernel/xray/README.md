@@ -1,5 +1,10 @@
 # Embedded Xray runtime
 
+`xhttp_validation_test.go` sends real XHTTP traffic while rejecting malformed
+direct, `extra` and nested-download HTTP/2 settings. Forced invalid reloads must
+preserve the serving listener, existing streams, new admission and accounted
+traffic. Early checks are shared with public validation through the protocol.
+
 `connection_limits_test.go` exercises real TCP and mux streams: an idle first
 flow still denies a second, existing traffic survives, and closing allows a new
 flow. Each logical dispatch uses the existing atomic session reservation.

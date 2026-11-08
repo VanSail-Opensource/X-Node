@@ -55,6 +55,12 @@ remain isolated from executables and code supplied by the tag. Repository
 administrators can change workflows and policies; this gate does not add a
 second administrator credential to the signing job.
 
+Publication explicitly uses `--latest=false`. The stable, signed version is
+available by its exact tag while the compatible panel is pinned, deployed and
+verified. Only then may the operator promote it to Latest for automatic agent
+discovery. Publishing artifacts must not upgrade agents ahead of their master.
+See the [GitHub CLI release options](https://cli.github.com/manual/gh_release_create).
+
 ## Interfaces and resource bounds
 
 `validate_context(version, run_id, context)` validates invocation inputs.

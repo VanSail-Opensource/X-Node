@@ -26,12 +26,12 @@ type AccountingCounter struct {
 }
 
 func (r *Registry) Acquire(ctx context.Context, id int, identity, tag, ip, destination, network string, port int, cancel func()) (*Lease, error) {
-	return r.acquire(ctx, id, identity, tag, ip, destination, network, port, cancel, false)
+	return r.acquireHourly(ctx, id, identity, tag, ip, destination, network, port, cancel, false)
 }
 
 // AcquireTracked keeps a separate completion barrier after admission slots are released.
 func (r *Registry) AcquireTracked(ctx context.Context, id int, identity, tag, ip, destination, network string, port int, cancel func()) (*Lease, error) {
-	return r.acquire(ctx, id, identity, tag, ip, destination, network, port, cancel, true)
+	return r.acquireHourly(ctx, id, identity, tag, ip, destination, network, port, cancel, true)
 }
 
 func (r *Registry) initializeAccounting(lease *Lease, tracked bool) {

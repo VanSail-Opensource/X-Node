@@ -36,7 +36,7 @@ func (j *Jobs) execute(ctx context.Context, cancel context.CancelFunc, slots cha
 	result.Data, result.Finished = data, time.Now().UTC()
 	if err != nil {
 		result.Status, result.Error = "failed", "utility operation failed"
-		if persistentJob(command) {
+		if persistentJob(command) && !definiteJobRefusal(err) {
 			result.Status, result.Error = "uncertain", "mutation failed; native outcome reconciliation required"
 		}
 		if j.redact != nil {
@@ -45,7 +45,7 @@ func (j *Jobs) execute(ctx context.Context, cancel context.CancelFunc, slots cha
 	}
 	if !executed {
 		result.Status, result.Error = "failed", "job cancelled before execution"
-	} else if ctx.Err() != nil || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+	} else if !definiteJobRefusal(err) && (ctx.Err() != nil || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)) {
 		result.Status = "cancelled"
 		if persistentJob(command) {
 			result.Status, result.Error = "uncertain", "cancelled mutation requires native outcome reconciliation"

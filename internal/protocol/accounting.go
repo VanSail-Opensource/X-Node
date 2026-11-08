@@ -17,11 +17,13 @@ type TrafficSample struct {
 
 // TrafficReport is an immutable journal batch. Samples replace legacy totals for billing.
 type TrafficReport struct {
-	ID             string          `json:"id"`
-	Traffic        Traffic         `json:"traffic"`
-	Samples        []TrafficSample `json:"samples,omitempty"`
-	StreamID       string          `json:"stream_id,omitempty"`
-	DroppedSamples uint64          `json:"dropped_samples,omitempty"`
+	ID                   string          `json:"id"`
+	Traffic              Traffic         `json:"traffic"`
+	Samples              []TrafficSample `json:"samples,omitempty"`
+	StreamID             string          `json:"stream_id,omitempty"`
+	DroppedSamples       uint64          `json:"dropped_samples,omitempty"`
+	HourlySamples        []HourlySample  `json:"hourly_samples,omitempty"`
+	DroppedHourlySamples uint64          `json:"dropped_hourly_samples,omitempty,string"`
 }
 
 // UserRate is measured payload throughput; it is independent of configured speed caps.

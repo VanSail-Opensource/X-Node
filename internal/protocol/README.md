@@ -1,5 +1,15 @@
 # Module
 
+`hourly.go`, `hourly_credit.go` and their validation helpers define optional
+account-wide ingress grants, raw admission samples and durable financial credit
+obligations. `schema_hourly.go` augments reflected types with hourly user paid
+boundaries, frame-item limits and typed credit arguments; `schema.go` preserves
+signed and unsigned integer string tags. `hourly_wire_test.go`,
+`hourly_validation_test.go` and `hourly_credit_validation_test.go` cover exact
+large integers, conditional user fields, command isolation/timeouts, malformed
+grants, duplicate batches and conserved normal/recovery proofs. Public details
+live in `docs/hourly-account-limits.md`; generated schema documents remain derived.
+
 `native_xhttp.go` checks effective XHTTP HTTP/2 settings before certificates or
 listeners are prepared. It mirrors the pinned Xray v26.10.31 alias precedence
 and single `extra` replacement, including effective `downloadSettings`, without

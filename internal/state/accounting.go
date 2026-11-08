@@ -11,7 +11,14 @@ import (
 // AddAccounting changes only bounded volatile storage. Validate the complete
 // capture before mutation; overflow cannot partially change accepted counters.
 func (s *Store) AddAccounting(delta Traffic, samples []protocol.TrafficSample) error {
-	if len(delta)+len(samples) == 0 {
+	return s.AddAccountingWithHourly(delta, samples, nil)
+}
+
+// AddAccountingWithHourly accepts one capture atomically. Invalid native input
+// changes neither bank. Hourly presentation loss never discards native billing
+// evidence or changes the independent durable credit obligations.
+func (s *Store) AddAccountingWithHourly(delta Traffic, samples []protocol.TrafficSample, hourly []protocol.HourlySample) error {
+	if len(delta)+len(samples)+len(hourly) == 0 {
 		return nil
 	}
 	s.mu.Lock()
@@ -19,6 +26,7 @@ func (s *Store) AddAccounting(delta Traffic, samples []protocol.TrafficSample) e
 	m := &s.traffic
 	if len(delta) > MaxTrafficEntries || len(samples) > MaxTrafficEntries {
 		m.drop(uint64(max(1, len(samples))))
+		m.addHourly(hourly)
 		return nil
 	}
 	totals := make(Traffic, len(delta))
@@ -71,6 +79,7 @@ func (s *Store) AddAccounting(delta Traffic, samples []protocol.TrafficSample) e
 	}
 	if entries > MaxTrafficEntries {
 		m.drop(uint64(max(1, len(samples))))
+		m.addHourly(hourly)
 		return nil
 	}
 	for id, value := range totals {
@@ -79,6 +88,7 @@ func (s *Store) AddAccounting(delta Traffic, samples []protocol.TrafficSample) e
 	for key, value := range updates {
 		m.samples[key] = value
 	}
+	m.addHourly(hourly)
 	return nil
 }
 

@@ -84,13 +84,13 @@ func (h *managedOutbound) Dispatch(ctx context.Context, link *transport.Link) {
 	if lease, ok := ctx.Value(leaseKey{}).(*sessions.Lease); ok {
 		if !lease.TrackOutbound(h.Tag()) {
 			common.Interrupt(link.Reader)
-			_ = common.Close(link.Writer)
+			_ = common.Interrupt(link.Writer)
 			return
 		}
 		h.Handler.Dispatch(ctx, link)
 		return
 	} // Chained outbounds share one reservation.
-	reject := func() { common.Interrupt(link.Reader); _ = common.Close(link.Writer) }
+	reject := func() { _ = common.Interrupt(link.Reader); _ = common.Interrupt(link.Writer) }
 	if si.User == nil || !strings.HasPrefix(si.User.Email, "user@") {
 		reject()
 		return
@@ -132,6 +132,15 @@ func (h *managedOutbound) Dispatch(ctx context.Context, link *transport.Link) {
 	defer stop()
 	// These are outbound-facing links. Xray's mux-facing *pipe.Reader is left untouched.
 	wrapped := &transport.Link{Reader: &meterReader{Reader: link.Reader, ctx: child, lease: lease}, Writer: &meterWriter{Writer: link.Writer, ctx: child, lease: lease}}
+	if flow, hourlyMode := lease.HourlyFlow(); hourlyMode {
+		if flow == nil {
+			return
+		}
+		reader := &hourlyReader{Reader: link.Reader, ctx: child, cancel: cancel, lease: lease, acquire: hourlyAcquirer(flow), datagram: lease.Info.Network == "udp"}
+		writer := &hourlyWriter{Writer: link.Writer, ctx: child, cancel: cancel, lease: lease, acquire: hourlyAcquirer(flow), datagram: lease.Info.Network == "udp"}
+		defer reader.releasePending()
+		wrapped = &transport.Link{Reader: reader, Writer: writer}
+	}
 	h.Handler.Dispatch(child, wrapped)
 }
 

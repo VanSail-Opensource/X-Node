@@ -16,7 +16,9 @@ func (r *Registry) SetUsers(users []protocol.User) {
 	}
 	r.ipBlocks = protocol.RemapIPBlocks(r.ipBlocks, replacements)
 	close := r.setUsers(users, replacements)
+	publication := r.hourlyPublication()
 	r.mu.Unlock()
+	publication.apply()
 	for _, lease := range close {
 		lease.Close()
 	}
@@ -44,7 +46,9 @@ func (r *Registry) ApplyAuthorization(view state.AuthorizationView) bool {
 		r.ipBlocks = map[string]protocol.IPBlock{}
 	}
 	r.authorizationSequence, r.authorizationRevision = view.Sequence, view.Revision
+	publication := r.hourlyPublication()
 	r.mu.Unlock()
+	publication.apply()
 	for _, lease := range close {
 		lease.Close()
 	}

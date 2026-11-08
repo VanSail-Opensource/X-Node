@@ -105,9 +105,37 @@ remain owned by the actor while activation runs in the serialized worker.
 
 `activity_test.go` verifies flush/sample independence with fake time. `activity.go` keeps throughput/activity sampling baselines independent of manual accounting captures, so a flush cannot consume the next configured rate sample. `accounting.go` returns queue-pressure barriers as retryable command failures without pausing admission.
 
+`accounting_hourly.go` captures cumulative raw admission counters alongside
+native traffic through one `Store.AddAccountingWithHourly` call. Baselines use
+the controller's unique counter generations, so pruning and re-admitting the
+same enrollment/period cannot replay or lose its first bytes. Capture advances
+and controller sample pruning occur only after the store accepts independent
+sample copies or records explicit presentation loss. Native validation failures
+leave both baselines unchanged for retry. Accepted payload remains charged even
+when a native writer later reports no handoff; credit settlement is separate.
+`accounting_hourly_test.go` exercises failed capture retry and lower/equal/higher
+readmission counters using real controller permits, without timer sleeps.
+
 `automatic_leases.go` dispatches `firewall.leases.update` to the existing reserved
 control executor and guard. Its bounded replay receipts remain memory-only;
 `jobs.go` skips filesystem writes for this volatile command and `job_privacy.go`
 filters it from later durable histories. `automatic_leases_test.go` verifies
 completion even when the history path cannot be written. Credentials, ordinary
 commands, desired configuration and bans retain their durable contracts.
+
+Hourly ingress enforcement lives in `hourly_runtime.go` and `internal/hourly`.
+Startup attaches the controller before publishing saved authorization. The
+capability is advertised only with a healthy, private durable credit journal;
+the WebSocket must independently negotiate and echo a fresh control session.
+Unsupported masters cannot activate hourly identities. Existing identities and
+native accounting retain their normal paths when hourly storage is unavailable.
+
+`hourly_receive.go` applies memory-only grants and delays successful shrink ACKs
+until native handoffs drain. `hourly_commands.go` uses the existing utility job
+executor for durable install, seal and exact proof ACK commands. It never waits
+on the reserved traffic/control executor. `hourly_publish.go` coalesces bounded
+demand/progress frames and replays immutable credit proofs. Live progress records
+admitted bytes; only a frozen and durably sealed proof can return unused credit.
+`hourly_retire.go` seals old sessions/days after their actual native barriers;
+disconnect alone does not authorize a refund. A damaged hourly journal disables
+this feature and preserves its evidence without stopping legacy traffic.

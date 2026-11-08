@@ -1,5 +1,16 @@
 # Logical sessions
 
+`hourly.go` captures immutable owner generation, enrollment, principal and period
+bindings at member admission and attaches one controller flow after releasing the
+registry lock. Authenticated transit retains normal accounting and skips this
+additional gate. `hourly_authorization.go` publishes complete authorization views
+with a monotonic process-local sequence, outside the registry lock because native
+interrupt callbacks close leases. New hourly admission requires acknowledgment of
+the current publication; a rejected snapshot closes existing hourly leases.
+Controller replacement and late attachment cannot restore a closed lease.
+`hourly_test.go` and `hourly_authorization_test.go` cover missing controllers,
+transit, stale publications, failed publication, immutable binding and renewal.
+
 `authorization.go` publishes committed users and IP blocks together using a
 process-local monotonic store sequence. Delayed publications cannot restore old
 authorization or restrictions. `identity.go` transfers leases only after the

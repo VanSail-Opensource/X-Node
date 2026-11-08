@@ -47,6 +47,7 @@ type Agent struct {
 	reportWake          chan struct{}
 	reportFlags         atomic.Uint32
 	compute             *computeWorker
+	hourly              *hourlyRuntime
 	Guard               *firewall.Guard
 	Dir                 string
 	Version             string
@@ -76,6 +77,7 @@ type Agent struct {
 	previousRates       state.Traffic
 	lastSample          time.Time
 	previousAccounting  map[string][2]uint64
+	previousHourly      map[uint64][2]uint64
 	lastCapture         time.Time
 	accountingRequests  chan accountingRequest
 	lastDDNS            map[string]time.Time
@@ -114,6 +116,7 @@ func New(dir, version string, client *transport.Client, logs *nlog.Stream) (*Age
 	runner := host.Commands{}
 	registry := sessions.New()
 	a := &Agent{Dir: dir, Version: version, BootID: store.StreamID(), Store: store, Registry: registry, Runtime: xray.New(registry), Client: client, Logs: logs, Sampler: monitor.New(), Certificates: cert.NewPool(filepath.Join(dir, "certs")), Runner: runner, apply: make(chan applyJob, 1), applied: make(chan applied, 1), bans: make(chan banEvent, 128), previous: state.Traffic{}, lastDDNS: map[string]time.Time{}, notify: make(chan reloadRequest, 1)}
+	a.initializeHourly()
 	a.ddnsJournal, e = state.OpenDDNS(dir)
 	a.reportWake = make(chan struct{}, 1)
 	if e != nil {
@@ -157,7 +160,7 @@ func New(dir, version string, client *transport.Client, logs *nlog.Stream) (*Age
 	}
 	client.Hello = func() protocol.Message {
 		d := store.Metadata()
-		return protocol.New("agent.hello", "", d.Revision, map[string]any{"agent_id": d.AgentID, "boot_id": a.BootID, "version": version, "xray_version": "v" + core.Version(), "config_revision": d.ConfigRevision, "ready": a.Runtime.Ready(), "capabilities": Capabilities, "upgrade_pending": a.Updater.Pending(), "binary_sha256": metadata.SHA256, "platform": metadata.Platform})
+		return protocol.New("agent.hello", "", d.Revision, map[string]any{"agent_id": d.AgentID, "boot_id": a.BootID, "version": version, "xray_version": "v" + core.Version(), "config_revision": d.ConfigRevision, "ready": a.Runtime.Ready(), "capabilities": a.runtimeCapabilities(), "upgrade_pending": a.Updater.Pending(), "binary_sha256": metadata.SHA256, "platform": metadata.Platform})
 	}
 	return a, nil
 }

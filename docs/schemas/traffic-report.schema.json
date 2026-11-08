@@ -2,9 +2,91 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "properties": {
+    "dropped_hourly_samples": {
+      "description": "Decimal count of omitted hourly presentation samples; marks incomplete usage history without changing financial credit proofs.",
+      "pattern": "^[0-9]+$",
+      "type": "string"
+    },
     "dropped_samples": {
       "minimum": 0,
       "type": "integer"
+    },
+    "hourly_samples": {
+      "description": "Raw hourly-mode member-ingress admission deltas; excludes authenticated transit and native traffic multipliers. Independent from durable credit proofs.",
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "accounting_period": {
+            "pattern": "^(?!_xnode_)[A-Za-z0-9._-]{1,128}$",
+            "type": "string"
+          },
+          "counter_generation": {
+            "pattern": "^[1-9][0-9]*$",
+            "type": "string"
+          },
+          "day_utc": {
+            "format": "date",
+            "type": "string"
+          },
+          "download_bytes": {
+            "pattern": "^[0-9]+$",
+            "type": "string"
+          },
+          "enrollment_id": {
+            "pattern": "^(?!_xnode_)[A-Za-z0-9._-]{1,128}$",
+            "type": "string"
+          },
+          "from": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "owner": {
+            "additionalProperties": false,
+            "properties": {
+              "generation": {
+                "pattern": "^[0-9]+$",
+                "type": "string"
+              },
+              "id": {
+                "pattern": "^(?!_xnode_)[A-Za-z0-9._-]{1,128}$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "generation"
+            ],
+            "type": "object"
+          },
+          "through": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "upload_bytes": {
+            "pattern": "^[0-9]+$",
+            "type": "string"
+          },
+          "user_id": {
+            "pattern": "^[1-9][0-9]*$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "counter_generation",
+          "owner",
+          "enrollment_id",
+          "user_id",
+          "accounting_period",
+          "day_utc",
+          "from",
+          "through",
+          "upload_bytes",
+          "download_bytes"
+        ],
+        "type": "object"
+      },
+      "maxItems": 8192,
+      "type": "array"
     },
     "id": {
       "type": "string"

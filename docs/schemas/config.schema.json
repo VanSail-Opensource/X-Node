@@ -399,6 +399,26 @@
     "users": {
       "items": {
         "additionalProperties": false,
+        "allOf": [
+          {
+            "if": {
+              "required": [
+                "hourly"
+              ]
+            },
+            "then": {
+              "properties": {
+                "accounting_period": {
+                  "minLength": 1
+                }
+              },
+              "required": [
+                "accounting_period",
+                "valid_until"
+              ]
+            }
+          }
+        ],
         "anyOf": [
           {
             "required": [
@@ -434,6 +454,38 @@
             "additionalProperties": {
               "type": "object"
             },
+            "type": "object"
+          },
+          "hourly": {
+            "additionalProperties": false,
+            "properties": {
+              "enrollment_id": {
+                "pattern": "^(?!_xnode_)[A-Za-z0-9._-]{1,128}$",
+                "type": "string"
+              },
+              "owner": {
+                "additionalProperties": false,
+                "properties": {
+                  "generation": {
+                    "pattern": "^[0-9]+$",
+                    "type": "string"
+                  },
+                  "id": {
+                    "pattern": "^(?!_xnode_)[A-Za-z0-9._-]{1,128}$",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "generation"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "owner",
+              "enrollment_id"
+            ],
             "type": "object"
           },
           "id": {

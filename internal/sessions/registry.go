@@ -139,6 +139,7 @@ func (r *Registry) acquire(ctx context.Context, id int, identity, tag, ip, desti
 	}
 	r.sequence++
 	l := &Lease{Info: Connection{ID: fmt.Sprintf("%s:%d", r.prefix, r.sequence), UserID: id, InboundTag: tag, SourceIP: ip, Destination: destination, DestinationPort: port, Network: network, Started: time.Now().UTC()}, registry: r, user: u, cancel: cancel, identity: identity, transit: transit}
+	l.captureHourly(u.policy, r.hourly, r.hourlySequence, r.hourlyApplied == r.hourlySequence)
 	r.initializeAccounting(l, tracked)
 	r.resources++
 	u.count++

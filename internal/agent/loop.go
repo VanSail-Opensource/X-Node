@@ -32,6 +32,7 @@ func (a *Agent) Run(ctx context.Context) error {
 	}
 	child, cancel := context.WithCancel(ctx)
 	defer cancel()
+	defer a.runHourly(child)()
 	status, err := a.listenStatus(child)
 	if err != nil {
 		return err

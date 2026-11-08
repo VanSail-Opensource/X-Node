@@ -52,6 +52,18 @@ restart loss, capacity, loss markers, blocked paths and allocation measurements.
 replay, periods, overflow atomicity, ordinary state durability and metadata cost.
 All automated verification runs in hosted CI.
 
+`AddAccountingWithHourly` accepts native accounting and hourly admission history
+under the same lock, after native validation. `accounting_hourly.go` retains raw
+owner/enrollment/period/day/generation deltas in a separate 8192-entry accumulation
+bank; it cannot consume native billing space. Invalid, overflowing or omitted
+hourly records increment `dropped_hourly_samples` rather than halt legacy access.
+Both banks enter one immutable boot-stream report, share the conservative 32 MiB
+queue bound, and retire through its existing matching ACK. Returned sample slices
+are detached. Admission history remains volatile and never enters `Data`; exact
+financial byte reservations and final proofs belong to `hourly.CreditStore`.
+`accounting_hourly_test.go` and `accounting_hourly_bounds_test.go` cover atomic
+retry, independent loss, immutable replay, queue accounting and disk isolation.
+
 `ddns.go` and `ddns_changes.go` retain the independent private 1 MiB DDNS journal.
 It preserves at most 1024 unacknowledged changes and successful job snapshots
 across restart/rollback, deduplicates generation changes and never contains

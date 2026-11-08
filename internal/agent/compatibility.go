@@ -40,6 +40,9 @@ func extensionRequirements(config protocol.Config) map[string]bool {
 		required["member_outbound_guards"] = true
 	}
 	for _, user := range config.Users {
+		if user.Hourly != nil {
+			required[protocol.HourlyCapability] = true
+		}
 		if user.WhitelistEnabled || len(user.WhitelistedIPs) > 0 {
 			required["member_source_whitelist_v1"] = true
 		}

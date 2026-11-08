@@ -76,6 +76,26 @@
               "const": "v1",
               "type": "string"
             }
+          },
+          {
+            "description": "Offer hourly enforcement only when operational; the master must echo both values exactly and check the hello capability.",
+            "in": "header",
+            "name": "X-XNode-Hourly",
+            "required": false,
+            "schema": {
+              "const": "v1",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Offer hourly enforcement only when operational; the master must echo both values exactly and check the hello capability.",
+            "in": "header",
+            "name": "X-XNode-Hourly-Session",
+            "required": false,
+            "schema": {
+              "pattern": "^[0-9a-f]{32}$",
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -93,6 +113,20 @@
                 "description": "Accepted DDNS change format; also requires the hello capability.",
                 "schema": {
                   "const": "acknowledged-v1",
+                  "type": "string"
+                }
+              },
+              "X-XNode-Hourly": {
+                "description": "Exact accepted hourly offer; no legacy fallback grants hourly payload.",
+                "schema": {
+                  "const": "v1",
+                  "type": "string"
+                }
+              },
+              "X-XNode-Hourly-Session": {
+                "description": "Exact accepted hourly offer; no legacy fallback grants hourly payload.",
+                "schema": {
+                  "pattern": "^[0-9a-f]{32}$",
                   "type": "string"
                 }
               },
@@ -156,7 +190,11 @@
             "compute.claim",
             "compute.heartbeat",
             "compute.result",
-            "compute.cancel"
+            "compute.cancel",
+            "hourly.demand",
+            "hourly.grant.ack",
+            "hourly.grant.acks",
+            "hourly.credit.proofs"
           ],
           "masterToAgent": {
             "$ref": "schemas/master-message.schema.json"
@@ -178,6 +216,24 @@
     "maximumEntries": 100000,
     "schema": "schemas/automatic-leases.schema.json",
     "volatile": true
+  },
+  "x-hourly-account-limits": {
+    "capability": "hourly_account_limits_v1",
+    "commands": [
+      "hourly.credit.install",
+      "hourly.credit.seal",
+      "hourly.credit.ack"
+    ],
+    "exactSessionEcho": true,
+    "failurePolicy": "pause hourly ingress; never restore grants or unused-credit proofs on disconnect",
+    "maxAggregateBurstBytes": 16384,
+    "maxFrameBytes": 65536,
+    "maxGrantLifetimeMilliseconds": 10000,
+    "maxItems": 128,
+    "offerHeader": "X-XNode-Hourly",
+    "offerValue": "v1",
+    "schema": "schemas/hourly.schema.json",
+    "sessionHeader": "X-XNode-Hourly-Session"
   },
   "x-report-framing": {
     "capability": "report_zstd_l6_v1",

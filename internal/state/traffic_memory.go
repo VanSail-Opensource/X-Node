@@ -17,13 +17,15 @@ const MaxTrafficQueuedBytes = 32 << 20
 var ErrTrafficBusy = errors.New("volatile traffic queue is full; retry the barrier")
 
 type memoryTraffic struct {
-	stream      string
-	sequence    uint64
-	totals      Traffic
-	samples     map[string]protocol.TrafficSample
-	queue       []*Batch
-	queuedBytes int
-	dropped     uint64
+	stream        string
+	sequence      uint64
+	totals        Traffic
+	samples       map[string]protocol.TrafficSample
+	queue         []*Batch
+	queuedBytes   int
+	dropped       uint64
+	hourly        map[string]protocol.HourlySample
+	droppedHourly uint64
 }
 
 func (s *Store) openTraffic() error {
@@ -54,14 +56,14 @@ func (m *memoryTraffic) drop(count uint64) { m.dropped += min(count, ^uint64(0)-
 func trafficFootprint(batch *Batch) int {
 	// Conservative retained allocation allowance, including map buckets, slice
 	// capacity, period strings and bookkeeping. Wire payload limits still apply.
-	return 256 + len(batch.Traffic)*128 + len(batch.Samples)*640
+	return 256 + len(batch.Traffic)*128 + len(batch.Samples)*640 + len(batch.HourlySamples)*1024
 }
 
 func (m *memoryTraffic) seal(agent string) error {
-	if len(m.totals)+len(m.samples) == 0 && m.dropped == 0 {
+	if len(m.totals)+len(m.samples)+len(m.hourly) == 0 && m.dropped == 0 && m.droppedHourly == 0 {
 		return nil
 	}
-	size := 256 + len(m.totals)*128 + len(m.samples)*640
+	size := 256 + len(m.totals)*128 + len(m.samples)*640 + len(m.hourly)*1024
 	if len(m.queue) >= MaxTrafficQueuedReports || size > MaxTrafficQueuedBytes-m.queuedBytes {
 		return ErrTrafficBusy
 	}
@@ -70,7 +72,7 @@ func (m *memoryTraffic) seal(agent string) error {
 	}
 	m.sequence++
 	batch := &Batch{ID: fmt.Sprintf("%s:%s:%d", agent, m.stream, m.sequence), StreamID: m.stream,
-		Traffic: m.totals, DroppedSamples: m.dropped}
+		Traffic: m.totals, DroppedSamples: m.dropped, DroppedHourlySamples: m.droppedHourly}
 	keys := make([]string, 0, len(m.samples))
 	for key := range m.samples {
 		keys = append(keys, key)
@@ -80,9 +82,18 @@ func (m *memoryTraffic) seal(agent string) error {
 	for _, key := range keys {
 		batch.Samples = append(batch.Samples, m.samples[key])
 	}
+	hourlyKeys := make([]string, 0, len(m.hourly))
+	for key := range m.hourly {
+		hourlyKeys = append(hourlyKeys, key)
+	}
+	sort.Strings(hourlyKeys)
+	for _, key := range hourlyKeys {
+		batch.HourlySamples = append(batch.HourlySamples, m.hourly[key])
+	}
 	m.queue = append(m.queue, batch)
 	m.queuedBytes += size
 	m.totals, m.samples, m.dropped = Traffic{}, map[string]protocol.TrafficSample{}, 0
+	m.hourly, m.droppedHourly = nil, 0
 	return nil
 }
 
@@ -92,5 +103,6 @@ func cloneTrafficBatch(batch *Batch) *Batch {
 	}
 	clone := *batch
 	clone.Traffic, clone.Samples = maps.Clone(batch.Traffic), slices.Clone(batch.Samples)
+	clone.HourlySamples = slices.Clone(batch.HourlySamples)
 	return &clone
 }

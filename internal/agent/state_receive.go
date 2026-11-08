@@ -13,6 +13,11 @@ func (a *Agent) handle(ctx context.Context, m protocol.Message) {
 		a.Client.Send(protocol.New("error", m.ID, m.Revision, map[string]string{"error": a.Logs.Redact(e.Error())}), true)
 	}
 	switch m.Type {
+	case "hourly.grant":
+		if err := a.receiveHourly(m); err != nil {
+			fail(err)
+		}
+		return
 	case "compute.announce", "compute.grant", "compute.ack", "compute.cancel":
 		a.receiveCompute(ctx, m)
 		return
@@ -105,6 +110,10 @@ func (a *Agent) handle(ctx context.Context, m protocol.Message) {
 			}
 		}
 		if e != nil {
+			fail(e)
+			return
+		}
+		if e = a.validateHourlyConfiguration(c); e != nil {
 			fail(e)
 			return
 		}

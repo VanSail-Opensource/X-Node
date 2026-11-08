@@ -12,6 +12,7 @@ import (
 )
 
 func (c *Client) connect(ctx context.Context) bool {
+	c.clearHourlySession()
 	c.computePool.Store(false)
 	c.compactTelemetry.Store(false)
 	c.openConnections.Store(false)
@@ -37,6 +38,7 @@ func (c *Client) connect(ctx context.Context) bool {
 	headers.Set(protocol.ReportFramingHeader, protocol.ZstdReportFraming)
 	headers.Set(protocol.TrafficStreamHeader, protocol.TrafficStreamFormat)
 	headers.Set(protocol.ActivityObservationsHeader, protocol.ActivityObservationsFormat)
+	hourlyOffer := c.offerHourly(headers)
 	socket, response, e := dialer.DialContext(ctx, c.URL, headers)
 	if e != nil {
 		if response != nil && response.Body != nil {
@@ -47,6 +49,8 @@ func (c *Client) connect(ctx context.Context) bool {
 	}
 	defer socket.Close()
 	defer c.status(false)
+	c.acceptHourly(response, hourlyOffer)
+	defer c.clearHourlySession()
 	c.computePool.Store(response.Header.Get(protocol.ComputePoolHeader) == protocol.ComputePoolFormat)
 	defer c.computePool.Store(false)
 	c.compactTelemetry.Store(response.Header.Get(protocol.TelemetryFormatHeader) == protocol.CompactTelemetryFormat)

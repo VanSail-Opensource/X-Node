@@ -1,5 +1,11 @@
 # Master protocol package
 
+`hourly.go` exports optional hourly user/grant/sample and credit-obligation wire
+types plus pure validators/digests. `hourly_schema.go` exposes `HourlySchemas`
+without importing enforcement or persistence. Negotiate both hourly upgrade
+headers and check the hello capability before admitting hourly plans. The detailed
+contract is `docs/hourly-account-limits.md`.
+
 `OpenConnectionsCapability` gates `UserMetrics.TotalConnections` (compact `o`).
 These totals include idle client flows; existing `Connections` remains the sampled
 traffic-active count used for limits. Treat totals from older agents as unknown.

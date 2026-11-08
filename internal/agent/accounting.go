@@ -73,10 +73,15 @@ func (a *Agent) captureTrafficFrom(current state.Traffic) error {
 	for id, totals := range periodTotals {
 		delta[id] = totals
 	}
-	if err := a.Store.AddAccounting(delta, samples); err != nil {
+	hourlyCaptured, hourlyDeltas, nextHourly := a.captureHourly(from)
+	if err := a.Store.AddAccountingWithHourly(delta, samples, hourlyDeltas); err != nil {
 		return err
 	}
 	a.previous, a.previousAccounting, a.lastCapture = current, nextAccounting, now
+	a.previousHourly = nextHourly
+	if a.hourly != nil && a.hourly.controller != nil {
+		a.hourly.controller.PruneSamples(hourlyCaptured)
+	}
 	a.Registry.PruneAccounting(captured)
 	a.Registry.PruneCounters()
 	return nil

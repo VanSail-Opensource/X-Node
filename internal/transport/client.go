@@ -4,6 +4,7 @@ package transport
 import (
 	"context"
 	"math/rand/v2"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -31,6 +32,11 @@ type Client struct {
 	reportFraming    atomic.Bool
 	trafficStreams   atomic.Bool
 	activityReports  atomic.Bool
+	hourlyEnabled    atomic.Bool
+	hourlyMu         sync.Mutex
+	hourlyNegotiated atomic.Bool
+	hourlySession    atomic.Value
+	OnHourlySession  func(string)            // Set before Run; synchronous admission fence.
 	reportEncoder    *protocol.ReportEncoder // serialized socket writer only
 }
 

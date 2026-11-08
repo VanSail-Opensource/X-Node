@@ -11,6 +11,98 @@
         "data": {
           "additionalProperties": false,
           "properties": {
+            "burst_bytes": {
+              "maximum": 16384,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "day_utc": {
+              "format": "date",
+              "type": "string"
+            },
+            "lifetime_ms": {
+              "maximum": 10000,
+              "minimum": 1,
+              "type": "integer"
+            },
+            "nonce": {
+              "pattern": "^[0-9a-f]{32}$",
+              "type": "string"
+            },
+            "owner": {
+              "additionalProperties": false,
+              "properties": {
+                "generation": {
+                  "pattern": "^[0-9]+$",
+                  "type": "string"
+                },
+                "id": {
+                  "pattern": "^(?!_xnode_)[A-Za-z0-9._-]{1,128}$",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "generation"
+              ],
+              "type": "object"
+            },
+            "rate_bytes_per_second": {
+              "pattern": "^[0-9]+$",
+              "type": "string"
+            },
+            "sequence": {
+              "pattern": "^[1-9][0-9]*$",
+              "type": "string"
+            },
+            "session_id": {
+              "pattern": "^[0-9a-f]{32}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "session_id",
+            "owner",
+            "nonce",
+            "sequence",
+            "day_utc",
+            "lifetime_ms",
+            "rate_bytes_per_second",
+            "burst_bytes"
+          ],
+          "type": "object"
+        },
+        "id": {
+          "type": "string"
+        },
+        "revision": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "type": {
+          "const": "hourly.grant"
+        },
+        "v": {
+          "const": 1
+        }
+      },
+      "required": [
+        "v",
+        "type",
+        "data"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "base_revision": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "data": {
+          "additionalProperties": false,
+          "properties": {
             "bytes": {
               "type": "integer"
             },
@@ -750,6 +842,26 @@
             "users": {
               "items": {
                 "additionalProperties": false,
+                "allOf": [
+                  {
+                    "if": {
+                      "required": [
+                        "hourly"
+                      ]
+                    },
+                    "then": {
+                      "properties": {
+                        "accounting_period": {
+                          "minLength": 1
+                        }
+                      },
+                      "required": [
+                        "accounting_period",
+                        "valid_until"
+                      ]
+                    }
+                  }
+                ],
                 "anyOf": [
                   {
                     "required": [
@@ -785,6 +897,38 @@
                     "additionalProperties": {
                       "type": "object"
                     },
+                    "type": "object"
+                  },
+                  "hourly": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "enrollment_id": {
+                        "pattern": "^(?!_xnode_)[A-Za-z0-9._-]{1,128}$",
+                        "type": "string"
+                      },
+                      "owner": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "generation": {
+                            "pattern": "^[0-9]+$",
+                            "type": "string"
+                          },
+                          "id": {
+                            "pattern": "^(?!_xnode_)[A-Za-z0-9._-]{1,128}$",
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "generation"
+                        ],
+                        "type": "object"
+                      }
+                    },
+                    "required": [
+                      "owner",
+                      "enrollment_id"
+                    ],
                     "type": "object"
                   },
                   "id": {
@@ -1306,6 +1450,26 @@
             "users": {
               "items": {
                 "additionalProperties": false,
+                "allOf": [
+                  {
+                    "if": {
+                      "required": [
+                        "hourly"
+                      ]
+                    },
+                    "then": {
+                      "properties": {
+                        "accounting_period": {
+                          "minLength": 1
+                        }
+                      },
+                      "required": [
+                        "accounting_period",
+                        "valid_until"
+                      ]
+                    }
+                  }
+                ],
                 "anyOf": [
                   {
                     "required": [
@@ -1341,6 +1505,38 @@
                     "additionalProperties": {
                       "type": "object"
                     },
+                    "type": "object"
+                  },
+                  "hourly": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "enrollment_id": {
+                        "pattern": "^(?!_xnode_)[A-Za-z0-9._-]{1,128}$",
+                        "type": "string"
+                      },
+                      "owner": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "generation": {
+                            "pattern": "^[0-9]+$",
+                            "type": "string"
+                          },
+                          "id": {
+                            "pattern": "^(?!_xnode_)[A-Za-z0-9._-]{1,128}$",
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "generation"
+                        ],
+                        "type": "object"
+                      }
+                    },
+                    "required": [
+                      "owner",
+                      "enrollment_id"
+                    ],
                     "type": "object"
                   },
                   "id": {
@@ -1467,6 +1663,26 @@
             "users": {
               "items": {
                 "additionalProperties": false,
+                "allOf": [
+                  {
+                    "if": {
+                      "required": [
+                        "hourly"
+                      ]
+                    },
+                    "then": {
+                      "properties": {
+                        "accounting_period": {
+                          "minLength": 1
+                        }
+                      },
+                      "required": [
+                        "accounting_period",
+                        "valid_until"
+                      ]
+                    }
+                  }
+                ],
                 "properties": {
                   "accounting_period": {
                     "type": "string"
@@ -1487,6 +1703,38 @@
                     "additionalProperties": {
                       "type": "object"
                     },
+                    "type": "object"
+                  },
+                  "hourly": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "enrollment_id": {
+                        "pattern": "^(?!_xnode_)[A-Za-z0-9._-]{1,128}$",
+                        "type": "string"
+                      },
+                      "owner": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "generation": {
+                            "pattern": "^[0-9]+$",
+                            "type": "string"
+                          },
+                          "id": {
+                            "pattern": "^(?!_xnode_)[A-Za-z0-9._-]{1,128}$",
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "generation"
+                        ],
+                        "type": "object"
+                      }
+                    },
+                    "required": [
+                      "owner",
+                      "enrollment_id"
+                    ],
                     "type": "object"
                   },
                   "id": {
@@ -1608,6 +1856,26 @@
             "upsert": {
               "items": {
                 "additionalProperties": false,
+                "allOf": [
+                  {
+                    "if": {
+                      "required": [
+                        "hourly"
+                      ]
+                    },
+                    "then": {
+                      "properties": {
+                        "accounting_period": {
+                          "minLength": 1
+                        }
+                      },
+                      "required": [
+                        "accounting_period",
+                        "valid_until"
+                      ]
+                    }
+                  }
+                ],
                 "properties": {
                   "accounting_period": {
                     "type": "string"
@@ -1628,6 +1896,38 @@
                     "additionalProperties": {
                       "type": "object"
                     },
+                    "type": "object"
+                  },
+                  "hourly": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "enrollment_id": {
+                        "pattern": "^(?!_xnode_)[A-Za-z0-9._-]{1,128}$",
+                        "type": "string"
+                      },
+                      "owner": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "generation": {
+                            "pattern": "^[0-9]+$",
+                            "type": "string"
+                          },
+                          "id": {
+                            "pattern": "^(?!_xnode_)[A-Za-z0-9._-]{1,128}$",
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "generation"
+                        ],
+                        "type": "object"
+                      }
+                    },
+                    "required": [
+                      "owner",
+                      "enrollment_id"
+                    ],
                     "type": "object"
                   },
                   "id": {
@@ -1923,6 +2223,230 @@
                   "args"
                 ]
               }
+            },
+            {
+              "if": {
+                "properties": {
+                  "name": {
+                    "const": "hourly.credit.install"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "args": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "agent_id": {
+                        "pattern": "^[0-9a-f]{32}$",
+                        "type": "string"
+                      },
+                      "boot_id": {
+                        "pattern": "^[0-9a-f]{32}$",
+                        "type": "string"
+                      },
+                      "byte_ceiling": {
+                        "pattern": "^[1-9][0-9]*$",
+                        "type": "string"
+                      },
+                      "day_utc": {
+                        "format": "date",
+                        "type": "string"
+                      },
+                      "issue_sequence": {
+                        "pattern": "^[1-9][0-9]*$",
+                        "type": "string"
+                      },
+                      "kind": {
+                        "enum": [
+                          "free",
+                          "extra"
+                        ],
+                        "type": "string"
+                      },
+                      "owner": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "generation": {
+                            "pattern": "^[0-9]+$",
+                            "type": "string"
+                          },
+                          "id": {
+                            "pattern": "^(?!_xnode_)[A-Za-z0-9._-]{1,128}$",
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "generation"
+                        ],
+                        "type": "object"
+                      },
+                      "reservation_id": {
+                        "pattern": "^(?!_xnode_)[A-Za-z0-9._-]{1,128}$",
+                        "type": "string"
+                      },
+                      "session_id": {
+                        "pattern": "^[0-9a-f]{32}$",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "reservation_id",
+                      "issue_sequence",
+                      "owner",
+                      "day_utc",
+                      "agent_id",
+                      "boot_id",
+                      "session_id",
+                      "byte_ceiling",
+                      "kind"
+                    ],
+                    "type": "object"
+                  }
+                },
+                "required": [
+                  "args"
+                ]
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "name": {
+                    "const": "hourly.credit.seal"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "args": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "expected": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "agent_id": {
+                            "pattern": "^[0-9a-f]{32}$",
+                            "type": "string"
+                          },
+                          "boot_id": {
+                            "pattern": "^[0-9a-f]{32}$",
+                            "type": "string"
+                          },
+                          "byte_ceiling": {
+                            "pattern": "^[1-9][0-9]*$",
+                            "type": "string"
+                          },
+                          "day_utc": {
+                            "format": "date",
+                            "type": "string"
+                          },
+                          "issue_sequence": {
+                            "pattern": "^[1-9][0-9]*$",
+                            "type": "string"
+                          },
+                          "kind": {
+                            "enum": [
+                              "free",
+                              "extra"
+                            ],
+                            "type": "string"
+                          },
+                          "owner": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "generation": {
+                                "pattern": "^[0-9]+$",
+                                "type": "string"
+                              },
+                              "id": {
+                                "pattern": "^(?!_xnode_)[A-Za-z0-9._-]{1,128}$",
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "generation"
+                            ],
+                            "type": "object"
+                          },
+                          "reservation_id": {
+                            "pattern": "^(?!_xnode_)[A-Za-z0-9._-]{1,128}$",
+                            "type": "string"
+                          },
+                          "session_id": {
+                            "pattern": "^[0-9a-f]{32}$",
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "reservation_id",
+                          "issue_sequence",
+                          "owner",
+                          "day_utc",
+                          "agent_id",
+                          "boot_id",
+                          "session_id",
+                          "byte_ceiling",
+                          "kind"
+                        ],
+                        "type": "object"
+                      },
+                      "reservation_id": {
+                        "pattern": "^(?!_xnode_)[A-Za-z0-9._-]{1,128}$",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "reservation_id"
+                    ],
+                    "type": "object"
+                  }
+                },
+                "required": [
+                  "args"
+                ]
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "name": {
+                    "const": "hourly.credit.ack"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "args": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "digest": {
+                        "pattern": "^[0-9a-fA-F]{64}$",
+                        "type": "string"
+                      },
+                      "issue_sequence": {
+                        "pattern": "^[1-9][0-9]*$",
+                        "type": "string"
+                      },
+                      "reservation_id": {
+                        "pattern": "^(?!_xnode_)[A-Za-z0-9._-]{1,128}$",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "reservation_id",
+                      "issue_sequence",
+                      "digest"
+                    ],
+                    "type": "object"
+                  }
+                },
+                "required": [
+                  "args"
+                ]
+              }
             }
           ],
           "properties": {
@@ -1931,6 +2455,9 @@
             },
             "name": {
               "enum": [
+                "hourly.credit.install",
+                "hourly.credit.seal",
+                "hourly.credit.ack",
                 "firewall.leases.update",
                 "firewall.protected.sync",
                 "firewall.geoip.sync",

@@ -1,5 +1,13 @@
 # Master WebSocket transport
 
+`hourly.go` independently negotiates operational hourly enforcement through an
+exact format/session echo. It clears the admission session synchronously on
+disconnect or disable. `hourly_message.go` suppresses unnegotiated frames and
+whole hourly-containing immutable traffic batches; stale demand/ack frames
+cannot cross sessions, while durable proofs retain their old installation
+binding for replay. `hourly_test.go` and `hourly_fallback_test.go` cover handshake,
+socket teardown, capability disable and preservation of accounting on fallback.
+
 `X-XNode-Open-Connections: v1` independently negotiates total open client counts.
 `Client.OpenConnections()` resets on disconnect; the serialized writer strips
 the extension from queued legacy/compact snapshots for older strict masters.

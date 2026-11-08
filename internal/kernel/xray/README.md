@@ -1,5 +1,25 @@
 # Embedded Xray runtime
 
+`hourly_permit.go` waits for account-wide native admission using cancellation,
+controller change notifications and rate deadlines. `hourly_buffers.go`,
+`hourly_reader.go` and `hourly_writer.go` hand off exactly the permit's real
+payload bytes. Stream tails retain their ordering and final read error; UDP
+buffers retain packet boundaries and metadata, including empty packets. A packet
+larger than 16 KiB is rejected before admission. Writer ownership transfers even
+on failure: only the unhanded tail is released. Successful `Begin` consumes quota
+and records separate raw hourly samples; delivery failure never refunds it.
+Legacy metering remains unchanged. Chained outbounds reuse one logical flow, and
+the wrappers remain exclusively outbound-facing, preserving mux pipe readers.
+
+Native revocation cancels the lease and interrupts both original link endpoints.
+This controls admission and draining inside the runtime; it does not promise
+that already-admitted operating-system/network bytes disappear at a deadline.
+Hosted `hourly_reader_test.go`, `hourly_writer_test.go` and their
+`hourly_test_helpers_test.go` cover slicing, EOF, cancellation, packet metadata
+and write-error ownership. `hourly_native_helpers_test.go`,
+`hourly_native_test.go` and `hourly_expiry_test.go` exercise real TCP/mux and
+UDP/XUDP, exact raw admissions, session revocation and idle paid-boundary closure.
+
 `xhttp_validation_test.go` sends real XHTTP traffic while rejecting malformed
 direct, `extra` and nested-download HTTP/2 settings. Forced invalid reloads must
 preserve the serving listener, existing streams, new admission and accounted

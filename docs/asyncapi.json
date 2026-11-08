@@ -329,6 +329,138 @@
             "type": "object"
           }
         },
+        "hourly.credit.proofs": {
+          "payload": {
+            "additionalProperties": false,
+            "properties": {
+              "base_revision": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "data": {
+                "$ref": "schemas/hourly.schema.json#/$defs/credit_proofs"
+              },
+              "id": {
+                "type": "string"
+              },
+              "revision": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "type": {
+                "const": "hourly.credit.proofs"
+              },
+              "v": {
+                "const": 1
+              }
+            },
+            "required": [
+              "v",
+              "type",
+              "data"
+            ],
+            "type": "object"
+          }
+        },
+        "hourly.demand": {
+          "payload": {
+            "additionalProperties": false,
+            "properties": {
+              "base_revision": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "data": {
+                "$ref": "schemas/hourly.schema.json#/$defs/demand"
+              },
+              "id": {
+                "type": "string"
+              },
+              "revision": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "type": {
+                "const": "hourly.demand"
+              },
+              "v": {
+                "const": 1
+              }
+            },
+            "required": [
+              "v",
+              "type",
+              "data"
+            ],
+            "type": "object"
+          }
+        },
+        "hourly.grant.ack": {
+          "payload": {
+            "additionalProperties": false,
+            "properties": {
+              "base_revision": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "data": {
+                "$ref": "schemas/hourly.schema.json#/$defs/grant_ack"
+              },
+              "id": {
+                "type": "string"
+              },
+              "revision": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "type": {
+                "const": "hourly.grant.ack"
+              },
+              "v": {
+                "const": 1
+              }
+            },
+            "required": [
+              "v",
+              "type",
+              "data"
+            ],
+            "type": "object"
+          }
+        },
+        "hourly.grant.acks": {
+          "payload": {
+            "additionalProperties": false,
+            "properties": {
+              "base_revision": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "data": {
+                "$ref": "schemas/hourly.schema.json#/$defs/grant_acks"
+              },
+              "id": {
+                "type": "string"
+              },
+              "revision": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "type": {
+                "const": "hourly.grant.acks"
+              },
+              "v": {
+                "const": 1
+              }
+            },
+            "required": [
+              "v",
+              "type",
+              "data"
+            ],
+            "type": "object"
+          }
+        },
         "masterMessage": {
           "payload": {
             "$ref": "schemas/master-message.schema.json"
@@ -409,6 +541,24 @@
     "maximumEntries": 100000,
     "schema": "schemas/automatic-leases.schema.json",
     "volatile": true
+  },
+  "x-hourly-account-limits": {
+    "capability": "hourly_account_limits_v1",
+    "commands": [
+      "hourly.credit.install",
+      "hourly.credit.seal",
+      "hourly.credit.ack"
+    ],
+    "exactSessionEcho": true,
+    "failurePolicy": "pause hourly ingress; never restore grants or unused-credit proofs on disconnect",
+    "maxAggregateBurstBytes": 16384,
+    "maxFrameBytes": 65536,
+    "maxGrantLifetimeMilliseconds": 10000,
+    "maxItems": 128,
+    "offerHeader": "X-XNode-Hourly",
+    "offerValue": "v1",
+    "schema": "schemas/hourly.schema.json",
+    "sessionHeader": "X-XNode-Hourly-Session"
   },
   "x-report-framing": {
     "capability": "report_zstd_l6_v1",

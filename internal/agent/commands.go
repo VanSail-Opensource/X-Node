@@ -57,6 +57,8 @@ func (a *Agent) command(ctx context.Context, m protocol.Message) error {
 		ctx, cancel := context.WithTimeout(ctx, protocol.CommandTimeout(request.Name))
 		defer cancel()
 		switch request.Name {
+		case protocol.HourlyCreditInstallCommand, protocol.HourlyCreditSealCommand, protocol.HourlyCreditAckCommand:
+			return a.hourlyCommand(ctx, request.Name, args)
 		case protocol.AutomaticLeaseCommand:
 			return a.automaticLeaseCommand(ctx, args)
 		case "traffic.flush":

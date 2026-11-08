@@ -12,6 +12,9 @@ func trafficContract(dir string, api, async map[string]any) {
 	report["title"] = "X-Node immutable traffic report"
 	properties := report["properties"].(map[string]any)
 	properties["stream_id"].(map[string]any)["pattern"] = "^[0-9a-f]{32}$"
+	properties["hourly_samples"].(map[string]any)["maxItems"] = 8192
+	properties["hourly_samples"].(map[string]any)["description"] = "Raw hourly-mode member-ingress admission deltas; excludes authenticated transit and native traffic multipliers. Independent from durable credit proofs."
+	properties["dropped_hourly_samples"].(map[string]any)["description"] = "Decimal count of omitted hourly presentation samples; marks incomplete usage history without changing financial credit proofs."
 	write(filepath.Join(dir, "schemas", "traffic-report.schema.json"), report)
 	write(filepath.Join(dir, "schemas", "traffic-barrier.schema.json"), protocol.Schema(protocol.TrafficBarrier{}))
 	framing := map[string]any{"offerHeader": protocol.ReportFramingHeader, "offerValue": protocol.ZstdReportFraming,

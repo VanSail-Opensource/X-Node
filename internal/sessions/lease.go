@@ -20,6 +20,7 @@ func (l *Lease) Close() {
 			}
 		}
 		r.mu.Unlock()
+		l.closeHourly()
 		if l.cancel != nil {
 			l.cancel()
 		}

@@ -118,6 +118,30 @@
   },
   "messages": [
     {
+      "name": "hourly.grant",
+      "direction": "Master → agent",
+      "description": "Apply a bounded owner ingress grant tied to the current session and original demand nonce.",
+      "body": "Requires hourly_account_limits_v1 and exact X-XNode-Hourly/X-XNode-Hourly-Session echoes. Grants contain owner, session_id, nonce, decimal sequence, day_utc, lifetime_ms, decimal rate_bytes_per_second and burst_bytes. Lifetime cannot exceed 10000 ms or the original demand deadline. Burst allocation across all nodes is at most 16 KiB. Shrink existing allocations and await native draining before increasing another node. Missing or expired grants pause hourly ingress. See [the hourly contract](hourly-account-limits.md)."
+    },
+    {
+      "name": "hourly.demand",
+      "direction": "Agent → master",
+      "description": "Report bounded current-session owner demand and cumulative installed-credit progress.",
+      "body": "The session_id matches this connection's exact upgrade echo. demands and optional progress share a 128-item per-array and 64 KiB serialized payload bound. Demand contains owner, nonce, lifetime_ms, decimal pending_bytes and min_atomic_bytes. These are allocation hints, never billable usage. Progress identifies a durable reservation/issue sequence with actual admitted upload/download counters. Empty demands remain an explicit array for progress-only frames. Stale queued demand cannot cross reconnection."
+    },
+    {
+      "name": "hourly.grant.ack",
+      "direction": "Agent → master",
+      "description": "Acknowledge a session-bound grant only after required native draining.",
+      "body": "Contains session_id, owner, original demand nonce, decimal sequence, applied and optional reason. Match the current authenticated node and offered session. A successful shrink acknowledgment authorizes the master to release the corresponding allocation; disconnect alone does not. A queued old-session acknowledgment is suppressed after reconnect. Already-admitted operating-system/network bytes cannot be withdrawn instantaneously."
+    },
+    {
+      "name": "hourly.credit.proofs",
+      "direction": "Agent → master",
+      "description": "Replay immutable final credit partitions until exact financial acknowledgment.",
+      "body": "Each proof contains its original installation, admitted upload/download, unused and unknown bytes, recovery and a canonical digest. The partition equals the original byte ceiling. A normal proof has no unknown residual; crash recovery reports no newly inferred unused bytes and preserves unknown residual. Retain the original installation session across capable reconnects. Deduplicate and settle durably before hourly.credit.ack. A disconnect or missing history sample is never an unused-credit proof."
+    },
+    {
       "name": "agent.hello",
       "direction": "Agent → master",
       "description": "Identify the durable agent and current process before synchronization.",
@@ -502,6 +526,21 @@
     }
   ],
   "commands": [
+    {
+      "name": "hourly.credit.install",
+      "description": "Durably install one centrally reserved full-speed byte-credit obligation.",
+      "body": "Requires negotiated hourly_account_limits_v1. Arguments identify reservation_id, decimal globally monotonic issue_sequence, owner generation, day_utc, exact agent_id/boot_id/session_id, positive decimal byte_ceiling and kind free or extra. Persist before credit becomes usable; replay cannot mint a second obligation. Uses the existing utility executor with a 30-second execution timeout. Reserve centrally before sending. See [the hourly contract](hourly-account-limits.md)."
+    },
+    {
+      "name": "hourly.credit.seal",
+      "description": "Freeze credit admission and seal a final proof after native handoffs drain.",
+      "body": "Arguments contain reservation_id only. Uses the utility executor with a two-minute execution bound, leaving traffic/control work available. The final proof preserves exact admitted bytes and authenticated unused evidence. Retry conservatively using durable receipts; timeout, disconnect or uncertain delivery cannot authorize reclaiming a reservation."
+    },
+    {
+      "name": "hourly.credit.ack",
+      "description": "Retire the exact immutable proof already settled by the master.",
+      "body": "Arguments contain reservation_id, decimal issue_sequence and exact digest. Settle the final proof durably and idempotently before acknowledging it. A mismatched acknowledgment cannot erase an obligation or proof. Uses the utility executor with a 30-second execution timeout; replay retains tombstone protection."
+    },
     {
       "name": "connections.list",
       "description": "Inspect a bounded page of authenticated logical sessions.",

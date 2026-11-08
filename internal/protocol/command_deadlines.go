@@ -6,6 +6,10 @@ import "time"
 // bounded to 30 seconds by the master, and must not consume the execution time.
 func CommandTimeout(name string) time.Duration {
 	switch name {
+	case HourlyCreditInstallCommand, HourlyCreditAckCommand:
+		return 30 * time.Second
+	case HourlyCreditSealCommand:
+		return 2 * time.Minute
 	case "update.install", "firewall.bans.sync", "firewall.geoip.sync":
 		return 10 * time.Minute
 	case "geodata.refresh", "firewall.apply":

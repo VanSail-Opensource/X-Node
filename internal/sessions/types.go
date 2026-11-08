@@ -5,6 +5,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/VanSail-Opensource/X-Node/internal/hourly"
 	"github.com/VanSail-Opensource/X-Node/internal/protocol"
 )
 
@@ -55,6 +56,9 @@ type Registry struct {
 	closedActivity        map[int]map[string]int
 	resources             int
 	outboundFences        map[string]int
+	hourly                *hourly.Controller
+	hourlySequence        uint64
+	hourlyApplied         uint64
 }
 type Lease struct {
 	Info                                     Connection
@@ -73,4 +77,11 @@ type Lease struct {
 	bytes                                    atomic.Uint64
 	sampledBytes                             uint64
 	closed, nativeFinished, resourceReleased bool
+	hourlyBinding                            *hourly.BindingKey
+	hourlyController                         *hourly.Controller
+	hourlyMu                                 sync.Mutex
+	hourlyFlow                               *hourly.Flow
+	hourlyClosed                             bool
+	hourlySequence                           uint64
+	hourlyReady                              bool
 }

@@ -407,3 +407,12 @@ The command, IP bank and replay receipts never enter durable command history;
 confirmed/rollback snapshots omit `leased_v4` and `leased_v6` elements. All other
 command/configuration/credential/ban durability remains unchanged. Public schema:
 `docs/schemas/automatic-leases.schema.json`.
+
+## Shared hourly ingress
+
+`hourly_account_limits_v1` requires an exact two-header session echo before any
+hourly payload can pass. Live owner grants remain memory-only; durable installed
+credits, final proofs and immutable raw traffic samples preserve exact replay and
+accounting. See [the hourly contract](hourly-account-limits.md) for the messages,
+command arguments, UTC units, native handoff boundary and master obligations, and
+[the generated hourly schemas](schemas/hourly.schema.json) for payload shapes.

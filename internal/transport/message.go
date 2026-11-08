@@ -9,6 +9,10 @@ import (
 )
 
 func (c *Client) writeMessage(socket *websocket.Conn, message protocol.Message) error {
+	message, send, hourlyErr := c.hourlyMessage(message)
+	if hourlyErr != nil || !send {
+		return hourlyErr
+	}
 	if strings.HasPrefix(message.Type, "compute.") && !c.ComputePool() {
 		return nil
 	}

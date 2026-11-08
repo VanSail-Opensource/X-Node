@@ -7,6 +7,8 @@ const (
 	HourlyHeader               = wire.HourlyHeader
 	HourlyFormat               = wire.HourlyFormat
 	HourlySessionHeader        = wire.HourlySessionHeader
+	HourlyAccountingHeader     = wire.HourlyAccountingHeader
+	HourlyAccountingFormat     = wire.HourlyAccountingFormat
 	HourlyCreditInstallCommand = wire.HourlyCreditInstallCommand
 	HourlyCreditSealCommand    = wire.HourlyCreditSealCommand
 	HourlyCreditAckCommand     = wire.HourlyCreditAckCommand

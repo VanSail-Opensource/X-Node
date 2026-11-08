@@ -2,11 +2,20 @@
 
 `hourly.go` independently negotiates operational hourly enforcement through an
 exact format/session echo. It clears the admission session synchronously on
-disconnect or disable. `hourly_message.go` suppresses unnegotiated frames and
-whole hourly-containing immutable traffic batches; stale demand/ack frames
+disconnect or disable. `hourly_accounting.go` separately accepts the exact
+response header `X-XNode-Hourly-Accounting: v1`, so historical traffic receipts
+remain available when local hourly credit storage disables admission. A current
+live-v1 negotiation also establishes receipt compatibility for older supporting
+masters. Disconnect and failed reconnect clear this connection-local flag;
+local admission disable does not. `hourly_message.go` suppresses live hourly
+frames without admission support and whole hourly-containing immutable traffic
+batches without receipt compatibility; stale demand/ack frames
 cannot cross sessions, while durable proofs retain their old installation
 binding for replay. `hourly_test.go` and `hourly_fallback_test.go` cover handshake,
 socket teardown, capability disable and preservation of accounting on fallback.
+`hourly_accounting*_test.go` covers exact/malformed headers, TLS replay and failed
+upgrades; the agent's matching regression preserves mixed reports across a real
+storage-disable reconnect without restoring hourly access.
 
 `X-XNode-Open-Connections: v1` independently negotiates total open client counts.
 `Client.OpenConnections()` resets on disconnect; the serialized writer strips

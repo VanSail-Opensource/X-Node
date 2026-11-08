@@ -35,6 +35,7 @@ type Client struct {
 	hourlyEnabled    atomic.Bool
 	hourlyMu         sync.Mutex
 	hourlyNegotiated atomic.Bool
+	hourlyAccounting atomic.Bool
 	hourlySession    atomic.Value
 	OnHourlySession  func(string)            // Set before Run; synchronous admission fence.
 	reportEncoder    *protocol.ReportEncoder // serialized socket writer only

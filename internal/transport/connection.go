@@ -50,6 +50,7 @@ func (c *Client) connect(ctx context.Context) bool {
 	defer socket.Close()
 	defer c.status(false)
 	c.acceptHourly(response, hourlyOffer)
+	c.acceptHourlyAccounting(response)
 	defer c.clearHourlySession()
 	c.computePool.Store(response.Header.Get(protocol.ComputePoolHeader) == protocol.ComputePoolFormat)
 	defer c.computePool.Store(false)

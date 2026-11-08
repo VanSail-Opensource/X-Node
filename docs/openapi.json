@@ -123,6 +123,13 @@
                   "type": "string"
                 }
               },
+              "X-XNode-Hourly-Accounting": {
+                "description": "Historical hourly traffic receipts are supported independently of live hourly admission and agent credit-store health.",
+                "schema": {
+                  "const": "v1",
+                  "type": "string"
+                }
+              },
               "X-XNode-Hourly-Session": {
                 "description": "Exact accepted hourly offer; no legacy fallback grants hourly payload.",
                 "schema": {
@@ -218,6 +225,9 @@
     "volatile": true
   },
   "x-hourly-account-limits": {
+    "accountingIndependentOfAdmission": true,
+    "accountingReceiptHeader": "X-XNode-Hourly-Accounting",
+    "accountingReceiptValue": "v1",
     "capability": "hourly_account_limits_v1",
     "commands": [
       "hourly.credit.install",

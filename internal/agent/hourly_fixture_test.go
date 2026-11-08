@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -42,11 +43,12 @@ type hourlyTestFrame struct {
 	message protocol.Message
 }
 type hourlyAgentFixture struct {
-	a      *Agent
-	peers  chan *hourlyTestPeer
-	frames chan hourlyTestFrame
-	audit  chan hourlyTestFrame
-	config protocol.Config
+	a          *Agent
+	peers      chan *hourlyTestPeer
+	frames     chan hourlyTestFrame
+	audit      chan hourlyTestFrame
+	config     protocol.Config
+	ackTraffic atomic.Bool
 }
 
 func newHourlyAgentFixture(t *testing.T, negotiate, corrupt bool) *hourlyAgentFixture {
@@ -56,10 +58,14 @@ func newHourlyAgentFixture(t *testing.T, negotiate, corrupt bool) *hourlyAgentFi
 func prepareHourlyAgentFixture(t *testing.T, negotiate, corrupt bool, prepare func(string)) *hourlyAgentFixture {
 	t.Helper()
 	f := &hourlyAgentFixture{peers: make(chan *hourlyTestPeer, 8), frames: make(chan hourlyTestFrame, 1024), audit: make(chan hourlyTestFrame, 1024)}
+	f.ackTraffic.Store(true)
 	stopServer := make(chan struct{})
 	upgrader := websocket.Upgrader{Subprotocols: []string{"x-node.v1"}}
 	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		headers := http.Header{}
+		if negotiate {
+			headers.Set(protocol.HourlyAccountingHeader, protocol.HourlyAccountingFormat)
+		}
 		if r.Header.Get(protocol.TrafficStreamHeader) == protocol.TrafficStreamFormat {
 			headers.Set(protocol.TrafficStreamHeader, protocol.TrafficStreamFormat)
 		}
@@ -94,7 +100,7 @@ func prepareHourlyAgentFixture(t *testing.T, negotiate, corrupt bool, prepare fu
 			default:
 				t.Error("hourly fixture audit capacity exhausted")
 			}
-			if m.Type == "traffic.report" {
+			if m.Type == "traffic.report" && f.ackTraffic.Load() {
 				peer.mu.Lock()
 				err = socket.WriteJSON(protocol.New("traffic.ack", "", 0, map[string]string{"id": m.ID}))
 				peer.mu.Unlock()

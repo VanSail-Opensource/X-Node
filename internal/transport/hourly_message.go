@@ -24,7 +24,7 @@ func (c *Client) hourlyMessage(message protocol.Message) (protocol.Message, bool
 			}
 		}
 	}
-	if message.Type == "traffic.report" && !c.Hourly() {
+	if message.Type == "traffic.report" && !c.HourlyAccounting() {
 		var report protocol.TrafficReport
 		if err := protocol.Decode(message.Data, &report); err != nil {
 			return message, false, err

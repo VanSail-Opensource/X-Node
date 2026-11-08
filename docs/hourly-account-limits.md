@@ -111,6 +111,13 @@ retain their existing meaning. `dropped_hourly_samples` is a decimal count of
 omitted history samples: display incomplete coverage, never invent their bytes.
 Financial credit proofs remain independent of presentation history retention.
 
+Historical report replay uses the independent master response header
+`X-XNode-Hourly-Accounting: v1` (or a current live-v1 negotiation). It remains
+usable when credit-store failure disables hourly admission. Compatibility is
+connection-local and never authorizes grants, hourly state or credit commands.
+Unknown masters receive no rewritten partial journal: the entire mixed report
+remains pending until a compatible connection can acknowledge its exact receipt.
+
 Native admission and interruption cannot withdraw bytes already accepted by the
 operating system or network. Expiry guarantees apply at admission and draining
 boundaries, rather than promising an instantaneous removal of bytes from the wire.

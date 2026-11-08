@@ -7,6 +7,8 @@ const (
 	HourlyHeader               = "X-XNode-Hourly"
 	HourlyFormat               = "v1"
 	HourlySessionHeader        = "X-XNode-Hourly-Session"
+	HourlyAccountingHeader     = "X-XNode-Hourly-Accounting"
+	HourlyAccountingFormat     = "v1"
 	HourlyCreditInstallCommand = "hourly.credit.install"
 	HourlyCreditSealCommand    = "hourly.credit.seal"
 	HourlyCreditAckCommand     = "hourly.credit.ack"

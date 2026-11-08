@@ -1,3 +1,13 @@
+# X-Node v2.0.22
+
+Separates historical hourly traffic receipts from live hourly admission.
+Supporting masters advertise `X-XNode-Hourly-Accounting: v1` on each connection,
+allowing whole immutable mixed native/hourly reports to replay after a credit
+storage failure disables hourly access. Ordinary accounting can continue;
+grants, authorization and financial mutations retain their healthy admission
+requirements. The receipt flag clears on disconnect and failed connection, and
+unknown masters still receive no stripped or relabeled historical reports.
+
 # X-Node v2.0.21
 
 Adds the independently negotiated `hourly_account_limits_v1` capability for

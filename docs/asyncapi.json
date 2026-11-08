@@ -543,6 +543,9 @@
     "volatile": true
   },
   "x-hourly-account-limits": {
+    "accountingIndependentOfAdmission": true,
+    "accountingReceiptHeader": "X-XNode-Hourly-Accounting",
+    "accountingReceiptValue": "v1",
     "capability": "hourly_account_limits_v1",
     "commands": [
       "hourly.credit.install",

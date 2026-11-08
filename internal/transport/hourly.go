@@ -46,6 +46,7 @@ func (c *Client) setHourlySession(session string) {
 func (c *Client) clearHourlySession() {
 	c.hourlyMu.Lock()
 	defer c.hourlyMu.Unlock()
+	c.hourlyAccounting.Store(false)
 	c.clearHourlySessionLocked()
 }
 

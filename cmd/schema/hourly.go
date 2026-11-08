@@ -17,6 +17,7 @@ func hourlyContract(dir string, api, async map[string]any) {
 		path["parameters"] = append(path["parameters"].([]any), map[string]any{"in": "header", "name": name, "required": false, "description": "Offer hourly enforcement only when operational; the master must echo both values exactly and check the hello capability.", "schema": schema})
 		response[name] = map[string]any{"description": "Exact accepted hourly offer; no legacy fallback grants hourly payload.", "schema": schema}
 	}
+	response[protocol.HourlyAccountingHeader] = map[string]any{"description": "Historical hourly traffic receipts are supported independently of live hourly admission and agent credit-store health.", "schema": map[string]any{"type": "string", "const": protocol.HourlyAccountingFormat}}
 	messages := path["x-websocket-messages"].(map[string]any)
 	messages["agentToMaster"] = append(messages["agentToMaster"].([]string), "hourly.demand", "hourly.grant.ack", "hourly.grant.acks", "hourly.credit.proofs")
 	for name, key := range map[string]string{"hourly.demand": "demand", "hourly.grant.ack": "grant_ack", "hourly.grant.acks": "grant_acks", "hourly.credit.proofs": "credit_proofs"} {
@@ -29,4 +30,6 @@ func hourlyContract(dir string, api, async map[string]any) {
 	}
 	metadata := map[string]any{"capability": protocol.HourlyCapability, "offerHeader": protocol.HourlyHeader, "offerValue": protocol.HourlyFormat, "sessionHeader": protocol.HourlySessionHeader, "exactSessionEcho": true, "maxFrameBytes": protocol.MaxHourlyFrameBytes, "maxItems": protocol.MaxHourlyItems, "maxGrantLifetimeMilliseconds": protocol.MaxHourlyLifetimeMillis, "maxAggregateBurstBytes": protocol.MaxHourlyBurstBytes, "schema": "schemas/hourly.schema.json", "commands": []string{protocol.HourlyCreditInstallCommand, protocol.HourlyCreditSealCommand, protocol.HourlyCreditAckCommand}, "failurePolicy": "pause hourly ingress; never restore grants or unused-credit proofs on disconnect"}
 	api["x-hourly-account-limits"], async["x-hourly-account-limits"] = metadata, metadata
+	metadata["accountingReceiptHeader"], metadata["accountingReceiptValue"] = protocol.HourlyAccountingHeader, protocol.HourlyAccountingFormat
+	metadata["accountingIndependentOfAdmission"] = true
 }

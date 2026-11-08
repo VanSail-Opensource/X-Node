@@ -141,3 +141,6 @@ admitted bytes; only a frozen and durably sealed proof can return unused credit.
 already-admitted native delivery does not delay financial proof or refund bytes.
 Disconnect alone does not authorize a refund. A damaged hourly journal disables
 this feature and preserves its evidence without stopping legacy traffic.
+Historical mixed traffic reports use the independently negotiated hourly
+accounting receipt header, allowing ordinary accounting to drain after hourly
+storage failure while live hourly admission remains disabled.

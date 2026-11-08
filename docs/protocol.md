@@ -416,3 +416,10 @@ credits, final proofs and immutable raw traffic samples preserve exact replay an
 accounting. See [the hourly contract](hourly-account-limits.md) for the messages,
 command arguments, UTC units, native handoff boundary and master obligations, and
 [the generated hourly schemas](schemas/hourly.schema.json) for payload shapes.
+
+`X-XNode-Hourly-Accounting: v1` is a separate master response header confirming
+receipt support for historical hourly samples inside immutable traffic reports.
+It does not require live hourly admission or a healthy agent credit store. A
+currently negotiated live-v1 connection also implies this compatibility. The
+agent clears receipt compatibility on disconnect and failed connection; without
+it, the whole mixed report stays pending instead of losing hourly evidence.

@@ -1,5 +1,10 @@
 # Module
 
+`xray_environment.go` rejects unreviewed process variables before native
+preparation through `ValidateNativePolicies`; `xray_environment_test.go` covers
+unsafe names, malformed values and supported options. This policy is shared by
+the public validator and activation; see `docs/process-environment.md`.
+
 `open_connections_v1` adds optional total open client counts independently of
 sampled `Connections`. Compact field `o` preserves idle-only rows and empty
 snapshots clear totals. The capability is exported for master availability gates.

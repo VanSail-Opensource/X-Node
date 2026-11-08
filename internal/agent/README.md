@@ -1,5 +1,9 @@
 # Agent orchestration
 
+Native preparation checks the environment before assets, certificates and cached
+validation. `native_environment_test.go` verifies dependency-free rejection of
+unsafe configuration. See `docs/process-environment.md`.
+
 `ddns.go` shares scheduled/manual discovery and external-provider execution under
 the existing DNS utility lock. Built-in `builtin:panel` skips provider creation
 and DNS publication. Successful generated jobs append a durable change before

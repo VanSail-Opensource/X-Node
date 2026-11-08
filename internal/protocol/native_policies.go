@@ -24,6 +24,9 @@ type SourceGeoIPListener struct {
 
 // ValidateNativePolicies applies to the public validator and agent activation.
 func ValidateNativePolicies(config Config) error {
+	if err := ValidateXrayEnvironment(config.Xray); err != nil {
+		return err
+	}
 	if len(config.BlockedDomains) > 10000 {
 		return errors.New("too many blocked domain selectors")
 	}

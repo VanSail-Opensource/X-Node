@@ -22,6 +22,9 @@ func (a *Agent) activate(lifetime context.Context, job applyJob) error {
 	}
 	started := time.Now()
 	c := protocol.Clone(job.Config)
+	if err := protocol.ValidateNativePolicies(c); err != nil {
+		return err
+	}
 	p, err := geodata.FromNative(c.Xray)
 	if err != nil {
 		return err

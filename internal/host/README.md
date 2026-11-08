@@ -4,6 +4,11 @@
 execution and argument arrays. It never starts a shell and returns sanitized
 command failures. Callers supply their existing typed command policy.
 
+`environment.go` fixes named executable resolution to system directories and
+passes only PATH/LANG/LC_ALL. Signature-verified absolute update paths remain
+supported. `environment_test.go` checks actual child environment isolation and
+PATH hijacking in hosted Linux CI. See `docs/process-environment.md`.
+
 `CheckRequirements` verifies Linux amd64/arm64, root, required utilities, running
 systemd and readable nftables kernel state for agent startup and upgrades. The
 CLI can configure a private bootstrap using `CheckLinux` without host mutations.

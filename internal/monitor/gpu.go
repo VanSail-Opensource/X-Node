@@ -4,18 +4,19 @@ import (
 	"context"
 	"encoding/csv"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/VanSail-Opensource/X-Node/internal/host"
 )
 
 func collectGPU(ctx context.Context) []GPU {
 	var out []GPU
-	if _, e := exec.LookPath("nvidia-smi"); e == nil {
+	{
 		child, cancel := context.WithTimeout(ctx, time.Second)
-		b, e := exec.CommandContext(child, "nvidia-smi", "--query-gpu=name,memory.total,memory.used,utilization.gpu,temperature.gpu", "--format=csv,noheader,nounits").Output()
+		b, e := (host.Commands{}).Run(child, "nvidia-smi", "--query-gpu=name,memory.total,memory.used,utilization.gpu,temperature.gpu", "--format=csv,noheader,nounits")
 		cancel()
 		if e == nil {
 			rows, _ := csv.NewReader(strings.NewReader(string(b))).ReadAll()

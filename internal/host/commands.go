@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"runtime"
 	"strings"
 	"time"
@@ -21,7 +20,10 @@ func (Commands) Run(ctx context.Context, name string, args ...string) ([]byte, e
 	if runtime.GOOS != "linux" {
 		return nil, errors.New("host utility requires Linux")
 	}
-	cmd := exec.CommandContext(ctx, name, args...)
+	cmd, err := utilityCommand(ctx, name, args...)
+	if err != nil {
+		return nil, err
+	}
 	out, err := cmd.Output()
 	if err != nil {
 		return nil, errors.New(name + " failed")
@@ -39,7 +41,7 @@ func CheckRequirements() error {
 	}
 	var missing []string
 	for _, name := range []string{"nft", "systemctl", "systemd-run", "ss", "ip", "sshd"} {
-		if _, err := exec.LookPath(name); err != nil {
+		if _, err := systemExecutable(name); err != nil {
 			missing = append(missing, name)
 		}
 	}

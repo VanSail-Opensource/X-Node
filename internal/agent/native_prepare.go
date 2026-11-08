@@ -26,6 +26,9 @@ func (a *Agent) prepareNative(ctx, lifetime context.Context, c protocol.Config, 
 	return a.prepareResolved(ctx, c, p, true, verify, func(c protocol.Config) (protocol.Config, error) { return a.Certificates.Prepare(lifetime, c) })
 }
 func (a *Agent) validateNative(ctx context.Context, c protocol.Config, p geodata.Policy) error {
+	if err := protocol.ValidateNativePolicies(c); err != nil {
+		return err
+	}
 	if err := a.checkCountryGeneration(ctx, c); err != nil {
 		return err
 	}
@@ -45,6 +48,9 @@ func (a *Agent) validateNative(ctx context.Context, c protocol.Config, p geodata
 	return err
 }
 func (a *Agent) prepareResolved(ctx context.Context, c protocol.Config, p geodata.Policy, activation, verify bool, prepare func(protocol.Config) (protocol.Config, error)) (*xray.Prepared, string, error) {
+	if err := protocol.ValidateNativePolicies(c); err != nil {
+		return nil, "", err
+	}
 	if err := a.checkCountryGeneration(ctx, c); err != nil {
 		return nil, "", err
 	}

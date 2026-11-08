@@ -1,5 +1,9 @@
 # Embedded Xray runtime
 
+`environment_test.go` verifies that rejected native environment input cannot
+partially mutate the privileged process. Environment rules are shared through
+the protocol validator; see `docs/process-environment.md`.
+
 `config.go` validates native documents with the pinned core and expands managed
 account lists. `runtime.go` owns listener activation, account-only updates and
 safe fallback with current authorization. `bridge.go` wraps native outbound

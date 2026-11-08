@@ -43,6 +43,12 @@ func TestRealHourlyPaidBoundaryInterruptsIdleNativeReader(t *testing.T) {
 	if deadline, ok := err.(net.Error); ok && deadline.Timeout() {
 		t.Fatal("idle native stream survived until the test deadline")
 	}
+	// The peer can observe the physical close before the native fence callback
+	// returns and releases its local logical reservation.
+	closedBy := time.Now().Add(time.Second)
+	for registry.Summary().TotalConnections[1] != 0 && time.Now().Before(closedBy) {
+		time.Sleep(time.Millisecond)
+	}
 	if registry.Summary().TotalConnections[1] != 0 {
 		t.Fatal("paid boundary retained logical admission")
 	}

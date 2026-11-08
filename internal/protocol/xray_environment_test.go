@@ -16,7 +16,7 @@ func TestNativeEnvironmentRejectsProcessInjection(t *testing.T) {
 			t.Fatalf("accepted unsafe key %s", key)
 		}
 	}
-	for _, env := range []any{[]string{"LD_PRELOAD=x"}, map[string]any{"XRAY_BUF_READV": true}, map[string]string{"XRAY_LOCATION_ASSET": "bad\x00path"}, map[string]string{"XRAY_LOCATION_CERT": strings.Repeat("x", 4097)}} {
+	for _, env := range []any{[]string{"LD_PRELOAD=x"}, map[string]any{"XRAY_BUF_READV": true}, map[string]any{"XRAY_BUF_READV": nil}, map[string]string{"XRAY_LOCATION_ASSET": "bad\x00path"}, map[string]string{"XRAY_LOCATION_CERT": strings.Repeat("x", 4097)}} {
 		raw, err := json.Marshal(map[string]any{"env": env})
 		if err != nil {
 			t.Fatal(err)

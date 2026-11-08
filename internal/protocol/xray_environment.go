@@ -14,14 +14,18 @@ func ValidateXrayEnvironment(raw json.RawMessage) error {
 	if json.Unmarshal(raw, &root) != nil || root == nil {
 		return errors.New("invalid Xray document")
 	}
-	var env map[string]string
+	var env map[string]any
 	if value := root["env"]; value != nil && json.Unmarshal(value, &env) != nil {
 		return errors.New("Xray environment must contain string values")
 	}
 	if len(env) > 32 {
 		return errors.New("too many Xray environment options")
 	}
-	for key, value := range env {
+	for key, raw := range env {
+		value, ok := raw.(string)
+		if !ok {
+			return errors.New("Xray environment must contain string values")
+		}
 		switch key {
 		case "XRAY_LOCATION_ASSET", "XRAY_LOCATION_CERT", "XRAY_LOCATION_CONFIG", "XRAY_LOCATION_CONFDIR",
 			"XRAY_JSON_STRICT", "XRAY_BUF_READV", "XRAY_BUF_SPLICE", "XRAY_VMESS_PADDING",

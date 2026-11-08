@@ -3,11 +3,12 @@ package geodata
 import (
 	"encoding/json"
 	"errors"
-	"github.com/robfig/cron/v3"
-	"net/url"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/VanSail-Opensource/X-Node/internal/httpguard"
+	"github.com/robfig/cron/v3"
 )
 
 const MaxAssetBytes = 128 << 20
@@ -51,8 +52,8 @@ func FromNative(raw json.RawMessage) (Policy, error) {
 	}
 	seen := map[string]bool{}
 	for _, a := range p.Assets {
-		u, e := url.Parse(a.URL)
-		if e != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || a.File != "geosite.dat" || seen[a.File] {
+		_, e := httpguard.HTTPSURL(a.URL)
+		if e != nil || a.File != "geosite.dat" || seen[a.File] {
 			return p, errors.New("invalid geodata asset")
 		}
 		seen[a.File] = true

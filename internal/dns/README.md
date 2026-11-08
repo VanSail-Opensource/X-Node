@@ -1,5 +1,9 @@
 # DDNS discovery and DNS utilities
 
+Discovery validates initial lookup URLs at execution and follows only the same
+HTTPS origin through `httpguard`. `redirect_test.go` covers port/origin changes
+and direct-call validation; failure precedes record publication.
+
 `ddns.go` discovers selected IPv4/IPv6 sources through an interface or configured
 HTTPS lookup and preserves family validation and external provider RRset updates.
 The reserved `builtin:panel` job returns successful discovered addresses without

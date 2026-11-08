@@ -1,5 +1,9 @@
 # Signed binary upgrades
 
+Release fetches use `httpguard` for HTTPS and same-origin redirects, with the
+precise GitHub release-download CDN exception. `redirect_test.go` verifies this
+boundary independently of manifest/signature checks; see `docs/http-redirects.md`.
+
 `manager.go` verifies the signed release manifest, stages and validates both the
 agent and CLI, journals their replacement, and arms an independent rollback
 timer before changing either executable. Mutation uses the process mutex and

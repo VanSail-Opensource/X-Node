@@ -14,17 +14,24 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/VanSail-Opensource/X-Node/internal/httpguard"
 )
 
 func Prepare(ctx context.Context, dir string, p Policy, hashes map[string]string, client *http.Client, refresh bool) (string, error) {
+	if len(p.Assets) > 32 {
+		return "", errors.New("too many assets")
+	}
+	for _, asset := range p.Assets {
+		if _, err := httpguard.HTTPSURL(asset.URL); err != nil {
+			return "", errors.New("invalid asset URL")
+		}
+	}
 	if err := pruneAbandonedStages(ctx, dir, time.Now()); err != nil {
 		return "", err
 	}
 	if len(p.Assets) == 0 {
 		return Resolve(dir), nil
-	}
-	if len(p.Assets) > 32 {
-		return "", errors.New("too many assets")
 	}
 	if client == nil {
 		client = &http.Client{Timeout: 2 * time.Minute}
@@ -69,7 +76,7 @@ func Prepare(ctx context.Context, dir string, p Policy, hashes map[string]string
 			if e != nil {
 				return "", errors.New("invalid asset URL")
 			}
-			response, e := client.Do(request)
+			response, e := httpguard.Do(client, request, httpguard.GitHubDownloads)
 			if e != nil {
 				return "", errors.New("asset download failed")
 			}

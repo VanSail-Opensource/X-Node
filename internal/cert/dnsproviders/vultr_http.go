@@ -1,18 +1,15 @@
 package dnsproviders
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
-	"fmt"
-	"github.com/libdns/libdns"
-	"io"
 	"net/http"
 	"net/url"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/libdns/libdns"
 )
 
 // The published libdns Vultr adapter depends on an SDK type removed in current
@@ -38,35 +35,6 @@ type vultrAPIRecord struct {
 	TTL  int    `json:"ttl"`
 }
 
-func (p *vultrProvider) request(ctx context.Context, method, path string, body any, out any) error {
-	b, _ := json.Marshal(body)
-	base := p.base
-	if base == "" {
-		base = "https://api.vultr.com/v2"
-	}
-	req, e := http.NewRequestWithContext(ctx, method, base+path, bytes.NewReader(b))
-	if e != nil {
-		return errors.New("invalid Vultr request")
-	}
-	req.Header.Set("Authorization", "Bearer "+p.token)
-	req.Header.Set("Content-Type", "application/json")
-	client := p.client
-	if client == nil {
-		client = &http.Client{Timeout: 20 * time.Second}
-	}
-	res, e := client.Do(req)
-	if e != nil {
-		return errors.New("Vultr request failed")
-	}
-	defer res.Body.Close()
-	if res.StatusCode < 200 || res.StatusCode >= 300 {
-		return fmt.Errorf("Vultr returned status %d", res.StatusCode)
-	}
-	if out != nil {
-		return json.NewDecoder(io.LimitReader(res.Body, 8<<20)).Decode(out)
-	}
-	return nil
-}
 func vultrPath(zone string) string {
 	return "/domains/" + url.PathEscape(strings.TrimSuffix(zone, ".")) + "/records"
 }

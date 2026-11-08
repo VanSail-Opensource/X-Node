@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/VanSail-Opensource/X-Node/internal/cert/dnsproviders"
+	"github.com/VanSail-Opensource/X-Node/internal/httpguard"
 	"github.com/VanSail-Opensource/X-Node/internal/protocol"
 	"github.com/libdns/libdns"
 )
@@ -124,6 +125,9 @@ func address(ctx context.Context, value, iface, lookup string, v4 bool, client *
 	if lookup == "" {
 		return "", errors.New("auto address requires an interface or HTTPS lookup")
 	}
+	if _, err := httpguard.HTTPSURL(lookup); err != nil {
+		return "", errors.New("invalid DDNS lookup")
+	}
 	if client == nil {
 		client = &http.Client{Timeout: 10 * time.Second}
 	}
@@ -131,7 +135,7 @@ func address(ctx context.Context, value, iface, lookup string, v4 bool, client *
 	if e != nil {
 		return "", errors.New("invalid DDNS lookup")
 	}
-	response, e := client.Do(req)
+	response, e := httpguard.Do(client, req, httpguard.ExactOrigin)
 	if e != nil {
 		return "", errors.New("DDNS lookup failed")
 	}

@@ -1,5 +1,9 @@
 # Agent orchestration
 
+`asset_client.go` retains lazy native download transports. Redirect protection
+is owned by the outer geodata HTTP client; `asset_redirect_test.go` verifies that
+using the inner RoundTripper cannot bypass it. See `docs/http-redirects.md`.
+
 Native preparation checks the environment before assets, certificates and cached
 validation. `native_environment_test.go` verifies dependency-free rejection of
 unsafe configuration. See `docs/process-environment.md`.

@@ -20,6 +20,8 @@ type assetTransport struct {
 
 // A cached generation never calls RoundTrip, so it never constructs a probe
 // core or alters the global system dialer merely to verify cached files.
+// geodata.Prepare guards the outer Do/redirect chain; this transport deliberately
+// uses the inner RoundTripper and cannot enforce an inner client's redirects.
 func lazyAssetClient(ctx context.Context, c protocol.Config, policy geodata.Policy) (*http.Client, func()) {
 	if policy.Outbound == "" {
 		return nil, func() {}

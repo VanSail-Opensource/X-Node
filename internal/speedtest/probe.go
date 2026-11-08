@@ -5,11 +5,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/VanSail-Opensource/X-Node/internal/kernel/xray"
 	"io"
 	"net/http"
-	"net/url"
 	"time"
+
+	"github.com/VanSail-Opensource/X-Node/internal/httpguard"
+	"github.com/VanSail-Opensource/X-Node/internal/kernel/xray"
 )
 
 type Request struct {
@@ -31,8 +32,7 @@ type Result struct {
 func Run(ctx context.Context, request Request, progress func(string)) (Result, error) {
 	var result Result
 	for _, raw := range []string{request.DownloadURL, request.UploadURL} {
-		u, e := url.Parse(raw)
-		if e != nil || u.Scheme != "https" || u.Host == "" || u.User != nil {
+		if _, e := httpguard.HTTPSURL(raw); e != nil {
 			return result, errors.New("speedtest endpoints require HTTPS")
 		}
 	}
@@ -71,7 +71,7 @@ func Run(ctx context.Context, request Request, progress func(string)) (Result, e
 			return result, e
 		}
 		at := time.Now()
-		response, e := client.Do(request)
+		response, e := httpguard.Do(client, request, httpguard.ExactOrigin)
 		if e != nil {
 			return result, errors.New("peer latency probe failed")
 		}
@@ -84,7 +84,7 @@ func Run(ctx context.Context, request Request, progress func(string)) (Result, e
 	progress("download")
 	get, _ := http.NewRequestWithContext(child, "GET", request.DownloadURL, nil)
 	at := time.Now()
-	response, e := client.Do(get)
+	response, e := httpguard.Do(client, get, httpguard.ExactOrigin)
 	if e != nil {
 		return result, errors.New("peer download failed")
 	}
@@ -104,7 +104,7 @@ func Run(ctx context.Context, request Request, progress func(string)) (Result, e
 	post.ContentLength = uploadBytes
 	post.Header.Set("Content-Type", "application/octet-stream")
 	at = time.Now()
-	response, e = client.Do(post)
+	response, e = httpguard.Do(client, post, httpguard.ExactOrigin)
 	if e != nil {
 		return result, errors.New("peer upload failed")
 	}

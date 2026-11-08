@@ -19,3 +19,7 @@ administrator-owned input paths and removes at most 64 cache directories per pas
 preflight. It validates actual file/content profiles without opening ACME
 listeners, mutating DNS, or publishing active profile status. Issuance and renewal
 belong to activation, with provider adapters in `dnsproviders`.
+
+The custom Vultr adapter uses `httpguard.ExactOrigin` so bearer requests cannot
+follow a different host/port or an HTTPS downgrade. Hosted coverage is in
+`dnsproviders/vultr_redirect_test.go`; see `docs/http-redirects.md`.

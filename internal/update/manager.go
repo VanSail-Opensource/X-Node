@@ -5,15 +5,17 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/VanSail-Opensource/X-Node/internal/host"
-	"github.com/VanSail-Opensource/X-Node/internal/state"
-	"golang.org/x/mod/semver"
 	"io"
 	"net/http"
 	"os"
 	"path/filepath"
 	"sync"
 	"time"
+
+	"github.com/VanSail-Opensource/X-Node/internal/host"
+	"github.com/VanSail-Opensource/X-Node/internal/httpguard"
+	"github.com/VanSail-Opensource/X-Node/internal/state"
+	"golang.org/x/mod/semver"
 )
 
 const Repository = "VanSail-Opensource/X-Node"
@@ -52,7 +54,7 @@ func (m *Manager) fetch(ctx context.Context, url string, max int64) ([]byte, err
 		return nil, errors.New("invalid release URL")
 	}
 	request.Header.Set("User-Agent", "X-Node")
-	response, e := m.Client.Do(request)
+	response, e := httpguard.Do(m.Client, request, httpguard.GitHubDownloads)
 	if e != nil {
 		return nil, errors.New("release download failed")
 	}

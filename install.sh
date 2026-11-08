@@ -37,7 +37,7 @@ fi
 [[ -d /run/systemd/system ]] || { echo 'A running systemd instance is required.' >&2; exit 1; }
 nft list tables >/dev/null || { echo 'nftables kernel support and privileges are required.' >&2; exit 1; }
 if [[ -z "$version" ]]; then
-    version=$(curl --fail --silent --show-error --location "https://api.github.com/repos/$REPOSITORY/releases/latest" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert not d["draft"] and not d["prerelease"]; print(d["tag_name"])')
+    version=$(curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --max-redirs 10 "https://api.github.com/repos/$REPOSITORY/releases/latest" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert not d["draft"] and not d["prerelease"]; print(d["tag_name"])')
 fi
 [[ $version =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo 'A stable version tag is required.' >&2; exit 1; }
 stage_dir=$(mktemp -d -t x-node-install.XXXXXXXX)
@@ -45,7 +45,7 @@ cleanup() { case "$stage_dir" in /tmp/x-node-install.*) rm -rf -- "$stage_dir" ;
 trap cleanup EXIT
 base="https://github.com/$REPOSITORY/releases/download/$version"
 for asset in SHA256SUMS SHA256SUMS.minisig "x-node-linux-$arch" "xnodectl-linux-$arch"; do
-    curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 "$base/$asset" -o "$stage_dir/$asset"
+    curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --max-redirs 10 --tlsv1.2 "$base/$asset" -o "$stage_dir/$asset"
 done
 minisign -Vm "$stage_dir/SHA256SUMS" -P "$PUBLIC_KEY" -x "$stage_dir/SHA256SUMS.minisig" -q
 [[ $(sed -n '3p' "$stage_dir/SHA256SUMS.minisig") == "trusted comment: version:$version" ]] || { echo 'Signed version differs.' >&2; exit 1; }

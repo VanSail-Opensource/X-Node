@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/VanSail-Opensource/X-Node/internal/protocol"
@@ -62,7 +61,7 @@ func TestChecksumlessJournalPersistsConservativeFloorBeforeHealthy(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	path := filepath.Join(t.TempDir(), "credit.json")
+	path := privateCreditFixturePath(t)
 	if err = os.WriteFile(path, raw, 0600); err != nil {
 		t.Fatal(err)
 	}

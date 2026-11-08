@@ -2,6 +2,7 @@ package xray
 
 import (
 	"context"
+	"net"
 	"sync"
 	"testing"
 	"time"
@@ -88,5 +89,22 @@ func assertNativeHourlySamples(t *testing.T, controller *hourly.Controller, expe
 	}
 	if upload != expected || download != expected {
 		t.Fatalf("raw hourly admissions upload=%d download=%d expected=%d", upload, download, expected)
+	}
+}
+
+// core.Dial connections need not implement deadlines. A safety close bounds a
+// failed native fence but must never count as evidence that enforcement worked.
+func boundHourlyIO(t *testing.T, conn net.Conn) func() {
+	t.Helper()
+	fired := make(chan struct{})
+	timer := time.AfterFunc(3*time.Second, func() {
+		close(fired)
+		_ = conn.Close()
+	})
+	return func() {
+		if !timer.Stop() {
+			<-fired
+			t.Error("hourly native I/O required the test safety close")
+		}
 	}
 }

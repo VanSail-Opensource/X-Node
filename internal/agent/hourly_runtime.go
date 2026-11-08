@@ -32,15 +32,16 @@ func (a *Agent) initializeHourly() {
 	a.hourly = h
 	a.Registry.SetHourlyController(h.controller)
 	a.Client.OnHourlySession = func(session string) { h.controller.SetSession(session) }
-	a.Client.SetHourlyEnabled(store.Healthy())
-	if err != nil {
+	ready := a.hourlyAvailable()
+	a.Client.SetHourlyEnabled(ready)
+	if err != nil || !ready {
 		nlog.Core().Warn("hourly credit journal unavailable; hourly access disabled")
 	}
 }
 
 func (a *Agent) runtimeCapabilities() []string {
 	capabilities := append([]string(nil), Capabilities...)
-	if a.hourly != nil && a.hourly.store.Healthy() {
+	if a.hourlyAvailable() {
 		capabilities = append(capabilities, protocol.HourlyCapability)
 	}
 	return capabilities
@@ -63,9 +64,13 @@ func (a *Agent) runHourly(ctx context.Context) func() {
 }
 
 func (a *Agent) checkHourlyHealth() bool {
-	healthy := a.hourly != nil && a.hourly.store.Healthy()
+	healthy := a.hourlyAvailable()
 	if !healthy {
 		a.Client.SetHourlyEnabled(false)
 	}
 	return healthy
+}
+
+func (a *Agent) hourlyAvailable() bool {
+	return a.hourly != nil && a.hourly.store.Healthy() && a.hourly.store.MatchesAgent(a.Store.Metadata().AgentID)
 }

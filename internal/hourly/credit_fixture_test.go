@@ -20,13 +20,24 @@ func creditFixtureInstall(sequence uint64) protocol.HourlyCreditInstall {
 
 func openCreditFixture(t *testing.T) (*CreditStore, string) {
 	t.Helper()
-	path := filepath.Join(t.TempDir(), "credit.json")
+	path := privateCreditFixturePath(t)
 	store, err := OpenCreditStore(path)
 	if err != nil || !store.Healthy() {
 		t.Fatalf("open private credit store: %v", err)
 	}
 	t.Cleanup(func() { _ = store.Close() })
 	return store, path
+}
+
+func privateCreditFixturePath(t *testing.T) string {
+	t.Helper()
+	// testing.TempDir's numbered child follows the process umask. Keep the
+	// actual journal parent private without relaxing production permission checks.
+	dir := filepath.Join(t.TempDir(), "private")
+	if err := os.Mkdir(dir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	return filepath.Join(dir, "credit.json")
 }
 
 func installCreditFixture(t *testing.T, store *CreditStore) InstalledCredit {

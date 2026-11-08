@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -28,7 +27,7 @@ func TestCorruptJournalFailsHourlyClosedAndPreservesEvidence(t *testing.T) {
 	}
 	for name, raw := range fixtures {
 		t.Run(name, func(t *testing.T) {
-			path := filepath.Join(t.TempDir(), "credit.json")
+			path := privateCreditFixturePath(t)
 			if err := os.WriteFile(path, raw, 0600); err != nil {
 				t.Fatal(err)
 			}
@@ -68,7 +67,7 @@ func TestJournalRejectsAlteredFinalProofOrHighwater(t *testing.T) {
 			case "sequence":
 				journal.Records[0].Install.IssueSequence = 0
 			}
-			path := filepath.Join(t.TempDir(), "credit.json")
+			path := privateCreditFixturePath(t)
 			writeCreditFixture(t, path, journal)
 			if store, err := OpenCreditStore(path); !errors.Is(err, ErrCreditCorrupt) || store.Healthy() {
 				t.Fatal("inconsistent financial evidence loaded", err)
@@ -80,7 +79,7 @@ func TestJournalRejectsAlteredFinalProofOrHighwater(t *testing.T) {
 func TestJournalRefusesNonPrivateFilesAndSymlinks(t *testing.T) {
 	for _, symlink := range []bool{false, true} {
 		t.Run(map[bool]string{false: "public-file", true: "symlink"}[symlink], func(t *testing.T) {
-			path := filepath.Join(t.TempDir(), "credit.json")
+			path := privateCreditFixturePath(t)
 			raw := []byte(`{"version":1,"agent_id":"","high_water":"0","records":null,"tombstones":null}`)
 			if symlink {
 				target := path + ".original"

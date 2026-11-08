@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"path/filepath"
 	"testing"
 
 	"github.com/VanSail-Opensource/X-Node/internal/protocol"
@@ -22,7 +21,7 @@ func TestAckCompactionPersistsAbsenceUncertaintyFloor(t *testing.T) {
 		p := fixtureCreditProof(previous, 0)
 		journal.Tombstones = append(journal.Tombstones, creditTombstone{ReservationID: previous.ReservationID, IssueSequence: n, InstallDigest: protocol.HourlyInstallDigest(previous), ProofDigest: p.Digest})
 	}
-	path := filepath.Join(t.TempDir(), "credit.json")
+	path := privateCreditFixturePath(t)
 	writeCreditFixture(t, path, journal)
 	store, err := OpenCreditStore(path)
 	if err != nil {
@@ -51,7 +50,7 @@ func TestInvalidRetirementFloorFailsClosed(t *testing.T) {
 	i := creditFixtureInstall(1)
 	proof := fixtureCreditProof(i, 0)
 	journal := creditJournal{Version: creditJournalVersion, AgentID: i.AgentID, HighWater: 1, RetiredThrough: 2, Records: []creditRecord{{Install: i, Digest: protocol.HourlyInstallDigest(i), Proof: &proof}}}
-	path := filepath.Join(t.TempDir(), "credit.json")
+	path := privateCreditFixturePath(t)
 	writeCreditFixture(t, path, journal)
 	store, err := OpenCreditStore(path)
 	if !errors.Is(err, ErrCreditCorrupt) || store.Healthy() {

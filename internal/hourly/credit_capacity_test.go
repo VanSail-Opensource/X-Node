@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"path/filepath"
 	"testing"
 
 	"github.com/VanSail-Opensource/X-Node/internal/protocol"
@@ -17,7 +16,7 @@ func TestUnacknowledgedObligationsAreNeverEvictedAtCapacity(t *testing.T) {
 		install.ReservationID = fmt.Sprintf("credit-%d", i)
 		journal.Records = append(journal.Records, creditRecord{Install: install, Digest: protocol.HourlyInstallDigest(install)})
 	}
-	path := filepath.Join(t.TempDir(), "credit.json")
+	path := privateCreditFixturePath(t)
 	writeCreditFixture(t, path, journal)
 	store, err := OpenCreditStore(path)
 	if err != nil {
@@ -51,7 +50,7 @@ func TestHighwaterRejectsReplayAfterAcknowledgmentTombstoneEviction(t *testing.T
 			journal.Records = append(journal.Records, creditRecord{Install: install, Digest: protocol.HourlyInstallDigest(install), Proof: &proof})
 		}
 	}
-	path := filepath.Join(t.TempDir(), "credit.json")
+	path := privateCreditFixturePath(t)
 	writeCreditFixture(t, path, journal)
 	store, err := OpenCreditStore(path)
 	if err != nil {

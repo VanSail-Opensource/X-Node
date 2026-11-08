@@ -125,7 +125,8 @@ commands, desired configuration and bans retain their durable contracts.
 
 Hourly ingress enforcement lives in `hourly_runtime.go` and `internal/hourly`.
 Startup attaches the controller before publishing saved authorization. The
-capability is advertised only with a healthy, private durable credit journal;
+capability is advertised only with a healthy, private durable credit journal
+whose immutable agent identity matches the ordinary state identity;
 the WebSocket must independently negotiate and echo a fresh control session.
 Unsupported masters cannot activate hourly identities. Existing identities and
 native accounting retain their normal paths when hourly storage is unavailable.

@@ -50,6 +50,10 @@ type hourlyAgentFixture struct {
 }
 
 func newHourlyAgentFixture(t *testing.T, negotiate, corrupt bool) *hourlyAgentFixture {
+	return prepareHourlyAgentFixture(t, negotiate, corrupt, nil)
+}
+
+func prepareHourlyAgentFixture(t *testing.T, negotiate, corrupt bool, prepare func(string)) *hourlyAgentFixture {
 	t.Helper()
 	f := &hourlyAgentFixture{peers: make(chan *hourlyTestPeer, 8), frames: make(chan hourlyTestFrame, 1024), audit: make(chan hourlyTestFrame, 1024)}
 	stopServer := make(chan struct{})
@@ -102,6 +106,9 @@ func newHourlyAgentFixture(t *testing.T, negotiate, corrupt bool) *hourlyAgentFi
 	}))
 	t.Cleanup(func() { close(stopServer); server.Close() })
 	dir := t.TempDir()
+	if prepare != nil {
+		prepare(dir)
+	}
 	if corrupt {
 		if err := os.WriteFile(filepath.Join(dir, "hourly-credits.json"), []byte("["), 0600); err != nil {
 			t.Fatal(err)

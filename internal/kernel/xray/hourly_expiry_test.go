@@ -28,7 +28,7 @@ func TestRealHourlyPaidBoundaryInterruptsIdleNativeReader(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer conn.Close()
-	checkEcho(t, conn)
+	echoRoundTrip(t, conn)
 	awaitMeteredTraffic(t, registry, 1, 4, 4)
 	stopGrants()
 	updated := protocol.Clone(cfg.Users[0])
@@ -36,6 +36,7 @@ func TestRealHourlyPaidBoundaryInterruptsIdleNativeReader(t *testing.T) {
 	updated.ValidUntil = &boundary
 	registry.SetUsers([]protocol.User{updated})
 	_ = conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+	defer boundHourlyIO(t, conn)()
 	if _, err = conn.Read(make([]byte, 1)); err == nil {
 		t.Fatal("paid boundary retained idle native access")
 	}

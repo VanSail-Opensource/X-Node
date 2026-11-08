@@ -47,19 +47,38 @@ type creditJournal struct {
 	Tombstones     []creditTombstone `json:"tombstones"`
 }
 
+type creditIdentity struct {
+	agentID  string
+	pristine bool
+}
+
 // CreditStore retains financial obligations independently of ordinary traffic
 // journals. Its failures disable hourly credit without preventing legacy startup.
 type CreditStore struct {
-	mu      sync.Mutex
-	path    string
-	data    creditJournal
-	markers map[string]*creditInstallMarker
-	healthy atomic.Bool
-	write   func(string, []byte) error
+	mu       sync.Mutex
+	path     string
+	data     creditJournal
+	markers  map[string]*creditInstallMarker
+	healthy  atomic.Bool
+	identity atomic.Pointer[creditIdentity]
+	write    func(string, []byte) error
 }
 
 // Healthy reports whether durable hourly mutations remain available.
 func (s *CreditStore) Healthy() bool { return s != nil && s.healthy.Load() }
+
+// MatchesAgent rejects reuse after the ordinary agent identity changes without
+// waiting for persistence. Only a pristine journal may accept its first identity.
+func (s *CreditStore) MatchesAgent(id string) bool {
+	if s == nil || !protocol.ValidStreamID(id) {
+		return false
+	}
+	identity := s.identity.Load()
+	if identity == nil {
+		return false
+	}
+	return identity.agentID == id || identity.pristine
+}
 
 // Close revokes all process-local activation authority. There are no open files.
 func (s *CreditStore) Close() error {
@@ -93,7 +112,12 @@ func (s *CreditStore) persist(next creditJournal) error {
 		return err
 	}
 	s.data = next
+	s.publishIdentity(next)
 	return nil
+}
+
+func (s *CreditStore) publishIdentity(journal creditJournal) {
+	s.identity.Store(&creditIdentity{agentID: journal.AgentID, pristine: journal.AgentID == "" && journal.HighWater == 0 && journal.RetiredThrough == 0 && len(journal.Records) == 0 && len(journal.Tombstones) == 0})
 }
 
 func (s *CreditStore) record(id string) int {

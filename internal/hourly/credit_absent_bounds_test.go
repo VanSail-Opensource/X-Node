@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/VanSail-Opensource/X-Node/internal/protocol"
@@ -46,7 +45,7 @@ func TestAbsenceCapacityNeverEvictsUnacknowledgedProofs(t *testing.T) {
 		proof := fixtureCreditProof(i, 0)
 		journal.Records = append(journal.Records, creditRecord{Install: i, Digest: protocol.HourlyInstallDigest(i), Proof: &proof})
 	}
-	path := filepath.Join(t.TempDir(), "credit.json")
+	path := privateCreditFixturePath(t)
 	writeCreditFixture(t, path, journal)
 	store, err := OpenCreditStore(path)
 	if err != nil {
@@ -81,7 +80,7 @@ func TestOlderJournalMissingRetirementFloorCannotInventAbsence(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	path := filepath.Join(t.TempDir(), "credit.json")
+	path := privateCreditFixturePath(t)
 	if err = os.WriteFile(path, raw, 0600); err != nil {
 		t.Fatal(err)
 	}

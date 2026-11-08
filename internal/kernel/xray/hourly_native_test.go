@@ -33,7 +33,7 @@ func TestRealHourlyTCPAndMuxGateAndSessionRevocation(t *testing.T) {
 				t.Fatal(err)
 			}
 			defer conn.Close()
-			checkEcho(t, conn)
+			echoRoundTrip(t, conn)
 			awaitMeteredTraffic(t, registry, 1, 4, 4)
 			assertNativeHourlySamples(t, controller, 4)
 			if registry.Summary().TotalConnections[1] != 1 {
@@ -45,6 +45,7 @@ func TestRealHourlyTCPAndMuxGateAndSessionRevocation(t *testing.T) {
 				t.Fatal("session fence retained native lease")
 			}
 			_ = conn.SetDeadline(time.Now().Add(2 * time.Second))
+			defer boundHourlyIO(t, conn)()
 			_, _ = conn.Write([]byte("late"))
 			if _, err = conn.Read(make([]byte, 4)); err == nil {
 				t.Fatal("session revocation retained the real native stream")

@@ -69,6 +69,7 @@ func OpenCreditStore(path string) (*CreditStore, error) {
 			return s, err
 		}
 	}
+	s.publishIdentity(s.data)
 	s.healthy.Store(true)
 	return s, nil
 }

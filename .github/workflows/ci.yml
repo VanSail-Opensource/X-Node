@@ -2,6 +2,13 @@ name: Quality
 on:
   push:
     branches: [main]
+    # Documentation-only pushes do not change build inputs. Release provenance
+    # still requires a Quality run, so releases are tagged on commits that
+    # include code or workflow changes.
+    paths-ignore:
+      - 'docs/**'
+      - 'docs-site/**'
+      - '**/*.md'
   pull_request:
   workflow_dispatch:
 permissions:

@@ -5,6 +5,11 @@ It does not check out source, execute release assets, sign files, publish a
 release, or change repository policy. The release workflow embeds this source
 from its trusted `main` definition so tagged source cannot replace the gate.
 
+Documentation-only pushes to `main` do not trigger the Quality workflow
+(`paths-ignore` in `ci.yml`), so such a commit has no successful Quality run.
+Tag a release on a commit that includes code or workflow changes; a tag on a
+documentation-only commit is rejected by the quality gate.
+
 Invoke it with `python3 scripts/release_provenance.py VERSION QUALITY_RUN_ID`.
 The same source supports `python3 - VERSION QUALITY_RUN_ID` when embedded in a
 workflow. `GH_TOKEN` authenticates fixed-origin GitHub API reads. Successful

@@ -1,4 +1,4 @@
-﻿# X-Node v2.0.27
+# X-Node v2.0.28
 
 Fixes Hysteria inbound activation. The managed-inbound observation wrapper
 replaced the concrete `*hysteria.Server` that xray-core's TCP worker inspects

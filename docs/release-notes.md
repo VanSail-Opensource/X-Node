@@ -1,3 +1,15 @@
+# X-Node v2.0.26
+
+Fixes Hysteria inbound activation. The managed-inbound observation wrapper
+replaced the concrete `*hysteria.Server` that xray-core's TCP worker inspects
+before injecting the QUIC transport validator, so every `protocol: "hysteria"`
+listener failed with `transport/internet/hysteria: validator is nil`. Hysteria
+inbounds now stay unwrapped and retain native user management and accounting
+enforcement; inbound observation events (firewall rule evidence) are not
+produced for Hysteria flows. Listener failures also retain the underlying Xray
+error in the runtime result instead of a bare summary, so the master receives
+the actionable cause. See [kernel notes](../internal/kernel/xray/README.md).
+
 # X-Node v2.0.25
 
 Adds `certificate_lifecycle_v1`: typed, queued ACME issue/renew commands with

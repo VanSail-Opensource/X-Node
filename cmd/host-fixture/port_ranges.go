@@ -12,7 +12,7 @@ import (
 // could reach an open service but cannot consistently choose the expected port.
 func rangePacketChecks(ctx context.Context, r host.Runner) error {
 	for _, port := range []string{"9001", "9002", "9003"} {
-		stop, err := startEcho(ctx, "xnode-target", port)
+		stop, err := startEcho(ctx, "xnode-target", port, true)
 		if err != nil {
 			return err
 		}

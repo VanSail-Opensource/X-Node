@@ -32,7 +32,7 @@ func rangeStateChecks(ctx context.Context, m *firewall.Manager, baseline protoco
 		return err
 	}
 	for _, port := range []string{"9002", "9003", "9004"} {
-		stop, err := startEcho(ctx, "xnode-target", port)
+		stop, err := startEcho(ctx, "xnode-target", port, true)
 		if err != nil {
 			return err
 		}

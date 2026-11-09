@@ -49,6 +49,7 @@ func forwardingPolicy() []protocol.Forward {
 }
 
 const echoServer = `import socket,threading,sys
+label_port=len(sys.argv)>2 and sys.argv[2]=='label'
 def serve(family,kind,address,port):
  s=socket.socket(family,kind)
  s.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR,1)
@@ -59,10 +60,10 @@ def serve(family,kind,address,port):
   if kind==socket.SOCK_STREAM:
    while True:
     c,_=s.accept()
-    with c: c.sendall((str(port).encode()+b':' if 9001<=port<=9004 else b'')+c.recv(1024))
+    with c: c.sendall((str(port).encode()+b':' if label_port else b'')+c.recv(1024))
   else:
    while True:
-    data,peer=s.recvfrom(1024);s.sendto((str(port).encode()+b':' if 9001<=port<=9004 else b'')+data,peer)
+    data,peer=s.recvfrom(1024);s.sendto((str(port).encode()+b':' if label_port else b'')+data,peer)
  threading.Thread(target=run,daemon=True).start()
 for family,address in [(socket.AF_INET,'0.0.0.0'),(socket.AF_INET6,'::')]:
  for kind in [socket.SOCK_STREAM,socket.SOCK_DGRAM]: serve(family,kind,address,int(sys.argv[1]))
@@ -70,8 +71,11 @@ print('ready',flush=True)
 threading.Event().wait()
 `
 
-func startEcho(ctx context.Context, namespace string, port string) (func(), error) {
+func startEcho(ctx context.Context, namespace string, port string, labelPort ...bool) (func(), error) {
 	args := []string{"-u", "-c", echoServer, port}
+	if len(labelPort) > 0 && labelPort[0] {
+		args = append(args, "label")
+	}
 	name := "python3"
 	if namespace != "" {
 		name = "ip"

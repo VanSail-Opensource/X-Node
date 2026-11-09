@@ -667,7 +667,22 @@
     {
       "name": "certificates.get",
       "description": "Inspect certificate readiness, expiry and renewal status.",
-      "body": "## Certificate status\nReturns named profile status from shared certificate managers. Inbounds referencing the same profile reuse issuance and renewal work. Private keys and provider credentials are excluded.\n\n## Arguments\nUse an empty object."
+      "body": "## Certificate status\nReturns public named-profile snapshots without waiting for certificate issuance or renewal. Inbounds referencing the same profile share certificate work. On certificate_lifecycle_v1 agents, fingerprint, validity and active describe serving material; acquired_fingerprint can identify newer material awaiting activation. Phase, command ID, revision, safe error code and attempt/success times support operation recovery. No PEM, private keys, provider credentials, raw provider errors or material paths are returned.\n\n## Arguments\nUse an empty object. See [certificate lifecycle](certificates.md) for serving evidence and uncertain-operation recovery."
+    },
+    {
+      "name": "certificates.run",
+      "description": "Issue or renew one desired ACME profile and activate its fenced certificate material.",
+      "body": "## Revision-bound ACME operation\nRequires certificate_lifecycle_v1. profile_id selects an ACME HTTP/DNS profile from the latest desired configuration, including a profile awaiting activation after a configuration failure. expected_revision must match that desired revision. issue reuses existing valid material; renew explicitly requests renewal outside the normal renewal window. File/content and self-signed profiles use normal configuration validation and activation.\n\n## Progress and result\nExecution is bounded to five minutes. Typed progress reports profile_id, action and phase. Acquisition and activation recheck desired profile identity/revision; the runtime verifies the acquired fingerprint before activation. A successful result contains profile_id, action, fingerprint, expires, applied and ready. Acquired material alone does not establish serving readiness.\n\n## Retry and uncertainty\nPersist the original command ID and agent identity. Same-ID retries return retained receipts before current eligibility checks. Never automatically issue a new command after an uncertain result or restart; reconcile retained results and public serving/acquired status first. Status, progress and durable results contain no PEM, private keys, credentials, raw provider errors or material paths. See [certificate lifecycle](certificates.md).",
+      "fields": [
+        ["profile_id", "string", "Required", "Desired ACME certificate profile ID."],
+        ["action", "string", "Required", "issue or renew."],
+        ["expected_revision", "integer", "Required", "Positive expected desired configuration revision."]
+      ],
+      "args": {
+        "profile_id": "public-tls",
+        "action": "renew",
+        "expected_revision": 42
+      }
     },
     {
       "name": "jobs.list",

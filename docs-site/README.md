@@ -36,3 +36,5 @@ Cloudflare documents these settings in its [build configuration guide](https://d
 The builder consumes `docs/protocol.md`, `docs/features.md`, `docs/migration.md`, `docs/release-notes.md`, OpenAPI, AsyncAPI, every schema under `docs/schemas/` and every file under `examples/`. Configuration field tables are generated from the schema. `reference.json` adds explanations and examples for individual messages and commands; update it whenever the wire contract changes. The builder checks that master message and command documentation covers the published contract, and validates example JSON against the master schema when the repository schema-check dependencies are available.
 
 `index.html`, `style.css` and `app.js` are the site shell and browser behavior. Build output is ignored; deploy the output directory after building it.
+
+The certificate command entries distinguish desired revision fences, acquired material and serving evidence. Keep their public-only examples aligned with `docs/certificates.md` and the typed `certificate_lifecycle_v1` schemas; retained command IDs govern retries after uncertain ACME outcomes.

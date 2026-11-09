@@ -6,6 +6,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/VanSail-Opensource/X-Node/internal/cert"
 	"github.com/VanSail-Opensource/X-Node/internal/geodata"
 	"github.com/VanSail-Opensource/X-Node/internal/protocol"
 	"github.com/VanSail-Opensource/X-Node/internal/speedtest"
@@ -22,6 +23,25 @@ func (a *Agent) command(ctx context.Context, m protocol.Message) error {
 	args := request.Args
 	if len(args) == 0 {
 		args = []byte("{}")
+	}
+	if request.Name == protocol.CertificateRunCommand {
+		var input protocol.CertificateRunArgs
+		if err := protocol.Decode(args, &input); err != nil {
+			return errors.New("CERTIFICATE_INPUT_INVALID")
+		}
+		if err := input.Validate(); err != nil {
+			return err
+		}
+		var eligibility error
+		if !a.hasDesired || a.Store.Revision() != input.ExpectedRevision {
+			eligibility = errors.New("CERTIFICATE_SUPERSEDED")
+		} else if _, ok := a.desired.Certificates[input.ProfileID]; !ok {
+			eligibility = errors.New("CERTIFICATE_INPUT_INVALID")
+		} else if !cert.IsACMEProfile(a.desired, input.ProfileID) {
+			eligibility = errors.New("CERTIFICATE_NOT_ACME")
+		}
+		// Durable same-ID replay precedes current desired-state eligibility.
+		return a.startCertificateCommand(ctx, m.ID, protocol.Clone(a.desired), input, eligibility)
 	}
 	// Recovery reads must remain available while both utility jobs are busy.
 	if request.Name == "update.status" || request.Name == "jobs.list" {

@@ -54,7 +54,11 @@ func limitJobResult(result JobResult, limit int) JobResult {
 		result.Error = strings.ToValidUTF8(result.Error[:1024], "")
 	}
 	if protectedJob(result) {
-		result.Data = nil
+		if result.Command == protocol.CertificateRunCommand {
+			result.Data = certificateJobFacts(result.Data)
+		} else {
+			result.Data = nil
+		}
 	}
 	raw, err := marshalJobBounded(result, limit)
 	if err != nil {

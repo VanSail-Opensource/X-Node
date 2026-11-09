@@ -18,11 +18,11 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/caddyserver/certmagic"
-	"go.uber.org/zap"
 
 	"github.com/VanSail-Opensource/X-Node/internal/cert/dnsproviders"
 	"github.com/VanSail-Opensource/X-Node/internal/config"
@@ -50,7 +50,9 @@ import (
 //  3. "file" (if both CertFile and KeyFile paths are provided)
 //  4. "none" (default)
 type Manager struct {
-	cfg config.CertConfig
+	cfg       config.CertConfig
+	persistMu sync.Mutex
+	onEvent   func(string, map[string]any)
 
 	// Atomic so the ACME renewal goroutine can swap without racing readers.
 	mat atomic.Pointer[certMaterial]
@@ -77,6 +79,8 @@ func NewManager(cfg config.CertConfig) *Manager {
 // storePEM atomically swaps the in-memory cert material and persists to disk
 // so that restarts can reload without re-generating or re-requesting.
 func (m *Manager) storePEM(cert, key []byte) {
+	m.persistMu.Lock()
+	defer m.persistMu.Unlock()
 	m.mat.Store(&certMaterial{certPEM: cert, keyPEM: key})
 	m.persistPEM(cert, key)
 }
@@ -266,6 +270,11 @@ func pemEqual(a, b kernel.TLSCert) bool {
 
 // Start initializes the cert manager based on the resolved mode.
 func (m *Manager) Start(ctx context.Context) error {
+	return m.StartContext(ctx, ctx)
+}
+
+// StartContext separates a bounded preparation attempt from renewal lifetime.
+func (m *Manager) StartContext(ctx, lifetime context.Context) error {
 	mode := m.resolveMode()
 
 	switch mode {
@@ -278,13 +287,13 @@ func (m *Manager) Start(ctx context.Context) error {
 	case "content":
 		return m.startContent()
 	case "http":
-		return m.startACME(ctx, nil)
+		return m.acquireACME(ctx, lifetime, nil, false)
 	case "dns":
 		solver, err := m.buildDNSSolver()
 		if err != nil {
 			return fmt.Errorf("build dns solver: %w", err)
 		}
-		return m.startACME(ctx, solver)
+		return m.acquireACME(ctx, lifetime, solver, false)
 	default:
 		return fmt.Errorf("unknown cert_mode: %q (supported: http, dns, self, file, content, none)", mode)
 	}
@@ -398,110 +407,8 @@ func (m *Manager) startContent() error {
 
 // ─── Mode: http / dns (ACME) ──────────────────────────────────────────────
 
-func (m *Manager) startACME(ctx context.Context, dnsSolver *certmagic.DNS01Solver) error {
-	// Idempotent for unchanged config: Reconfigure already tore down stale ACME state.
-	if m.acmeStarted {
-		return nil
-	}
-
-	if m.cfg.Domain == "" {
-		return fmt.Errorf("cert.domain is required for ACME modes (http/dns)")
-	}
-
-	if err := os.MkdirAll(m.cfg.CertDir, 0o755); err != nil {
-		return fmt.Errorf("create cert dir: %w", err)
-	}
-
-	storage := &certmagic.FileStorage{Path: m.cfg.CertDir}
-
-	var magic *certmagic.Config
-	cache := certmagic.NewCache(certmagic.CacheOptions{
-		Logger: zap.NewNop(),
-		GetConfigForCert: func(_ certmagic.Certificate) (*certmagic.Config, error) {
-			return magic, nil
-		},
-	})
-	m.cache = cache
-
-	magic = certmagic.New(cache, certmagic.Config{
-		Logger:  zap.NewNop(),
-		Storage: storage,
-		OnEvent: func(evtCtx context.Context, event string, data map[string]any) error {
-			// Only react to renewals; initial load happens explicitly after ObtainCertSync.
-			if event != "cert_obtained" {
-				return nil
-			}
-			if renewed, _ := data["renewal"].(bool); !renewed {
-				return nil
-			}
-			issuerKey, _ := data["issuer"].(string)
-			if issuerKey == "" {
-				return nil
-			}
-			if err := m.loadPEMFromStorage(evtCtx, storage, issuerKey, m.cfg.Domain); err != nil {
-				nlog.Core().Error("failed to reload cert after renewal", "error", err)
-				return nil
-			}
-			m.renewed.Store(true)
-			nlog.Core().Info("TLS certificate reloaded after renewal", "domain", m.cfg.Domain)
-			return nil
-		},
-	})
-
-	issuer := certmagic.ACMEIssuer{
-		CA:    certmagic.LetsEncryptProductionCA,
-		Email: m.cfg.Email,
-	}
-
-	if dnsSolver != nil {
-		// DNS-01 mode: no HTTP port needed, supports wildcards.
-		issuer.DNS01Solver = dnsSolver
-		issuer.DisableHTTPChallenge = true
-		issuer.DisableTLSALPNChallenge = true
-	} else {
-		// HTTP-01 mode.
-		httpPort := m.cfg.HTTPPort
-		if httpPort == 0 {
-			httpPort = 80
-		}
-		issuer.AltHTTPPort = httpPort
-		issuer.DisableTLSALPNChallenge = true
-	}
-
-	magic.Issuers = []certmagic.Issuer{
-		certmagic.NewACMEIssuer(magic, issuer),
-	}
-	m.magic = magic
-
-	// Derived ctx so Reconfigure can cancel ACME background goroutines.
-	acmeCtx, acmeCancel := context.WithCancel(ctx)
-
-	startup := time.Duration(m.cfg.StartupTimeoutSeconds) * time.Second
-	if startup <= 0 {
-		startup = 120 * time.Second
-	}
-	obtainCtx, obtainCancel := context.WithTimeout(acmeCtx, startup)
-	defer obtainCancel()
-	if err := magic.ObtainCertSync(obtainCtx, m.cfg.Domain); err != nil {
-		acmeCancel()
-		return fmt.Errorf("obtain certificate: %w", err)
-	}
-
-	issuerKey := magic.Issuers[0].IssuerKey()
-	if err := m.loadPEMFromStorage(acmeCtx, storage, issuerKey, m.cfg.Domain); err != nil {
-		acmeCancel()
-		return fmt.Errorf("load cert from storage: %w", err)
-	}
-
-	if err := magic.ManageAsync(acmeCtx, []string{m.cfg.Domain}); err != nil {
-		acmeCancel()
-		return fmt.Errorf("start cert manager: %w", err)
-	}
-
-	m.acmeCancel = acmeCancel
-	m.acmeFingerprint = acmeFingerprint(m.cfg)
-	m.acmeStarted = true
-	return nil
+func (m *Manager) startACME(ctx context.Context, solver *certmagic.DNS01Solver) error {
+	return m.acquireACME(ctx, ctx, solver, false)
 }
 
 func validateKeyPair(certPEM, keyPEM []byte) error {

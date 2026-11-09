@@ -12,7 +12,7 @@ func CommandTimeout(name string) time.Duration {
 		return 2 * time.Minute
 	case "update.install", "firewall.bans.sync", "firewall.geoip.sync":
 		return 10 * time.Minute
-	case "geodata.refresh", "firewall.apply":
+	case "geodata.refresh", "firewall.apply", CertificateRunCommand:
 		return 5 * time.Minute
 	case "runtime.reload", "config.validate", "update.check", "traffic.flush":
 		return 2 * time.Minute

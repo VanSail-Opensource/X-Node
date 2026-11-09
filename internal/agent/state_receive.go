@@ -132,6 +132,7 @@ func (a *Agent) handle(ctx context.Context, m protocol.Message) {
 		a.Sampler.Interval(c.SampleInterval())
 		changes := protocol.Classify(a.desired, c)
 		a.desired = c
+		a.Certificates.Declare(c, m.Revision)
 		a.hasDesired = true
 		a.desiredCached = false
 		if a.utilityContext == nil || changes.Utilities || changes.Assets || changes.Certificates {

@@ -351,6 +351,9 @@ func ValidName(s string) bool {
 }
 
 func (c Config) Validate() error {
+	if len(c.Certificates) > MaxCertificateProfiles {
+		return errors.New("too many certificate profiles")
+	}
 	var err error
 	c, err = c.NormalizeDNS()
 	if err != nil {

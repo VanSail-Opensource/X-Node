@@ -26,6 +26,7 @@ func main() {
 	trafficContract(dir, api, async)
 	automaticLeaseContract(dir, api, async)
 	hourlyContract(dir, api, async)
+	certificateContract(dir, api, async)
 	write(filepath.Join(dir, "openapi.json"), api)
 	write(filepath.Join(dir, "asyncapi.json"), async)
 }

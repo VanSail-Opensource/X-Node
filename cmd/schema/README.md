@@ -1,5 +1,10 @@
 # Public protocol schemas
 
+`certificates.go` publishes the lifecycle capability, bounded command timeout,
+public status/progress/result schemas and command-progress envelope. Certificate
+revision values are decimal strings; material, provider credentials and paths
+never enter these observation schemas.
+
 `main.go` generates the configuration/master-envelope schemas and OpenAPI/AsyncAPI
 documents from public protocol types. `telemetry.go`, `ddns.go` and `compute.go`
 extend their corresponding negotiated contracts. `traffic.go` publishes report

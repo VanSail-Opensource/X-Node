@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "action": {
+      "type": "string"
+    },
+    "applied": {
+      "type": "boolean"
+    },
+    "expires": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "fingerprint": {
+      "type": "string"
+    },
+    "profile_id": {
+      "type": "string"
+    },
+    "ready": {
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "profile_id",
+    "action",
+    "applied",
+    "ready"
+  ],
+  "type": "object"
+}

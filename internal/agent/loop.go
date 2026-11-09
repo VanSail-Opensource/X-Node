@@ -2,7 +2,6 @@ package agent
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
@@ -22,6 +21,7 @@ func (a *Agent) Run(ctx context.Context) error {
 	}
 	if startup != nil {
 		a.desired = protocol.Clone(*startup)
+		a.Certificates.Declare(a.desired, d.Revision)
 		a.desired.Users = d.Users
 		a.hasDesired = true
 		a.Guard.Configure(a.desired.Firewall)
@@ -124,13 +124,7 @@ func (a *Agent) Run(ctx context.Context) error {
 			}
 			a.sendStatus()
 		case request := <-a.notify:
-			if request.Context.Err() != nil {
-				finishReload(request.Done, request.Context.Err())
-			} else if a.hasDesired {
-				a.queue(request.Context, applyJob{ID: request.ID, Revision: a.Store.Revision(), Config: a.desired, Cached: a.desiredCached, ForceRebuild: request.Force, RefreshAssets: request.RefreshAssets, RecheckMaterial: true, Done: request.Done})
-			} else {
-				finishReload(request.Done, errors.New("full baseline required before reload"))
-			}
+			a.handleReloadRequest(request)
 		case <-cadence.sample.C:
 			if e := a.sampleTraffic(); e != nil {
 				a.failStorage(e)

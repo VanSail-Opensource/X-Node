@@ -1,7 +1,21 @@
 # Managed certificate profiles
 
-`profiles.go` prepares shared managers and publishes them only after successful
-activation. Node-file profiles reload bounded local PEM files on preparation;
+`lifecycle.go` acquires per-profile leases, then runs typed issue/renew actions
+outside metadata/status locks. `acme_lifecycle.go` uses public CertMagic APIs,
+shared storage coordination and a headless PreChecker; renewal lifetime remains
+the agent lifetime. `profile_status.go` publishes all actor-declared desired
+profiles. `profile_serving.go` records exact prepared fingerprints immediately
+after runtime success, independently from accepted state and manager renewal.
+`prepared_candidate.go` fences manual activation to immutable acquired bytes.
+
+The preparation mutex serializes cache creation/cleanup, with cancellable waits;
+manager operation gates are per profile. Long ACME calls never own metadata or
+status mutexes. Cleanup retains leased managers and actual runtime material.
+See `docs/certificates.md` for wire, privacy and uncertain-replay contracts.
+
+`profiles.go` prepares shared managers and immutable material. Desired profile
+status is published independently from serving status. Node-file profiles reload
+bounded local PEM files on preparation;
 their host files remain administrator-owned and are never removed by cleanup.
 `file_material.go` limits each local certificate/key read to one MiB.
 

@@ -1,5 +1,15 @@
 # Agent orchestration
 
+`command_certificates.go` captures actor-owned desired profiles and runs bounded
+ACME work through the same durable Jobs executor. Journal replay precedes current
+revision/profile eligibility. `command_reload.go` verifies candidate identity
+before scheduling material rechecks; `activation.go` verifies prepared bytes and
+publishes serving evidence before auxiliary acceptance. `certificate_job_facts.go`
+allowlists public partial outcomes while other uncertain payloads remain stripped.
+Status/progress contain no PEM, private paths or provider responses. Hosted
+certificate regressions cover replay, stale revisions, lock waits and serving
+versus acquired material; see `docs/certificates.md`.
+
 Authorization reception, IP controls and expiry publish complete committed
 store views to the registry. Positive IP commands capture and recheck their
 credential/period subject; expiry compares persisted deadlines before publication.

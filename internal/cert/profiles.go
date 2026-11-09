@@ -4,93 +4,121 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
-	"crypto/x509"
 	"encoding/hex"
-	"encoding/pem"
 	"errors"
-	"github.com/VanSail-Opensource/X-Node/internal/protocol"
-	"github.com/VanSail-Opensource/X-Node/internal/state"
 	"os"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"time"
+
+	"github.com/VanSail-Opensource/X-Node/internal/kernel"
+	"github.com/VanSail-Opensource/X-Node/internal/protocol"
+	"github.com/VanSail-Opensource/X-Node/internal/state"
 )
 
-type ProfileStatus struct {
-	Domain       string    `json:"domain"`
-	Expires      time.Time `json:"expires"`
-	Expiring     bool      `json:"expiring"`
-	ObtainMillis int64     `json:"obtain_millis"`
-}
+type ProfileStatus = protocol.CertificateStatus
+
 type profile struct {
 	manager *Manager
-	elapsed int64
+	gate    chan struct{}
+	refs    int // protected by Pool.mu
+	elapsed atomic.Int64
 }
+
 type Pool struct {
-	mu               sync.Mutex
-	dir              string
-	profiles         map[string]*profile
-	active           map[string]string
-	runtimeKeys      map[string]bool
-	currentMaterial  map[string]bool
-	currentACME      map[string]bool
-	previousMaterial map[string]bool
-	previousACME     map[string]bool
+	mu                                sync.Mutex // Metadata only; never held across disk, network or manager shutdown.
+	prepareMu                         operationMutex
+	statusMu                          sync.Mutex
+	dir                               string
+	profiles                          map[string]*profile
+	active                            map[string]string
+	runtimeKeys                       map[string]bool
+	runtimeMaterial                   map[string]bool
+	currentMaterial, previousMaterial map[string]bool
+	currentACME, previousACME         map[string]bool
+	statuses                          map[string]ProfileStatus
+	desired                           map[string]string
+	servingKeys                       map[string]string
+	prepared                          map[string]materialStatus
+	acquireFn                         func(context.Context, context.Context, *Manager, string) error
 }
 
 func NewPool(dir string) *Pool {
-	return &Pool{dir: dir, profiles: map[string]*profile{}, active: map[string]string{}}
+	return &Pool{dir: dir, prepareMu: operationMutex{make(chan struct{}, 1)}, profiles: map[string]*profile{}, active: map[string]string{}, statuses: map[string]ProfileStatus{}, desired: map[string]string{}, servingKeys: map[string]string{}, prepared: map[string]materialStatus{}}
 }
+
 func (p *Pool) Prepare(ctx context.Context, c protocol.Config) (protocol.Config, error) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
+	return p.PrepareContext(ctx, ctx, c, nil)
+}
+
+// PrepareContext stages immutable material while renewal managers outlive attempts.
+// An explicit candidate pins all aliases of its profile to exactly those bytes.
+func (p *Pool) PrepareContext(ctx, lifetime context.Context, c protocol.Config, candidate *Candidate) (protocol.Config, error) {
+	if err := p.prepareMu.LockContext(ctx); err != nil {
+		return protocol.Config{}, err
+	}
+	defer p.prepareMu.Unlock()
 	out := protocol.Clone(c)
-	if len(c.Certificates) > 64 {
+	if len(c.Certificates) > protocol.MaxCertificateProfiles {
 		return out, errors.New("too many certificate profiles")
 	}
 	p.discardUnusedCandidates(c)
-	prepared := map[string]bool{}
+	prepared := map[string]kernel.TLSCert{}
 	for id, spec := range c.Certificates {
-		cfg, key := profileSettings(c, spec)
-		entry := p.profiles[key]
-		fresh := entry == nil
-		if entry == nil {
-			storageHash := sha256.Sum256([]byte(cfg.CertMode + ":" + cfg.Domain + ":" + cfg.Email))
-			cfg.CertDir = filepath.Join(p.dir, "acme", hex.EncodeToString(storageHash[:]))
-			if cfg.CertMode == "file" || cfg.CertMode == "content" {
-				cfg.CertDir = ""
-			}
-			manager := NewManager(cfg)
-			start := time.Now()
-			if err := manager.Start(ctx); err != nil {
-				manager.Stop()
-				return out, errors.New("certificate profile preparation failed")
-			}
-			entry = &profile{manager: manager, elapsed: time.Since(start).Milliseconds()}
-			p.profiles[key] = entry
+		_, key := profileSettings(c, spec)
+		entry, release := p.lease(c, spec)
+		if err := lockProfile(ctx, entry); err != nil {
+			release()
+			return out, err
 		}
-		if cfg.CertMode == "file" && !prepared[key] && !fresh {
-			if err := entry.manager.startFile(); err != nil {
-				return out, err
-			}
-		}
-		prepared[key] = true
 		material := entry.manager.TLSCert()
+		var err error
+		if shared, ok := prepared[key]; ok {
+			material = shared
+		} else if candidate != nil && candidate.Key == key {
+			material = candidate.Material
+		} else {
+			p.profilePhase(key, "", initialPhase(entry.manager), "")
+			started := time.Now()
+			err = entry.manager.StartContext(ctx, lifetime)
+			entry.elapsed.Store(time.Since(started).Milliseconds())
+			material = entry.manager.TLSCert()
+		}
+		unlockProfile(entry)
+		release()
+		if err != nil {
+			p.profilePhase(key, "", "failed", "CERTIFICATE_PREPARATION_FAILED")
+			return out, errors.New("CERTIFICATE_PREPARATION_FAILED")
+		}
 		if len(material.CertPEM) == 0 || len(material.KeyPEM) == 0 {
 			return out, errors.New("certificate profile has no TLS material")
 		}
+		if err := validateKeyPair(material.CertPEM, material.KeyPEM); err != nil {
+			return out, errors.New("CERTIFICATE_MATERIAL_INVALID")
+		}
+		prepared[key] = material
 		pair := append(append([]byte(nil), material.CertPEM...), material.KeyPEM...)
 		hash := sha256.Sum256(pair)
 		dir := filepath.Join(p.dir, "material", hex.EncodeToString(hash[:]))
 		certFile, keyFile := filepath.Join(dir, "cert.pem"), filepath.Join(dir, "key.pem")
-		if err := writeMaterial(certFile, material.CertPEM); err != nil {
+		if err = writeMaterial(certFile, material.CertPEM); err != nil {
 			return out, err
 		}
-		if err := writeMaterial(keyFile, material.KeyPEM); err != nil {
+		if err = writeMaterial(keyFile, material.KeyPEM); err != nil {
 			return out, err
 		}
-		spec.Config.CertFile = certFile
-		spec.Config.KeyFile = keyFile
+		metadata, err := describeMaterial(material.CertPEM)
+		if err != nil {
+			return out, err
+		}
+		p.mu.Lock()
+		p.prepared[certFile] = metadata
+		p.mu.Unlock()
+		if candidate == nil || candidate.Key != key {
+			p.acquired(key, metadata, entry.elapsed.Load())
+		}
+		spec.Config.CertFile, spec.Config.KeyFile = certFile, keyFile
 		out.Certificates[id] = spec
 	}
 	return out, nil
@@ -102,59 +130,47 @@ func writeMaterial(path string, material []byte) error {
 	}
 	return state.AtomicWrite(path, material, 0600)
 }
+
 func (p *Pool) Commit(c protocol.Config) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	used := map[string]bool{}
-	active := map[string]string{}
+	p.prepareMu.Lock()
+	defer p.prepareMu.Unlock()
+	used, active := map[string]bool{}, map[string]string{}
 	for id, spec := range c.Certificates {
 		_, key := profileSettings(c, spec)
 		used[key] = true
 		active[id] = key
 	}
+	p.mu.Lock()
 	p.active = active
-	for key, entry := range p.profiles {
-		if !used[key] {
-			entry.manager.Stop()
-			delete(p.profiles, key)
-		}
-	}
+	p.mu.Unlock()
+	p.retireProfiles(used)
 	p.cleanupMaterial(used)
 }
+
 func (p *Pool) Renewed() bool {
 	p.mu.Lock()
-	defer p.mu.Unlock()
+	entries := make([]*profile, 0, len(p.profiles))
+	for _, entry := range p.profiles {
+		entries = append(entries, entry)
+	}
+	p.mu.Unlock()
 	renewed := false
-	for _, e := range p.profiles {
-		renewed = e.manager.CertRenewed() || renewed
+	for _, entry := range entries {
+		renewed = entry.manager.CertRenewed() || renewed
 	}
 	return renewed
 }
-func (p *Pool) Status() map[string]ProfileStatus {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	out := map[string]ProfileStatus{}
-	for id, key := range p.active {
-		e := p.profiles[key]
-		if e == nil {
-			continue
-		}
-		b, _ := pem.Decode(e.manager.TLSCert().CertPEM)
-		if b == nil {
-			continue
-		}
-		c, err := x509.ParseCertificate(b.Bytes)
-		if err == nil {
-			out[id] = ProfileStatus{Domain: c.Subject.CommonName, Expires: c.NotAfter, Expiring: time.Until(c.NotAfter) < 30*24*time.Hour, ObtainMillis: e.elapsed}
-		}
-	}
-	return out
-}
+
 func (p *Pool) Stop() {
+	p.prepareMu.Lock()
+	defer p.prepareMu.Unlock()
 	p.mu.Lock()
-	defer p.mu.Unlock()
-	for _, e := range p.profiles {
-		e.manager.Stop()
-	}
+	entries := p.profiles
 	p.profiles = map[string]*profile{}
+	p.mu.Unlock()
+	for _, entry := range entries {
+		entry.gate <- struct{}{}
+		entry.manager.Stop()
+		unlockProfile(entry)
+	}
 }

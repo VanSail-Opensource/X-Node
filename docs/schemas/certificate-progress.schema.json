@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "action": {
+      "type": "string"
+    },
+    "phase": {
+      "enum": [
+        "issuing",
+        "renewing",
+        "applying",
+        "idle",
+        "failed"
+      ],
+      "type": "string"
+    },
+    "profile_id": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "profile_id",
+    "action",
+    "phase"
+  ],
+  "type": "object"
+}

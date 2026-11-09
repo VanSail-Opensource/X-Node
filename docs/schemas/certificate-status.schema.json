@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": {
+    "additionalProperties": false,
+    "properties": {
+      "acquired_fingerprint": {
+        "type": "string"
+      },
+      "active": {
+        "type": "boolean"
+      },
+      "command_id": {
+        "type": "string"
+      },
+      "domain": {
+        "type": "string"
+      },
+      "error_code": {
+        "type": "string"
+      },
+      "expires": {
+        "format": "date-time",
+        "type": "string"
+      },
+      "expiring": {
+        "type": "boolean"
+      },
+      "fingerprint": {
+        "type": "string"
+      },
+      "issuer": {
+        "type": "string"
+      },
+      "last_attempt": {
+        "format": "date-time",
+        "type": "string"
+      },
+      "last_success": {
+        "format": "date-time",
+        "type": "string"
+      },
+      "mode": {
+        "type": "string"
+      },
+      "not_before": {
+        "format": "date-time",
+        "type": "string"
+      },
+      "obtain_millis": {
+        "type": "integer"
+      },
+      "phase": {
+        "enum": [
+          "issuing",
+          "renewing",
+          "applying",
+          "idle",
+          "failed"
+        ],
+        "type": "string"
+      },
+      "revision": {
+        "pattern": "^[0-9]+$",
+        "type": "string"
+      },
+      "sans": {
+        "items": {
+          "type": "string"
+        },
+        "maxItems": 128,
+        "type": "array"
+      }
+    },
+    "required": [
+      "domain",
+      "mode",
+      "phase",
+      "active",
+      "expires",
+      "expiring",
+      "obtain_millis",
+      "revision"
+    ],
+    "type": "object"
+  },
+  "maxProperties": 128,
+  "type": "object"
+}

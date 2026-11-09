@@ -22,6 +22,7 @@ func TestProfilesShareCertificateManager(t *testing.T) {
 	if len(p.Status()) != 0 {
 		t.Fatal("prepared profile was published before activation")
 	}
+	p.RetainRuntime(c, resolved)
 	p.Commit(c)
 	if p.Status()["a"].Expires.IsZero() {
 		t.Fatal("missing certificate expiry")

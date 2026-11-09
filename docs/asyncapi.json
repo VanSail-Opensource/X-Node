@@ -36,6 +36,39 @@
             "type": "object"
           }
         },
+        "certificateProgress": {
+          "payload": {
+            "additionalProperties": false,
+            "properties": {
+              "base_revision": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "data": {
+                "$ref": "schemas/certificate-progress.schema.json"
+              },
+              "id": {
+                "type": "string"
+              },
+              "revision": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "type": {
+                "const": "command.progress",
+                "type": "string"
+              },
+              "v": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "v",
+              "type"
+            ],
+            "type": "object"
+          }
+        },
         "compactTelemetry": {
           "payload": {
             "additionalProperties": false,

@@ -16,6 +16,7 @@ const (
 )
 
 var actionEffects = map[string]ActionEffect{
+	CertificateRunCommand:      UtilityAction,
 	HourlyCreditInstallCommand: UtilityAction,
 	HourlyCreditSealCommand:    UtilityAction,
 	HourlyCreditAckCommand:     UtilityAction,

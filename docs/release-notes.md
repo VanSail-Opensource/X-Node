@@ -1,3 +1,14 @@
+# X-Node v2.0.25
+
+Adds `certificate_lifecycle_v1`: typed, queued ACME issue/renew commands with
+durable replay, bounded progress and revision/profile/fingerprint activation
+fences. Desired failed profiles remain visible. Certificate status reads stay
+responsive during network work and distinguish acquired material from the exact
+serving certificate, including partial activation failures. Optional-email ACME
+runs without terminal prompts; automatic renewals retain agent lifetime. No PEM,
+private paths, provider credentials or raw provider errors enter results.
+See [certificate lifecycle](certificates.md) for command and recovery contracts.
+
 # X-Node v2.0.24
 
 Retires resolver selection: DNS interception always uses native Xray DNS.

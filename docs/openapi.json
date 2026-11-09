@@ -173,6 +173,20 @@
           }
         ],
         "summary": "Upgrade the authenticated agent connection to WebSocket",
+        "x-certificate-lifecycle": {
+          "capability": "certificate_lifecycle_v1",
+          "command": "certificates.run",
+          "progress": {
+            "$ref": "schemas/certificate-progress.schema.json"
+          },
+          "result": {
+            "$ref": "schemas/certificate-result.schema.json"
+          },
+          "status": {
+            "$ref": "schemas/certificate-status.schema.json"
+          },
+          "timeoutSeconds": 300
+        },
         "x-websocket-messages": {
           "agentToMaster": [
             "agent.hello",

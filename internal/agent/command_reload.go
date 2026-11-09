@@ -2,17 +2,47 @@ package agent
 
 import (
 	"context"
+	"errors"
 
+	"github.com/VanSail-Opensource/X-Node/internal/cert"
 	"github.com/VanSail-Opensource/X-Node/internal/protocol"
 )
 
 type reloadRequest struct {
-	ID            string
-	Done          chan error
-	Context       context.Context
-	RefreshAssets bool
-	Force         bool
+	Certificate      *cert.Candidate
+	ExpectedRevision uint64
+	ID               string
+	Done             chan error
+	Context          context.Context
+	RefreshAssets    bool
+	Force            bool
 }
+
+// Only the actor reads desired state or schedules material activation.
+func (a *Agent) handleReloadRequest(request reloadRequest) {
+	if err := request.Context.Err(); err != nil {
+		finishReload(request.Done, err)
+		return
+	}
+	if !a.hasDesired {
+		finishReload(request.Done, errors.New("full baseline required before reload"))
+		return
+	}
+	if target := request.Certificate; target != nil {
+		key, ok := cert.ProfileKey(a.desired, target.ProfileID)
+		if !ok || key != target.Key || request.ExpectedRevision != a.Store.Revision() {
+			finishReload(request.Done, errors.New("CERTIFICATE_SUPERSEDED"))
+			return
+		}
+		if a.Certificates.ServingMatches(*target) && a.Runtime.Ready() && a.Store.Metadata().ConfigRevision == request.ExpectedRevision {
+			a.Certificates.Completed(*target)
+			finishReload(request.Done, nil)
+			return
+		}
+	}
+	a.queue(request.Context, applyJob{ID: request.ID, Revision: a.Store.Revision(), Config: protocol.Clone(a.desired), Cached: a.desiredCached, ForceRebuild: request.Force, RefreshAssets: request.RefreshAssets, RecheckMaterial: true, Done: request.Done, Certificate: request.Certificate})
+}
+
 type reloadOptions struct{ RefreshAssets, Force bool }
 
 func finishReload(done chan error, err error) {

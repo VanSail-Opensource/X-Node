@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/VanSail-Opensource/X-Node/internal/cert"
 	"github.com/VanSail-Opensource/X-Node/internal/geodata"
 	"github.com/VanSail-Opensource/X-Node/internal/nlog"
 	"github.com/VanSail-Opensource/X-Node/internal/protocol"
@@ -44,7 +45,7 @@ func (a *Agent) activate(lifetime context.Context, job applyJob) error {
 			}
 			a.geoCandidate, a.geoCandidateKey = target, assetKey(c, p)
 		}
-		candidate, dir, err := a.prepareNative(job.Context, lifetime, c, p, job.RecheckMaterial || job.ForceRebuild)
+		candidate, dir, err := a.prepareCertificateNative(job.Context, lifetime, c, p, job.RecheckMaterial || job.ForceRebuild, job.Certificate)
 		if err != nil {
 			return err
 		}
@@ -52,10 +53,16 @@ func (a *Agent) activate(lifetime context.Context, job applyJob) error {
 		if err = a.stage(job, c); err != nil {
 			return err
 		}
+		if job.Certificate != nil {
+			key, ok := cert.ProfileKey(c, job.Certificate.ProfileID)
+			if !ok || key != job.Certificate.Key || !a.Certificates.PreparedMatches(*job.Certificate, candidate.Source) || a.Store.Revision() != job.Revision || job.Context.Err() != nil {
+				return errors.New("CERTIFICATE_SUPERSEDED")
+			}
+		}
 		if err = a.Runtime.ApplyPrepared(lifetime, candidate, job.ForceRebuild); err != nil {
 			return err
 		}
-		a.Certificates.RetainRuntime(c)
+		a.Certificates.RetainRuntime(c, candidate.Source)
 	} else {
 		if err = a.stage(job, c); err != nil {
 			return err

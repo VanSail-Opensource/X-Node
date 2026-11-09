@@ -46,7 +46,7 @@ func schemaType(t reflect.Type) map[string]any {
 				required = append(required, name)
 			}
 		}
-		return dnsPolicySchema(t, firewallPortsSchema(t, hourlySchema(t, map[string]any{"type": "object", "properties": properties, "required": required, "additionalProperties": false})))
+		return certificateTypeSchema(t, dnsPolicySchema(t, firewallPortsSchema(t, hourlySchema(t, map[string]any{"type": "object", "properties": properties, "required": required, "additionalProperties": false}))))
 	case reflect.Slice, reflect.Array:
 		return map[string]any{"type": "array", "items": schemaType(t.Elem())}
 	case reflect.Map:
@@ -92,6 +92,7 @@ func Schemas() map[string]any {
 	leaseArgs := AutomaticLeaseSchema()
 	command["allOf"] = append(command["allOf"].([]any), map[string]any{"if": map[string]any{"properties": map[string]any{"name": map[string]any{"const": AutomaticLeaseCommand}}}, "then": map[string]any{"properties": map[string]any{"args": leaseArgs}, "required": []string{"args"}}})
 	addHourlyCommandSchemas(command)
+	addCertificateCommandSchema(command)
 	variants := []any{}
 	for _, name := range MasterMessageTypes {
 		data := types[name]
@@ -108,4 +109,4 @@ func Schemas() map[string]any {
 }
 
 var MasterMessageTypes = []string{"hourly.grant", "compute.announce", "compute.grant", "compute.ack", "compute.cancel", "ddns.changes.ack", "firewall.events.ack", "state.sync", "config.apply", "users.sync", "users.delta", "user.controls", "traffic.ack", "command", "command.cancel"}
-var CommandNames = []string{HourlyCreditInstallCommand, HourlyCreditSealCommand, HourlyCreditAckCommand, AutomaticLeaseCommand, "firewall.protected.sync", "firewall.geoip.sync", "firewall.bans.sync", "firewall.bans.update", "firewall.bans.get", "connections.list", "connections.close", "users.active_ips", "ips.control", "metrics.get", "jobs.list", "firewall.status", "firewall.confirm", "firewall.apply", "speedtest", "update.check", "update.status", "update.install", "update.rollback", "runtime.reload", "geodata.refresh", "ddns.run", "certificates.get", "traffic.flush", "config.validate"}
+var CommandNames = []string{CertificateRunCommand, HourlyCreditInstallCommand, HourlyCreditSealCommand, HourlyCreditAckCommand, AutomaticLeaseCommand, "firewall.protected.sync", "firewall.geoip.sync", "firewall.bans.sync", "firewall.bans.update", "firewall.bans.get", "connections.list", "connections.close", "users.active_ips", "ips.control", "metrics.get", "jobs.list", "firewall.status", "firewall.confirm", "firewall.apply", "speedtest", "update.check", "update.status", "update.install", "update.rollback", "runtime.reload", "geodata.refresh", "ddns.run", "certificates.get", "traffic.flush", "config.validate"}

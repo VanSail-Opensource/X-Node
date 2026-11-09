@@ -126,3 +126,6 @@ handler additions/removals.
 `reload_benchmark_test.go` compares unchanged normal reload to the previous
 forced behavior. `live_stream_test.go` checks unchanged TCP/mux sessions across
 repeated normal reload, using the same runtime application path as the agent.
+
+Firewall detection evidence is not produced for Hysteria inbounds; their transport rejects unauthenticated handshakes before the observation wrapper could classify them.
+

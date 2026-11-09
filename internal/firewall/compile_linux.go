@@ -26,6 +26,11 @@ type policyPlan struct {
 var counterNames = []string{"blocked_requests", "ban_events", "blacklist_drops", "syn_limited", "outbound_replies", "dns_redirects"}
 
 func compile(p protocol.FirewallPolicy, redirect bool, ssh []int) (*policyPlan, error) {
+	var err error
+	p, err = p.NormalizePortRanges()
+	if err != nil {
+		return nil, err
+	}
 	if err := validate(p, ssh); err != nil {
 		return nil, err
 	}
@@ -93,8 +98,8 @@ func (b *policyPlan) input() {
 			name = "trusted_v6"
 		}
 		// Trusted sources bypass detection on open services, never the port ACL.
-		b.add("input", fmt.Sprintf("trusted-tcp-%t", v6), sourceSet(v6, name, false, false), portSet(unix.IPPROTO_TCP, "tcp_ports", false), accept())
-		b.add("input", fmt.Sprintf("trusted-udp-%t", v6), sourceSet(v6, name, false, false), portSet(unix.IPPROTO_UDP, "udp_ports", false), accept())
+		b.add("input", fmt.Sprintf("trusted-tcp-%t", v6), sourceSet(v6, name, false, false), b.portSet(unix.IPPROTO_TCP, "tcp_ports", false), accept())
+		b.add("input", fmt.Sprintf("trusted-udp-%t", v6), sourceSet(v6, name, false, false), b.portSet(unix.IPPROTO_UDP, "udp_ports", false), accept())
 	}
 	b.add("input", "blacklists", direction(false, false), jump("blacklist"))
 	for i, raw := range []string{"127.0.0.0/8", "::1/128"} {

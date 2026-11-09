@@ -7,6 +7,9 @@ import (
 
 func extensionRequirements(config protocol.Config) map[string]bool {
 	required := map[string]bool{}
+	if config.Firewall.UsesPortRanges() {
+		required[protocol.FirewallPortRangesCapability] = true
+	}
 	if config.Firewall.SourceGeoIP != nil {
 		required["source_geoip_firewall_v1"] = true
 		if config.Firewall.SourceGeoIP.Reference {

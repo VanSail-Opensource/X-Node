@@ -46,6 +46,9 @@ func (b *policyPlan) staticSets(p protocol.FirewallPolicy, ssh []int) error {
 		})
 		b.sets = append(b.sets, setSpec{set: &nftables.Set{Table: b.table, Name: name, KeyType: key, Interval: true, AutoMerge: true}, elements: elements})
 	}
+	if p.UsesPortRanges() {
+		return b.portRangeSets(p, ssh)
+	}
 	tcp := append(append(append([]int(nil), p.TCPPorts...), p.SSHPorts...), ssh...)
 	for _, s := range []struct {
 		name  string
@@ -70,7 +73,9 @@ func (b *policyPlan) staticSets(p protocol.FirewallPolicy, ssh []int) error {
 }
 
 func setDelta(current, desired []nftables.SetElement) (add, remove []nftables.SetElement) {
-	key := func(e nftables.SetElement) string { return fmt.Sprintf("%x/%t", e.Key, e.IntervalEnd) }
+	key := func(e nftables.SetElement) string {
+		return fmt.Sprintf("%x/%x/%t/%x", e.Key, e.KeyEnd, e.IntervalEnd, e.Val)
+	}
 	existing := map[string]nftables.SetElement{}
 	for _, e := range current {
 		existing[key(e)] = e

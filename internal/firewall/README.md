@@ -91,6 +91,22 @@ policy, and retains other private state unless purge was requested.
 
 ## Verification and extension
 
+`port_ranges_linux.go` compiles additive TCP/UDP/SSH ranges into versioned native
+interval sets. `nat_linux.go` keeps range-to-single forwarding compact and uses
+one `inet_service` map for each equal-length range translation. Map keys are
+original listener ports and values preserve exact offsets. No random NAT target
+range allocation is used. Original conntrack listener constraints remain on
+forward acceptance. Changes replace map values and obsolete owned static sets
+inside the same transaction without clearing live dynamic sets or counters.
+
+`FirewallPolicy.NormalizePortRanges` is the public canonicalization boundary;
+the firewall also normalizes direct apply requests. Optional forwarding ends
+default to their starts, duplicate rows disappear, and new range policies reject
+overlapping listener domains. Legacy singleton policies retain their accepted
+ordering/address compatibility. Translated maps are bounded to 65,535 entries
+per rule and 262,140 entries per policy. `native_firewall_port_ranges_v1` is
+required for persisted range policies, including restore candidates.
+
 Portable manager fixtures inject `Backend` and `host.Runner`; Linux fixtures cover
 compilation, expression changes, order, and set boundaries. The disposable Debian
 VM fixture verifies real packets, live-state retention, watchdog recovery after

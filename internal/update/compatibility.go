@@ -36,6 +36,10 @@ func (m *Manager) requiredCapabilities() ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
+	portRangesRequired, err := m.firewallPortRangesRequired()
+	if err != nil {
+		return nil, err
+	}
 	diskRequired := false
 	if _, err := os.Stat(filepath.Join(filepath.Dir(m.Dir), "firewall", "disk-sources-v1")); err == nil {
 		diskRequired = true
@@ -69,6 +73,9 @@ func (m *Manager) requiredCapabilities() ([]string, error) {
 	raw, err := os.ReadFile(filepath.Join(filepath.Dir(m.Dir), "state.json"))
 	if os.IsNotExist(err) {
 		caps := []string{}
+		if portRangesRequired {
+			caps = append(caps, protocol.FirewallPortRangesCapability)
+		}
 		if cidrRequired {
 			caps = append(caps, "firewall_cidr_exemptions_v1")
 		}
@@ -97,6 +104,7 @@ func (m *Manager) requiredCapabilities() ([]string, error) {
 		return nil, errors.New("invalid private-state compatibility data")
 	}
 	required := map[string]bool{}
+	required[protocol.FirewallPortRangesCapability] = portRangesRequired
 	required["firewall_cidr_exemptions_v1"] = cidrRequired
 	required["disk_firewall_sources_v1"] = diskRequired
 	required["firewall_control_v1"] = controlRequired
@@ -148,6 +156,9 @@ func (m *Manager) requiredCapabilities() ([]string, error) {
 		}
 		if config == nil {
 			continue
+		}
+		if config.Firewall.UsesPortRanges() {
+			required[protocol.FirewallPortRangesCapability] = true
 		}
 		if config.Firewall.Enabled && config.Firewall.MasterControlled {
 			required["firewall_master_observation_v1"] = true

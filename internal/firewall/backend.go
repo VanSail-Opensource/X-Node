@@ -28,7 +28,7 @@ func validate(p protocol.FirewallPolicy, ssh []int) error {
 			return err
 		}
 	}
-	if len(ssh) == 0 && len(p.SSHPorts) == 0 {
+	if len(ssh) == 0 && len(p.SSHPorts) == 0 && len(p.SSHPortRanges) == 0 {
 		return errors.New("SSH listening ports must be known")
 	}
 	for _, port := range ssh {

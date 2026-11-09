@@ -70,6 +70,16 @@ IPv4/IPv6 sources. Open services and configured forwarding remain reachable;
 listening closed TCP/UDP services must time out without a reply or rejection.
 These checks run only in hosted disposable VMs.
 
+`port_ranges.go` proves first/middle/last port hopping and exact translated
+offsets with port-labelled TCP/UDP echoes over IPv4/IPv6. `port_range_state.go`
+changes existing map values, removes obsolete maps, then restores the baseline
+policy before other state checks. The large-firewall VM case also installs a
+65,535-element map and verifies its native cardinality. Ranged forwarding stays
+in the confirmed policy exercised by the watchdog and reboot restoration.
+The baseline also permits 65534-65535 through compact TCP/UDP interval sets;
+dual-stack packet checks require a listening 65535 service to answer and a
+listening 65533 service to time out, proving the upper-end sentinel in the kernel.
+
 `firewall_control.go` requires a first count delta below the retired local
 threshold and verifies packet hits cannot extend a master-issued deadline.
 

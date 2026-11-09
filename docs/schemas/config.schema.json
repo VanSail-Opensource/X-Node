@@ -20,12 +20,16 @@
         "additionalProperties": false,
         "properties": {
           "from": {
+            "maximum": 65535,
+            "minimum": 1,
             "type": "integer"
           },
           "network": {
             "type": "string"
           },
           "to": {
+            "maximum": 65535,
+            "minimum": 1,
             "type": "integer"
           }
         },
@@ -199,12 +203,26 @@
                 "type": "string"
               },
               "port": {
+                "maximum": 65535,
+                "minimum": 1,
+                "type": "integer"
+              },
+              "port_end": {
+                "maximum": 65535,
+                "minimum": 0,
                 "type": "integer"
               },
               "target_ip": {
                 "type": "string"
               },
               "target_port": {
+                "maximum": 65535,
+                "minimum": 1,
+                "type": "integer"
+              },
+              "target_port_end": {
+                "maximum": 65535,
+                "minimum": 0,
                 "type": "integer"
               }
             },
@@ -291,15 +309,93 @@
           ],
           "type": "object"
         },
+        "ssh_port_ranges": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "from": {
+                "maximum": 65535,
+                "minimum": 1,
+                "type": "integer"
+              },
+              "network": {
+                "type": "string"
+              },
+              "to": {
+                "maximum": 65535,
+                "minimum": 1,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "from",
+              "to"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
         "ssh_ports": {
           "items": {
             "type": "integer"
           },
           "type": "array"
         },
+        "tcp_port_ranges": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "from": {
+                "maximum": 65535,
+                "minimum": 1,
+                "type": "integer"
+              },
+              "network": {
+                "type": "string"
+              },
+              "to": {
+                "maximum": 65535,
+                "minimum": 1,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "from",
+              "to"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
         "tcp_ports": {
           "items": {
             "type": "integer"
+          },
+          "type": "array"
+        },
+        "udp_port_ranges": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "from": {
+                "maximum": 65535,
+                "minimum": 1,
+                "type": "integer"
+              },
+              "network": {
+                "type": "string"
+              },
+              "to": {
+                "maximum": 65535,
+                "minimum": 1,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "from",
+              "to"
+            ],
+            "type": "object"
           },
           "type": "array"
         },

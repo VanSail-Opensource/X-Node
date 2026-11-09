@@ -39,6 +39,11 @@ func forwardingPolicy() []protocol.Forward {
 	var result []protocol.Forward
 	for _, network := range []string{"tcp", "udp"} {
 		result = append(result, protocol.Forward{ListenIP: "198.18.0.1", Port: 24443, TargetIP: "198.18.0.6", TargetPort: 9000, Network: network}, protocol.Forward{ListenIP: "2001:db8:1::1", Port: 24443, TargetIP: "2001:db8:2::2", TargetPort: 9000, Network: network})
+		for _, pair := range []struct{ listen, target string }{{"198.18.0.1", "198.18.0.6"}, {"2001:db8:1::1", "2001:db8:2::2"}} {
+			result = append(result,
+				protocol.Forward{ListenIP: pair.listen, Port: 24500, PortEnd: 24502, TargetIP: pair.target, TargetPort: 9000, Network: network},
+				protocol.Forward{ListenIP: pair.listen, Port: 24600, PortEnd: 24602, TargetIP: pair.target, TargetPort: 9001, TargetPortEnd: 9003, Network: network})
+		}
 	}
 	return result
 }
@@ -54,10 +59,10 @@ def serve(family,kind,address,port):
   if kind==socket.SOCK_STREAM:
    while True:
     c,_=s.accept()
-    with c: c.sendall(c.recv(1024))
+    with c: c.sendall((str(port).encode()+b':' if 9001<=port<=9004 else b'')+c.recv(1024))
   else:
    while True:
-    data,peer=s.recvfrom(1024);s.sendto(data,peer)
+    data,peer=s.recvfrom(1024);s.sendto((str(port).encode()+b':' if 9001<=port<=9004 else b'')+data,peer)
  threading.Thread(target=run,daemon=True).start()
 for family,address in [(socket.AF_INET,'0.0.0.0'),(socket.AF_INET6,'::')]:
  for kind in [socket.SOCK_STREAM,socket.SOCK_DGRAM]: serve(family,kind,address,int(sys.argv[1]))
@@ -103,9 +108,10 @@ const echoProbe = `import socket,sys
 family=socket.AF_INET6 if ':' in sys.argv[1] else socket.AF_INET
 kind=socket.SOCK_STREAM if sys.argv[3]=='tcp' else socket.SOCK_DGRAM
 s=socket.socket(family,kind);s.settimeout(2)
-if len(sys.argv)>4: s.bind((sys.argv[4],0))
+if len(sys.argv)>4 and sys.argv[4]: s.bind((sys.argv[4],0))
 s.connect((sys.argv[1],int(sys.argv[2])));s.sendall(b'x-node-fixture')
-assert s.recv(128)==b'x-node-fixture'
+expected=(sys.argv[5].encode()+b':' if len(sys.argv)>5 else b'')+b'x-node-fixture'
+assert s.recv(128)==expected
 `
 
 const closedProbe = `import socket,sys
@@ -127,13 +133,21 @@ func packetChecks(ctx context.Context, r host.Runner) error {
 		return err
 	}
 	defer stop()
+	stopUpper, err := startEcho(ctx, "", "65535")
+	if err != nil {
+		return err
+	}
+	defer stopUpper()
 	stopTarget, err := startEcho(ctx, "xnode-target", "9000")
 	if err != nil {
 		return err
 	}
 	defer stopTarget()
+	if err := rangePacketChecks(ctx, r); err != nil {
+		return err
+	}
 	for _, addr := range []string{"198.18.0.1", "2001:db8:1::1"} {
-		for _, port := range []string{"9443", "24443"} {
+		for _, port := range []string{"9443", "24443", "65535"} {
 			for _, network := range []string{"tcp", "udp"} {
 				if _, err := r.Run(ctx, "ip", "netns", "exec", "xnode-client", "python3", "-c", echoProbe, addr, port, network); err != nil {
 					return fmt.Errorf("%s %s:%s: %w", network, addr, port, err)
@@ -147,10 +161,17 @@ func packetChecks(ctx context.Context, r host.Runner) error {
 		return err
 	}
 	defer stopClosed()
+	stopBeforeRange, err := startEcho(ctx, "", "65533")
+	if err != nil {
+		return err
+	}
+	defer stopBeforeRange()
 	for _, addr := range []string{"198.18.0.1", "2001:db8:1::1"} {
 		for _, network := range []string{"tcp", "udp"} {
-			if _, err := r.Run(ctx, "ip", "netns", "exec", "xnode-client", "python3", "-c", closedProbe, addr, "9444", network); err != nil {
-				return fmt.Errorf("closed %s %s was not silently dropped: %w", network, addr, err)
+			for _, port := range []string{"9444", "65533"} {
+				if _, err := r.Run(ctx, "ip", "netns", "exec", "xnode-client", "python3", "-c", closedProbe, addr, port, network); err != nil {
+					return fmt.Errorf("closed %s %s:%s was not silently dropped: %w", network, addr, port, err)
+				}
 			}
 		}
 	}

@@ -166,11 +166,13 @@ type PortRange struct {
 	Network string `json:"network,omitempty"`
 }
 type Forward struct {
-	ListenIP   string `json:"listen_ip,omitempty"`
-	Port       int    `json:"port"`
-	TargetIP   string `json:"target_ip"`
-	TargetPort int    `json:"target_port"`
-	Network    string `json:"network"`
+	ListenIP      string `json:"listen_ip,omitempty"`
+	Port          int    `json:"port"`
+	PortEnd       int    `json:"port_end,omitempty"`
+	TargetIP      string `json:"target_ip"`
+	TargetPort    int    `json:"target_port"`
+	TargetPortEnd int    `json:"target_port_end,omitempty"`
+	Network       string `json:"network"`
 }
 type FirewallPolicy struct {
 	SourceGeoIP      *SourceGeoIPPolicy      `json:"source_geoip,omitempty"`
@@ -182,6 +184,9 @@ type FirewallPolicy struct {
 	TCPPorts         []int                   `json:"tcp_ports,omitempty"`
 	UDPPorts         []int                   `json:"udp_ports,omitempty"`
 	SSHPorts         []int                   `json:"ssh_ports,omitempty"`
+	TCPPortRanges    []PortRange             `json:"tcp_port_ranges,omitempty"`
+	UDPPortRanges    []PortRange             `json:"udp_port_ranges,omitempty"`
+	SSHPortRanges    []PortRange             `json:"ssh_port_ranges,omitempty"`
 	AllowPrefixes    []string                `json:"allow_prefixes,omitempty"`
 	Forward          []Forward               `json:"forward,omitempty"`
 }
@@ -244,6 +249,11 @@ func ParseConfig(b []byte) (Config, error) {
 		return c, err
 	}
 	if err := c.Validate(); err != nil {
+		return c, err
+	}
+	var err error
+	c.Firewall, err = c.Firewall.NormalizePortRanges()
+	if err != nil {
 		return c, err
 	}
 	return c, nil
@@ -335,6 +345,9 @@ func ValidName(s string) bool {
 }
 
 func (c Config) Validate() error {
+	if _, err := c.Firewall.NormalizePortRanges(); err != nil {
+		return err
+	}
 	if err := ValidateNativePolicies(c); err != nil {
 		return err
 	}

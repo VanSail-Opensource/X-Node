@@ -96,6 +96,9 @@ func reconcileNative(ctx context.Context, p protocol.FirewallPolicy, redirect bo
 	if err := plan.removeLegacyBanSets(c, exists); err != nil {
 		return err
 	}
+	if err := plan.removeObsoletePortSets(c, exists); err != nil {
+		return err
+	}
 	if err := ctx.Err(); err != nil {
 		return err
 	}

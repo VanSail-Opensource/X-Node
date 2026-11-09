@@ -20,6 +20,11 @@ func (m *Manager) Apply(ctx context.Context, id string, p protocol.FirewallPolic
 	return m.apply(ctx, id, p, redirect, redirect)
 }
 func (m *Manager) apply(ctx context.Context, id string, p protocol.FirewallPolicy, redirect, activeRedirect bool) (Pending, error) {
+	normalized, err := p.NormalizePortRanges()
+	if err != nil {
+		return Pending{}, err
+	}
+	p = normalized
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	release, err := m.locked(ctx)

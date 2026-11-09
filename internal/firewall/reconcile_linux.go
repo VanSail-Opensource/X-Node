@@ -25,7 +25,7 @@ func (b *policyPlan) reconcileSets(c *nftables.Conn, exists bool) error {
 			}
 			continue
 		}
-		if old.KeyType.Name != spec.set.KeyType.Name || old.Interval != spec.set.Interval || old.Dynamic != spec.set.Dynamic || old.HasTimeout != spec.set.HasTimeout || old.Timeout != spec.set.Timeout {
+		if old.KeyType.Name != spec.set.KeyType.Name || old.Interval != spec.set.Interval || old.IsMap != spec.set.IsMap || old.DataType.Name != spec.set.DataType.Name || old.Dynamic != spec.set.Dynamic || old.HasTimeout != spec.set.HasTimeout || old.Timeout != spec.set.Timeout {
 			return fmt.Errorf("incompatible existing set %s; refusing to discard live state", old.Name)
 		}
 		if old.Dynamic || spec.preserve {

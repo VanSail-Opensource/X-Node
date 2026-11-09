@@ -64,22 +64,22 @@ func (b *policyPlan) networkEssentials(_ bool) {
 	b.add("input", "new-not-syn", ctState(expr.CtStateBitNEW, false), flags(0x17, 2, true), b.eventDrop("invalid_packet"))
 	b.add("input", "dhcpv4", family(false), port(unix.IPPROTO_UDP, 67, false), port(unix.IPPROTO_UDP, 68, true), accept())
 	b.add("input", "dhcpv6", family(true), port(unix.IPPROTO_UDP, 547, false), port(unix.IPPROTO_UDP, 546, true), accept())
-	b.add("input", "tcp-closed", portSet(unix.IPPROTO_TCP, "tcp_ports", true), goTo("blocked"))
+	b.add("input", "tcp-closed", b.portSet(unix.IPPROTO_TCP, "tcp_ports", true), goTo("blocked"))
 	for _, v6 := range []bool{false, true} {
 		lan := "lan_v4"
 		if v6 {
 			lan = "lan_v6"
 		}
-		b.add("input", fmt.Sprintf("lan-tcp-%t", v6), sourceSet(v6, lan, false, false), portSet(unix.IPPROTO_TCP, "tcp_ports", false), ctState(expr.CtStateBitNEW, false), accept())
+		b.add("input", fmt.Sprintf("lan-tcp-%t", v6), sourceSet(v6, lan, false, false), b.portSet(unix.IPPROTO_TCP, "tcp_ports", false), ctState(expr.CtStateBitNEW, false), accept())
 	}
-	b.add("input", "udp-closed", portSet(unix.IPPROTO_UDP, "udp_ports", true), goTo("blocked"))
+	b.add("input", "udp-closed", b.portSet(unix.IPPROTO_UDP, "udp_ports", true), goTo("blocked"))
 	if _, enabled := b.policy.Rule("syn_flood"); enabled {
 		for _, v6 := range []bool{false, true} {
 			name := "syn_v4"
 			if v6 {
 				name = "syn_v6"
 			}
-			match := cat(family(v6), ctState(expr.CtStateBitNEW, false), portSet(unix.IPPROTO_TCP, "tcp_ports", false))
+			match := cat(family(v6), ctState(expr.CtStateBitNEW, false), b.portSet(unix.IPPROTO_TCP, "tcp_ports", false))
 			limit := &expr.Limit{Type: expr.LimitTypePkts, Rate: 50, Unit: expr.LimitTimeSecond, Burst: 50, Over: true}
 			action := cat(b.eventDrop("syn_flood"))
 			if v6 {
@@ -89,7 +89,7 @@ func (b *policyPlan) networkEssentials(_ bool) {
 			b.add("input", fmt.Sprintf("syn-overflow-%t", v6), match, sourceSet(v6, name, true, false), b.eventDrop("syn_flood"))
 		}
 	}
-	b.add("input", "tcp-open", portSet(unix.IPPROTO_TCP, "tcp_ports", false), ctState(expr.CtStateBitNEW, false), accept())
-	b.add("input", "udp-open", portSet(unix.IPPROTO_UDP, "udp_ports", false), ctState(expr.CtStateBitNEW, false), accept())
+	b.add("input", "tcp-open", b.portSet(unix.IPPROTO_TCP, "tcp_ports", false), ctState(expr.CtStateBitNEW, false), accept())
+	b.add("input", "udp-open", b.portSet(unix.IPPROTO_UDP, "udp_ports", false), ctState(expr.CtStateBitNEW, false), accept())
 	b.add("input", "blocked", goTo("blocked"))
 }

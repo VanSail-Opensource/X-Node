@@ -9,6 +9,8 @@ import (
 )
 
 const Version = wire.Version
+const FirewallPortRangesCapability = wire.FirewallPortRangesCapability
+const MaxForwardMapElements = wire.MaxForwardMapElements
 const MaxFrameBytes = wire.MaxFrameBytes
 const MaxFirewallEventsPerFrame = wire.MaxFirewallEventsPerFrame
 const GeoIPPrefixesPerChunk = wire.GeoIPPrefixesPerChunk
@@ -42,6 +44,12 @@ type CertConfig = config.CertConfig
 type DDNSJob = wire.DDNSJob
 type DNSPolicy = wire.DNSPolicy
 type PortRange = wire.PortRange
+
+func NormalizePortIntervals(input []PortRange) ([]PortRange, error) {
+	return wire.NormalizePortIntervals(input)
+}
+func PortBounds(start, end int) (int, int) { return wire.PortBounds(start, end) }
+
 type FirewallPolicy = wire.FirewallPolicy
 type GeoIPChunk = wire.GeoIPChunk
 type SourceGeoIPPolicy = wire.SourceGeoIPPolicy

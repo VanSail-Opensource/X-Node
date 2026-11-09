@@ -1,3 +1,18 @@
+# X-Node v2.0.23
+
+Adds negotiated `native_firewall_port_ranges_v1` support for compact TCP, UDP
+and SSH allow ranges, range-to-single forwarding and deterministic equal-length
+range-to-range forwarding. Native interval sets keep allow ranges compact;
+typed service maps preserve exact forwarding offsets without allocating one
+rule per port or choosing arbitrary target ports. Map updates and cleanup share
+the existing atomic apply/confirm/rollback transaction. Persisted desired,
+confirmed and rollback policies prevent replacement with a range-blind binary.
+
+Masters must gate range delivery on the capability and use the matching public
+protocol package. Existing singleton fields and legacy singleton policies remain
+readable. Hosted regressions include boundary normalization, map updates,
+downgrade protection and real TCP/UDP IPv4/IPv6 packet checks in disposable VMs.
+
 # X-Node v2.0.22
 
 Separates historical hourly traffic receipts from live hourly admission.

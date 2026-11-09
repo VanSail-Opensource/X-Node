@@ -18,6 +18,7 @@ func TestPersistedPolicyCapabilitiesSurviveUpgradeAndRollback(t *testing.T) {
 	}{
 		{name: "disk sources", marker: "disk-sources-v1", capability: "disk_firewall_sources_v1"},
 		{name: "CIDR exemptions", marker: "cidr-exemptions-v1", capability: "firewall_cidr_exemptions_v1"},
+		{name: "compact firewall ranges", capability: protocol.FirewallPortRangesCapability, policy: protocol.Config{Firewall: protocol.FirewallPolicy{UDPPortRanges: []protocol.PortRange{{From: 1000, To: 2000}}}}},
 		{name: "streamed country ranges", capability: "source_geoip_stream_v1", policy: protocol.Config{Firewall: protocol.FirewallPolicy{SourceGeoIP: &protocol.SourceGeoIPPolicy{Reference: true}}}},
 		{name: "node file certificate", capability: "node_file_certificates_v1", policy: protocol.Config{Certificates: map[string]protocol.Certificate{"tls": {Config: config.CertConfig{CertMode: "file", CertFile: "/private/cert.pem", KeyFile: "/private/key.pem"}}}}},
 	} {

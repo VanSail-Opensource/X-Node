@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"github.com/VanSail-Opensource/X-Node/internal/protocol"
+	"github.com/google/nftables"
 	"github.com/google/nftables/binaryutil"
 	"github.com/google/nftables/expr"
 	"golang.org/x/sys/unix"
@@ -33,7 +34,9 @@ func (b *policyPlan) nat(forwards []protocol.Forward, redirect bool) {
 		if f.Network == "udp" {
 			proto = unix.IPPROTO_UDP
 		}
-		id := fmt.Sprintf("forward-%x", sha256.Sum256([]byte(fmt.Sprintf("%s/%d/%s/%s/%d", f.ListenIP, f.Port, f.Network, target, f.TargetPort))))
+		from, to := protocol.PortBounds(f.Port, f.PortEnd)
+		targetFrom, targetTo := protocol.PortBounds(f.TargetPort, f.TargetPortEnd)
+		id := fmt.Sprintf("forward-%x", sha256.Sum256([]byte(fmt.Sprintf("%s/%d-%d/%s/%s/%d-%d", f.ListenIP, from, to, f.Network, target, targetFrom, targetTo))))
 		if seen[id] {
 			continue
 		}
@@ -43,13 +46,30 @@ func (b *policyPlan) nat(forwards []protocol.Forward, redirect bool) {
 			ip := netip.MustParseAddr(f.ListenIP)
 			match = address(netip.PrefixFrom(ip, ip.BitLen()).String(), true, false)
 		}
-		b.add("prerouting", id, match, port(proto, uint16(f.Port), true), expressions{
-			&expr.Immediate{Register: 1, Data: target.AsSlice()}, &expr.Immediate{Register: 2, Data: binaryutil.BigEndian.PutUint16(uint16(f.TargetPort))},
+		translation := expressions{&expr.Immediate{Register: 2, Data: binaryutil.BigEndian.PutUint16(uint16(targetFrom))}}
+		if targetTo != targetFrom {
+			name := forwardingMapName(f)
+			elements := make([]nftables.SetElement, 0, to-from+1)
+			for port := from; port <= to; port++ {
+				elements = append(elements, nftables.SetElement{Key: binaryutil.BigEndian.PutUint16(uint16(port)), Val: binaryutil.BigEndian.PutUint16(uint16(targetFrom + port - from))})
+			}
+			b.sets = append(b.sets, setSpec{set: &nftables.Set{Table: b.table, Name: name, KeyType: nftables.TypeInetService, DataType: nftables.TypeInetService, IsMap: true}, elements: elements})
+			translation = expressions{&expr.Lookup{SourceRegister: 1, DestRegister: 2, IsDestRegSet: true, SetName: name}}
+		}
+		b.add("prerouting", id, match, portInterval(proto, from, to), translation, expressions{
+			&expr.Immediate{Register: 1, Data: target.AsSlice()},
 			&expr.NAT{Type: expr.NATTypeDestNAT, Family: fam, RegAddrMin: 1, RegProtoMin: 2},
 		})
-		b.add("forward", id, dnat(), address(netip.PrefixFrom(target, target.BitLen()).String(), true, false), port(proto, uint16(f.TargetPort), true), accept())
+		b.add("forward", id, family(v6), dnat(), originalForward(f), address(netip.PrefixFrom(target, target.BitLen()).String(), true, false), portInterval(proto, targetFrom, targetTo), accept())
 	}
 	b.add("postrouting", "masquerade", dnat(), expressions{&expr.Masq{}})
+}
+
+func forwardingMapName(f protocol.Forward) string {
+	// Target ports are values rather than identity, allowing atomic value updates.
+	_, to := protocol.PortBounds(f.Port, f.PortEnd)
+	hash := sha256.Sum256([]byte(fmt.Sprintf("%s/%d-%d/%s/%s", f.ListenIP, f.Port, to, f.Network, f.TargetIP)))
+	return fmt.Sprintf("forward_ports_%x", hash[:12])
 }
 func dnat() expressions {
 	// Linux UAPI enum ip_conntrack_status: IPS_DST_NAT_BIT = 5.

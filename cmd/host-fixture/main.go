@@ -67,6 +67,8 @@ func main() {
 	}
 	m := &firewall.Manager{Dir: "/var/lib/x-node/firewall", ConfigPath: "/etc/nftables.conf", Executable: "/usr/local/bin/xnodectl", Runner: runner, RecoveryTimeout: recoveryTimeout}
 	policy := protocol.FirewallPolicy{Enabled: true, Protect: true, MasterControlled: true, TCPPorts: []int{443, 9443}, UDPPorts: []int{443, 9443}, SSHPorts: []int{22}, Forward: forwardingPolicy()}
+	policy.TCPPortRanges = []protocol.PortRange{{From: 65534, To: 65535}}
+	policy.UDPPortRanges = []protocol.PortRange{{From: 65534, To: 65535}}
 	pending, e := m.Apply(ctx, "fixture-rollback", policy, false)
 	if e != nil {
 		fail(e)
@@ -94,6 +96,9 @@ func main() {
 		fail(e)
 	}
 	if e = probeModeChecks(ctx, m, policy, runner); e != nil {
+		fail(e)
+	}
+	if e = rangeStateChecks(ctx, m, policy, runner); e != nil {
 		fail(e)
 	}
 	if e = liveStateChecks(ctx, m, policy); e != nil {

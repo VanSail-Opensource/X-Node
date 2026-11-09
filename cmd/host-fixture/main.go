@@ -98,8 +98,7 @@ func main() {
 	if e = probeModeChecks(ctx, m, policy, runner); e != nil {
 		fail(e)
 	}
-	// Check the one-minute SYN meter while probe traffic is still fresh.
-	if e = liveStateChecks(ctx, m, policy); e != nil {
+	if e = liveStateChecks(ctx, m, policy, runner); e != nil {
 		fail(e)
 	}
 	if e = rangeStateChecks(ctx, m, policy, runner); e != nil {

@@ -36,7 +36,7 @@ func ruleHandles(c *nftables.Conn, t *nftables.Table) (map[string]uint64, error)
 	}
 	return result, nil
 }
-func liveStateChecks(ctx context.Context, m *firewall.Manager, p protocol.FirewallPolicy) error {
+func liveStateChecks(ctx context.Context, m *firewall.Manager, p protocol.FirewallPolicy, runner host.Runner) error {
 	c := &nftables.Conn{}
 	table := &nftables.Table{Name: "x_node", Family: nftables.TableFamilyINet}
 	ban, err := c.GetSetByName(table, "banned_v4_v2")
@@ -62,9 +62,9 @@ func liveStateChecks(ctx context.Context, m *firewall.Manager, p protocol.Firewa
 	if err != nil {
 		return err
 	}
-	meterBefore, err := c.GetSetElements(meters)
-	if err != nil || len(meterBefore) == 0 {
-		return fmt.Errorf("SYN meter missing: %w", err)
+	meterBefore, err := freshSYNMeter(ctx, c, meters, runner)
+	if err != nil {
+		return err
 	}
 	if err := legacyBanFixture(c, table); err != nil {
 		return err
@@ -110,8 +110,17 @@ func liveStateChecks(ctx context.Context, m *firewall.Manager, p protocol.Firewa
 		return fmt.Errorf("incremental update lost ban expiry")
 	}
 	meterAfter, err := c.GetSetElements(meters)
-	if err != nil || len(meterAfter) < len(meterBefore) {
-		return fmt.Errorf("incremental update lost meters: %w", err)
+	if err != nil {
+		return fmt.Errorf("read incremental SYN meters: %w", err)
+	}
+	found = false
+	for _, entry := range meterAfter {
+		if reflect.DeepEqual(entry.Key, meterBefore.Key) && entry.Expires > 0 {
+			found = true
+		}
+	}
+	if !found {
+		return fmt.Errorf("incremental update lost freshly observed SYN meter %s", netip.AddrFrom4([4]byte{198, 18, 0, 2}))
 	}
 	tables, err := c.ListTables()
 	if err != nil {
@@ -123,6 +132,40 @@ func liveStateChecks(ctx context.Context, m *firewall.Manager, p protocol.Firewa
 		}
 	}
 	return nil
+}
+
+// Create fresh real input traffic so unrelated old meter expirations cannot
+// masquerade as state loss while a slow disposable VM applies the next policy.
+func freshSYNMeter(ctx context.Context, c *nftables.Conn, set *nftables.Set, runner host.Runner) (nftables.SetElement, error) {
+	probe, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	key := []byte{198, 18, 0, 2}
+	// Destroy is idempotent when an old entry already expired. Touch only the
+	// fixture client's key; all other dynamic meters remain part of the audit.
+	if err := c.SetDestroyElements(set, []nftables.SetElement{{Key: key}}); err != nil {
+		return nftables.SetElement{}, fmt.Errorf("reset fixture SYN meter: %w", err)
+	}
+	if err := c.Flush(); err != nil {
+		return nftables.SetElement{}, fmt.Errorf("commit fixture SYN meter reset: %w", err)
+	}
+	stop, err := startEcho(probe, "", "9443")
+	if err != nil {
+		return nftables.SetElement{}, err
+	}
+	defer stop()
+	if _, err = runner.Run(probe, "ip", "netns", "exec", "xnode-client", "python3", "-c", echoProbe, "198.18.0.1", "9443", "tcp", "198.18.0.2"); err != nil {
+		return nftables.SetElement{}, fmt.Errorf("fresh untrusted SYN probe: %w", err)
+	}
+	entries, err := c.GetSetElements(set)
+	if err != nil {
+		return nftables.SetElement{}, fmt.Errorf("read fresh SYN meter: %w", err)
+	}
+	for _, entry := range entries {
+		if reflect.DeepEqual(entry.Key, key) && entry.Expires > 0 {
+			return entry, nil
+		}
+	}
+	return nftables.SetElement{}, fmt.Errorf("fresh untrusted SYN did not create its expiring meter")
 }
 
 func watchdogCheck(ctx context.Context, m *firewall.Manager, p protocol.FirewallPolicy, runner host.Runner) error {

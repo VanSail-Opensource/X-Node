@@ -2,7 +2,7 @@ package xray
 
 import (
 	"context"
-	"errors"
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -119,7 +119,7 @@ func (r *Runtime) ApplyPrepared(ctx context.Context, next *Prepared, force bool)
 				_ = r.start(ctx, rollback, safe)
 			}
 		}
-		return errors.New("Xray listener activation failed")
+		return fmt.Errorf("Xray listener activation failed: %w", err)
 	}
 	r.stats.Rebuilds++
 	r.stats.MatcherBuilds += uint64(len(next.Router.Rule))

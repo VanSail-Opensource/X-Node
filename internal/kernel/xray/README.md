@@ -67,6 +67,16 @@ credential rotation, expiry and SS-2022 authentication in hosted Linux CI.
 Stream assertions wait for successful server writes to publish their counters;
 receiving a response on the client can precede that publication.
 
+Hysteria inbounds (`protocol: "hysteria"`) deliberately skip the managed-inbound
+observation wrapper. The Xray TCP worker reads the QUIC validator from the
+concrete `*hysteria.Server`; wrapping it in `observedInbound` hides that type and
+the listener fails with `transport/internet/hysteria: validator is nil`. The
+unwrapped server still implements native user management, so admission and
+accounting continue to apply, but inbound observation events (firewall rule
+evidence) are not produced for Hysteria flows. `hysteria_unwrapped_test.go`
+holds the unwrapped proxy settings, and `Runtime` failures now retain the
+underlying Xray listener error instead of a bare summary.
+
 `dns.go` adds authenticated-inbound-only port-53 routing and a reserved core DNS
 identity. Internal queries use their own freedom outbound with explicit local
 resolver access. No DNS listener is opened and no host packet is redirected.

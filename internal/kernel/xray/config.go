@@ -66,6 +66,21 @@ func PrepareCached(c protocol.Config, previous *Prepared) (*Prepared, error) {
 	if err := json.Unmarshal(c.Xray, &root); err != nil || root == nil {
 		return nil, errors.New("invalid native configuration")
 	}
+	// xray-core reads the Hysteria QUIC validator from the concrete
+	// *hysteria.Server when the TCP worker starts. The observation wrapper
+	// replaces that concrete type, which leaves the validator nil and makes the
+	// listener fail to start, so Hysteria inbounds must stay unwrapped.
+	rawHysteria := map[string]bool{}
+	if nativeInbounds, ok := root["inbounds"].([]any); ok {
+		for _, raw := range nativeInbounds {
+			inbound, _ := raw.(map[string]any)
+			inboundTag, _ := inbound["tag"].(string)
+			proto, _ := inbound["protocol"].(string)
+			if proto == "hysteria" && inboundTag != "" {
+				rawHysteria[inboundTag] = true
+			}
+		}
+	}
 	supported := map[string]bool{}
 	typ := reflect.TypeOf(conf.Config{})
 	for i := 0; i < typ.NumField(); i++ {
@@ -137,7 +152,7 @@ func PrepareCached(c protocol.Config, previous *Prepared) (*Prepared, error) {
 			return nil, err
 		}
 		_, wrapped := obj.(*InboundConfig)
-		if !auxiliary[in.Tag] && !wrapped {
+		if !auxiliary[in.Tag] && !rawHysteria[in.Tag] && !wrapped {
 			reality := false
 			for _, raw := range inbounds {
 				item, _ := raw.(map[string]any)

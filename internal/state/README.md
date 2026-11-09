@@ -6,6 +6,12 @@ acceptance clears them. `connection_controls.go` excludes connection-derived
 admission decisions from durable snapshots. `configuration.go` provides bounded
 configuration copies and metadata without copying traffic or credentials.
 
+`dns_migration.go` normalizes both accepted and staged legacy resolver settings
+in memory during `Open`, before bootstrap or configuration readers see them.
+It delegates to the public protocol migration and does not rewrite the state
+file just for DNS, alter identities/revisions or clear accounting. A later normal
+configuration persistence includes the normalized node snapshot.
+
 `authorization.go` publishes detached `AuthorizationView` snapshots containing
 users, scoped IP blocks, the durable authorization revision and a process-local
 monotonic publication sequence. `AuthorizeView` validates identity replacements

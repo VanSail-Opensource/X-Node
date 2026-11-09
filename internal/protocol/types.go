@@ -156,8 +156,10 @@ type DDNSJob struct {
 	IntervalSeconds int    `json:"interval_seconds,omitempty"`
 }
 type DNSPolicy struct {
-	Mode      string   `json:"mode,omitempty"`
-	Redirect  bool     `json:"redirect,omitempty"`
+	// Deprecated: resolver selection is normalized to Xray at input/bootstrap.
+	Mode     string `json:"mode,omitempty"`
+	Redirect bool   `json:"redirect,omitempty"`
+	// Deprecated: native Xray dns.servers alone determines upstream resolvers.
 	Upstreams []string `json:"upstreams,omitempty"`
 }
 type PortRange struct {
@@ -248,10 +250,14 @@ func ParseConfig(b []byte) (Config, error) {
 	if err := Decode(b, &c); err != nil {
 		return c, err
 	}
+	var err error
+	c, err = c.NormalizeDNS()
+	if err != nil {
+		return c, err
+	}
 	if err := c.Validate(); err != nil {
 		return c, err
 	}
-	var err error
 	c.Firewall, err = c.Firewall.NormalizePortRanges()
 	if err != nil {
 		return c, err
@@ -345,6 +351,11 @@ func ValidName(s string) bool {
 }
 
 func (c Config) Validate() error {
+	var err error
+	c, err = c.NormalizeDNS()
+	if err != nil {
+		return err
+	}
 	if _, err := c.Firewall.NormalizePortRanges(); err != nil {
 		return err
 	}
@@ -367,10 +378,7 @@ func (c Config) Validate() error {
 	if json.Unmarshal(c.Xray, &native) != nil || native == nil {
 		return errors.New("xray must be an object")
 	}
-	if c.DNS.Mode != "" && c.DNS.Mode != "xray" && c.DNS.Mode != "smartdns" {
-		return errors.New("unsupported resolver mode")
-	}
-	if c.DNS.Redirect && c.DNS.Mode != "smartdns" {
+	if c.DNS.Redirect {
 		var resolver struct {
 			Servers []json.RawMessage `json:"servers"`
 		}

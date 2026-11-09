@@ -39,6 +39,11 @@ func Prepare(c protocol.Config) (*Prepared, error) {
 // PrepareCached reuses immutable sections of one previous candidate. The
 // caller owns serialization; neither source nor previous protobufs are mutated.
 func PrepareCached(c protocol.Config, previous *Prepared) (*Prepared, error) {
+	var err error
+	c, err = c.NormalizeDNS()
+	if err != nil {
+		return nil, err
+	}
 	if err := protocol.ValidateNativePolicies(c); err != nil {
 		return nil, err
 	}

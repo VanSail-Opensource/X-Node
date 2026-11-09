@@ -64,6 +64,9 @@ func Open(dir string) (*Store, error) {
 	} else if !os.IsNotExist(err) {
 		return nil, err
 	}
+	if err := normalizeCachedDNS(&s.data); err != nil {
+		return nil, err
+	}
 	if clean, changed := withoutConnectionControls(s.data); changed {
 		s.data = clean
 		if err := s.persist(clean); err != nil {

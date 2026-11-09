@@ -1,3 +1,14 @@
+# X-Node v2.0.24
+
+Retires resolver selection: DNS interception always uses native Xray DNS.
+Deprecated `dns.mode` values remain accepted for compatibility. Legacy SmartDNS
+interception without explicit native DNS servers is migrated to an explicit
+`127.0.0.1` Xray upstream before parsing, bootstrap and native preparation.
+Existing native DNS servers retain precedence. The formerly ignored
+`dns.upstreams` field remains ignored; no host resolver configuration or service
+is changed. Cached accepted and desired configurations migrate in memory,
+preserving authorization, accounting and original state-file contents.
+
 # X-Node v2.0.23
 
 Adds negotiated `native_firewall_port_ranges_v1` support for compact TCP, UDP

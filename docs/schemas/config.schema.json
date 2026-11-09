@@ -162,12 +162,21 @@
       "additionalProperties": false,
       "properties": {
         "mode": {
+          "deprecated": true,
+          "description": "Deprecated compatibility input. Empty/xray/smartdns are accepted; effective DNS always uses Xray. Legacy loopback behavior is migrated to native dns.servers.",
+          "enum": [
+            "",
+            "xray",
+            "smartdns"
+          ],
           "type": "string"
         },
         "redirect": {
           "type": "boolean"
         },
         "upstreams": {
+          "deprecated": true,
+          "description": "Ignored compatibility input. Configure upstream resolvers through native Xray dns.servers.",
           "items": {
             "type": "string"
           },

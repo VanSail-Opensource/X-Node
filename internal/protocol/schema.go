@@ -46,7 +46,7 @@ func schemaType(t reflect.Type) map[string]any {
 				required = append(required, name)
 			}
 		}
-		return firewallPortsSchema(t, hourlySchema(t, map[string]any{"type": "object", "properties": properties, "required": required, "additionalProperties": false}))
+		return dnsPolicySchema(t, firewallPortsSchema(t, hourlySchema(t, map[string]any{"type": "object", "properties": properties, "required": required, "additionalProperties": false})))
 	case reflect.Slice, reflect.Array:
 		return map[string]any{"type": "array", "items": schemaType(t.Elem())}
 	case reflect.Map:

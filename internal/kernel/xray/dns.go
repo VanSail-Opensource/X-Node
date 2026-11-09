@@ -21,12 +21,7 @@ func scopedDNS(root map[string]any, outs []any, policy protocol.DNSPolicy, users
 	}
 	servers, _ := resolver["servers"].([]any)
 	if len(servers) == 0 {
-		if policy.Mode != "smartdns" {
-			return nil, errors.New("DNS interception requires configured Xray DNS servers")
-		}
-		// Legacy SmartDNS remains an externally managed resolver. Never change
-		// its process, configuration or service ownership during an upgrade.
-		resolver["servers"] = []any{"127.0.0.1"}
+		return nil, errors.New("DNS interception requires configured Xray DNS servers")
 	}
 	resolver["tag"] = coreDNSTag
 	root["dns"] = resolver

@@ -51,13 +51,14 @@ func hotEligible(old, next *Prepared) bool {
 		for _, raw := range p.Native["outbounds"].([]any) {
 			out := raw.(map[string]any)
 			tag, _ := out["tag"].(string)
-			proxy, _ := out["proxySettings"].(map[string]any)
-			peer, _ := proxy["tag"].(string)
-			stream, _ := out["streamSettings"].(map[string]any)
-			socket, _ := stream["sockopt"].(map[string]any)
-			dialer, _ := socket["dialerProxy"].(string)
-			if changed[tag] && unsafeOutbound(raw) || changed[peer] || changed[dialer] {
+			dependencies, err := outboundDependencies(raw)
+			if err != nil || changed[tag] && unsafeOutbound(raw, dependencies) {
 				return false
+			}
+			for _, dependency := range dependencies {
+				if changed[dependency] {
+					return false
+				}
 			}
 		}
 	}

@@ -22,6 +22,9 @@ Effective download streams must also contain an address, nonzero port and an
 XHTTP transport: the pinned native builder accepts incomplete download settings
 that would later panic in its dialer. Builder-backed fixtures reject those
 shapes before listeners change, preserving native method/alias/extra precedence.
+`native_dependencies.go` shares that selection with runtime dependency graphs,
+including case-insensitive socket fields and penetrating parent sockets. It
+performs no native construction, file access or process-environment mutation.
 
 Member outbounds apply their literal-public-address and owned-peer socket rules
 to every effective XHTTP download stream. Case-insensitive native field names

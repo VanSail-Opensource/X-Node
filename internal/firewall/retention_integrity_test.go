@@ -2,6 +2,7 @@ package firewall
 
 import (
 	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -41,6 +42,16 @@ func TestCountryCleanupStillRetiresKnownUnreferencedRanges(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	unrelated := g.file("bulk/operator-notes.txt")
+	external := filepath.Join(t.TempDir(), "caller-owned.ranges")
+	for _, path := range []string{unrelated, external} {
+		if err := os.WriteFile(path, []byte("caller-owned evidence"), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.Symlink(external, g.file("bulk/src-obsolete-link.ranges")); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.WriteFile(g.file("geoip-ready.json"), []byte(`{"generation":"kept"}`), 0600); err != nil {
 		t.Fatal(err)
 	}
@@ -52,5 +63,10 @@ func TestCountryCleanupStillRetiresKnownUnreferencedRanges(t *testing.T) {
 	}
 	if _, err := os.Stat(sourcePath(g.dir, "country", "retired")); !os.IsNotExist(err) {
 		t.Fatal("unreferenced ranges were not retired", err)
+	}
+	for _, path := range []string{unrelated, external} {
+		if raw, err := os.ReadFile(path); err != nil || string(raw) != "caller-owned evidence" {
+			t.Fatal("range cleanup changed an unrelated file or followed a symlink", path, err)
+		}
 	}
 }

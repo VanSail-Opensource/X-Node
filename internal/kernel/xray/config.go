@@ -1,7 +1,6 @@
 package xray
 
 import (
-	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -21,7 +20,6 @@ type Prepared struct {
 	Native      map[string]any
 	Core        *core.Config
 	Inbounds    map[string]*core.InboundHandlerConfig
-	BaseHash    [32]byte
 	InboundBase map[string]string
 	Epochs      map[string]string
 	Auxiliary   map[string]bool
@@ -166,10 +164,7 @@ func PrepareCached(c protocol.Config, previous *Prepared) (*Prepared, error) {
 		}
 		pbmap[in.Tag] = in
 	}
-	without := protocol.Clone(root)
-	delete(without, "inbounds")
-	global, _ := json.Marshal(without)
-	p.Inbounds, p.BaseHash = pbmap, sha256.Sum256(global)
+	p.Inbounds = pbmap
 	p.Outbounds = map[string]*core.OutboundHandlerConfig{}
 	for _, out := range pb.Outbound {
 		p.Outbounds[out.Tag] = out

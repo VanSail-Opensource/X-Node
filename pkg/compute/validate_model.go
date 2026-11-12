@@ -5,7 +5,9 @@ import (
 	"math"
 )
 
-func near(a, b float64) bool { return math.Abs(a-b) <= 1e-9*max(1, math.Abs(a), math.Abs(b)) }
+func near(a, b float64) bool {
+	return valid(a) && valid(b) && math.Abs(a-b) <= 1e-9*max(1, math.Abs(a), math.Abs(b))
+}
 
 // Validate the submitted diagnostics against original observations in one
 // linear pass, without repeating gradient fitting on the master.

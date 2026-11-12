@@ -2,8 +2,6 @@ package geodata
 
 import (
 	"context"
-	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"io"
 	"os"
@@ -64,24 +62,21 @@ func pruneAbandonedStages(ctx context.Context, dir string, now time.Time) error 
 // A failed candidate cannot accumulate another complete copy on each refresh.
 // Agent native preparation serializes this with activation and validation.
 func prunePrepared(dir, candidate string) error {
-	keep := map[string]bool{candidate: true, Resolve(dir): true}
-	var previous struct {
-		Generation string `json:"generation"`
+	active, err := resolveGeneration(dir)
+	if err != nil {
+		return err
 	}
-	if raw, err := os.ReadFile(filepath.Join(dir, "previous.json")); err == nil && json.Unmarshal(raw, &previous) == nil && len(previous.Generation) == 64 {
-		if _, err = hex.DecodeString(previous.Generation); err == nil {
-			keep[filepath.Join(dir, previous.Generation)] = true
-		}
+	previous, err := generationPointer(dir, "previous.json", "", true)
+	if err != nil {
+		return err
 	}
+	keep := map[string]bool{candidate: true, active: true, previous: true}
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return err
 	}
 	for _, entry := range entries {
-		if !entry.IsDir() || len(entry.Name()) != 64 {
-			continue
-		}
-		if _, err := hex.DecodeString(entry.Name()); err != nil {
+		if !entry.IsDir() || !generationName(entry.Name()) {
 			continue
 		}
 		target := filepath.Join(dir, entry.Name())

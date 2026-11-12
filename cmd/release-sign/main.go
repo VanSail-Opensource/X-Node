@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 )
 
 func main() {
@@ -22,25 +21,7 @@ func main() {
 		fail("key-file is required")
 	}
 	if *generate {
-		if _, e := os.Stat(*keyPath); e == nil {
-			fail("private key already exists")
-		}
-		public, private, e := minisign.GenerateKey(nil)
-		if e != nil {
-			fail(e.Error())
-		}
-		secret, _ := private.MarshalText()
-		pub, _ := public.MarshalText()
-		if e = os.MkdirAll(filepath.Dir(*keyPath), 0700); e != nil {
-			fail(e.Error())
-		}
-		if e = os.WriteFile(*keyPath, secret, 0600); e != nil {
-			fail(e.Error())
-		}
-		if *publicPath == "" {
-			fail("public-out is required")
-		}
-		if e = os.WriteFile(*publicPath, pub, 0644); e != nil {
+		if e := generateKeyPair(*keyPath, *publicPath); e != nil {
 			fail(e.Error())
 		}
 		fmt.Println("Release key generated; private material was not printed.")

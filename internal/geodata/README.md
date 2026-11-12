@@ -14,3 +14,11 @@ Failed candidates are bounded to the active, previous and latest prepared genera
 `cleanup.go` also removes at most 64 day-old private download directories per
 preparation. Recent transfers and immutable serving/rollback generations remain
 protected. Hosted cleanup regressions use only temporary private directories.
+
+Active/previous generation pointers are bounded, strict regular-file reads.
+Unknown or malformed references stop publication and immutable-generation
+cleanup; they are never evidence that a serving or rollback directory is unused.
+The historical previous pointer to the flat asset directory remains readable.
+`recovery_test.go` verifies both cleanup paths preserve uncertain evidence.
+Downloaded files and their staging directory are synced before the generation
+rename, and the parent directory is synced before the candidate is returned.

@@ -168,12 +168,18 @@ func AtomicWrite(path string, b []byte, mode os.FileMode) error {
 	if err = os.Rename(tmp, path); err != nil {
 		return err
 	}
-	d, err := os.Open(filepath.Dir(path))
+	return SyncDirectory(filepath.Dir(path))
+}
+
+// SyncDirectory makes new/replaced filenames durable before their state is
+// published to callers. File.Sync alone does not persist directory entries.
+func SyncDirectory(path string) error {
+	d, err := os.Open(path)
 	if err != nil {
 		return err
 	}
 	err = d.Sync()
-	closeErr = d.Close()
+	closeErr := d.Close()
 	if err != nil {
 		return err
 	}

@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"io"
 	"os"
+
+	"github.com/VanSail-Opensource/X-Node/internal/state"
 )
 
 func kernelChange(record journalRecord) bool {
@@ -110,6 +112,12 @@ func (g *Guard) appendPrepared(record journalRecord) error {
 		return errors.Join(err, truncateErr, closeErr)
 	}
 	if err = file.Close(); err != nil {
+		return err
+	}
+	// The first append after checkpoint compaction creates a new filename.
+	// Retry this sync even if a previous attempt wrote a complete member but
+	// could not make the directory entry durable.
+	if err = state.SyncDirectory(g.dir); err != nil {
 		return err
 	}
 	g.applyRecord(record)

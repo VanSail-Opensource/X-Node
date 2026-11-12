@@ -1,9 +1,6 @@
 package firewall
 
-import (
-	"github.com/VanSail-Opensource/X-Node/internal/protocol"
-	"time"
-)
+import "github.com/VanSail-Opensource/X-Node/internal/protocol"
 
 const maxBanStateBytes = 512 << 20
 
@@ -66,7 +63,6 @@ func (g *Guard) applyRecord(record journalRecord) {
 			g.sourceBanCount--
 		}
 		delete(g.state.Bans, prefix)
-		g.resetAt[prefix] = time.Now().UTC()
 	}
 	for _, ip := range record.RemoveExemptions {
 		delete(g.state.Exemptions, ip)
@@ -80,10 +76,6 @@ func (g *Guard) applyRecord(record journalRecord) {
 		source := g.state.Sources[id]
 		source.BaseExpired = true
 		g.state.Sources[id] = source
-	}
-	if len(g.resetAt) > 65536 {
-		clear(g.resetAt)
-		clear(g.windows)
 	}
 	for _, id := range record.Ack {
 		if event, ok := g.state.Events[id]; ok && event.Kind == "source_expired" {

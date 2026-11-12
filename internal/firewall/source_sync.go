@@ -136,14 +136,21 @@ func (g *Guard) syncSources(ctx context.Context, update protocol.FirewallUpdate)
 		g.mu.Unlock()
 		return err
 	}
-	if err := g.compact(); err != nil {
+	err = g.compact()
+	if err != nil && g.state.JournalEpoch == previous.JournalEpoch {
 		g.state = previous
 		g.mu.Unlock()
 		return err
 	}
+	// A new journal epoch means the checkpoint was already published. An
+	// obsolete journal unlink can still fail afterwards; retaining the old
+	// memory state would write subsequent receipts under a retired epoch.
 	g.closeSourceLookups()
 	g.dirty, g.sourcesDirty = true, true
 	g.mu.Unlock()
+	if err != nil {
+		return err
+	}
 	if err := g.clearSourceStage(); err != nil {
 		return err
 	}

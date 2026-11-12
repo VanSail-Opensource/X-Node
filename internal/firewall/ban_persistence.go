@@ -11,7 +11,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/VanSail-Opensource/X-Node/internal/protocol"
 	"github.com/VanSail-Opensource/X-Node/internal/state"
 )
 
@@ -37,17 +36,10 @@ func (g *Guard) load() error {
 			_ = file.Close()
 			return e
 		}
-		decoder := json.NewDecoder(io.LimitReader(reader, maxBanStateBytes+1))
-		e = g.decodeBanState(decoder)
-		if e == nil {
-			_, e = io.Copy(io.Discard, reader)
-		}
+		e = g.decodeBanSnapshot(reader, maxBanStateBytes)
 		closeErr := errors.Join(reader.Close(), file.Close())
 		if e = errors.Join(e, closeErr); e != nil {
 			return e
-		}
-		if g.state.Bans == nil || g.state.Exemptions == nil || g.state.Sources == nil || g.state.Events == nil || !protocol.ValidName(g.state.EventNamespace) || !protocol.ValidName(g.state.JournalEpoch) {
-			return errors.New("invalid persisted firewall state")
 		}
 		g.haveSnapshot = true
 	} else if !os.IsNotExist(err) {

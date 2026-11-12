@@ -59,7 +59,10 @@ func (g *Guard) cleanupSourceFiles() error {
 		return nil
 	}
 	keep := map[string]bool{}
-	g.retainCountryFiles(keep)
+	if err := g.retainCountryFiles(keep); err != nil {
+		// Unknown recovery dependencies are not evidence of unused ranges.
+		return err
+	}
 	g.mu.Lock()
 	for id, source := range g.state.Sources {
 		if source.Expired {

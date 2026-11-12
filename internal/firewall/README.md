@@ -131,8 +131,9 @@ The deprecated redirect argument remains readable for upgrade compatibility; it 
 restrictions. Default detection is three hits in 24 hours; no detector can add
 a ban. `nflog_linux.go` reads Linux NFLOG group 100 using bounded header-only
 packet copies, without parsing kernel text logs. Xray supplies public inbound
-observations. Disabled rules do not report; blacklist hits extend existing
-authorized deadlines without creating fresh detection reports.
+observations. Disabled rules do not report; blacklist hits never extend
+master-authorized deadlines or create fresh detection reports. Obsolete local
+extension/reset-window fields and the unused source preparation wrapper are removed.
 
 `ban_sync.go`, `ban_snapshot.go`, `ban_update.go` and `ban_validation.go` implement
 ordered snapshots, source references and immediate deltas. Master versions and
@@ -142,7 +143,10 @@ can shorten a restriction. Exact exemptions bypass blacklist lookup only and
 never bypass ordinary port, invalid-packet or forwarding checks.
 
 `ban_journal.go`, `ban_persistence.go` and `ban_writes.go` use private gzip
-checkpoints plus a bounded append journal. Changes fsync before command success.
+checkpoints plus a bounded append journal. File contents and the journal's
+directory entry fsync before command success, including retries after an uncertain
+directory barrier. Recovery rejects incomplete/duplicate checkpoint metadata and
+trailing documents, and enforces the decompressed limit through the gzip footer.
 A stable event namespace and monotonic sequence allow replay-safe master cursors.
 Repeated acknowledgments of already-retired events do not append another journal
 record; pending writes are flushed before determining which IDs remain active.
@@ -150,7 +154,14 @@ Hosted `BenchmarkDuplicateFirewallAcknowledgment` compares duplicate journal
 writes with the no-op path on the same private state fixture.
 Acknowledged events and expired records are pruned; torn final journal members
 are removed without losing committed records. Compaction epochs prevent stale
-journal replay, and expiry acknowledgments cannot remove a newer source.
+journal replay, and expiry acknowledgments cannot remove a newer source. If old
+journal cleanup fails after publishing a source checkpoint, memory retains the
+published epoch so later receipts remain readable after restart.
+Expiry shares the detector's 4096 pending-event budget. Full queues defer only
+durable retirement/report creation; absolute deadlines still remove kernel and
+operational restrictions. ACKs resume retirement without discarding reports.
+Immediate exemptions share the 100,000-grant full-snapshot budget. Existing
+historical overflow can shrink or replace entries without silent eviction.
 
 `ban_backend.go`, `ban_sets_linux.go`, `ban_rules_linux.go`, `source_sets_linux.go`
 and `ban_other.go` bind durable state to native sets. Large source generations
@@ -177,12 +188,16 @@ private fixed-width files. Sorting retains roughly one MiB of records plus
 bounded merge readers; overlaps and adjacent ranges merge without enumerating
 addresses. `source_sync.go`/`source_stage.go` publish metadata only after all
 files are durable. `source_load.go` streams old gzip snapshots into this format.
-The old snapshot stays readable by the rollback binary until upgrade confirmation.
+The decoder marks migrated inline sources so the old snapshot stays readable by
+the rollback binary until upgrade confirmation. Compaction cannot retire that
+legacy representation while the upgrade is pending or unreadable.
 
 `bulk_lock.go`, `source_cleanup.go` and `source_retention.go` serialize writers and
 remove scratch/unused generations. Bulk storage, including staging/runs, has a
 2 GiB ceiling and a 16 MiB filesystem reserve. `memory_admission_linux.go`
 requires kernel-set staging headroom; admission errors preserve active rules.
+Unreadable country pointers or policy recovery records defer range-file deletion;
+uncertain references never count as evidence that a generation is unused.
 `range_sets_linux.go` populates unreferenced sets in 512-element transactions.
 
 `geoip_sync.go`/`geoip_sets_linux.go` implement `firewall.geoip.sync`: the master

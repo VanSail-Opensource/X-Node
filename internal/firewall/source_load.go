@@ -59,11 +59,16 @@ func (g *Guard) decodeBanState(d *json.Decoder) error {
 		return errors.New("invalid firewall state")
 	}
 	fields := map[string]any{"source_master_version": &g.state.SourceMasterVersion, "source_revision": &g.state.SourceRevision, "master_version": &g.state.MasterVersion, "event_namespace": &g.state.EventNamespace, "next_event": &g.state.NextEvent, "revision": &g.state.Revision, "bans": &g.state.Bans, "exemptions": &g.state.Exemptions, "events": &g.state.Events, "snapshot_id": &g.state.SnapshotID, "journal_epoch": &g.state.JournalEpoch}
+	seen := map[string]bool{}
 	for d.More() {
 		key, err := d.Token()
 		if err != nil {
 			return err
 		}
+		if seen[key.(string)] {
+			return errors.New("duplicate firewall state field")
+		}
+		seen[key.(string)] = true
 		if key == "sources" {
 			if err = g.decodeSources(d); err != nil {
 				return err
@@ -95,6 +100,9 @@ func (g *Guard) decodeSources(d *json.Decoder) error {
 		if len(g.state.Sources) >= 128 {
 			return errors.New("source capacity exceeded")
 		}
+		if _, exists := g.state.Sources[key.(string)]; exists {
+			return errors.New("duplicate firewall source")
+		}
 		source, err := g.decodeSource(d)
 		if err != nil {
 			return err
@@ -114,6 +122,7 @@ func (g *Guard) decodeSource(d *json.Decoder) (sourceState, error) {
 		return source, errors.New("invalid source record")
 	}
 	fields := map[string]any{"id": &source.ID, "generation": &source.Generation, "until": &source.Until, "refresh_seconds": &source.RefreshSeconds, "reference": &source.Reference, "expired": &source.Expired, "base_expired": &source.BaseExpired, "prefix_count": &source.PrefixCount, "previous_generation": &source.PreviousGeneration}
+	seen := map[string]bool{}
 	var staged string
 	defer func() {
 		if staged != "" {
@@ -125,6 +134,10 @@ func (g *Guard) decodeSource(d *json.Decoder) (sourceState, error) {
 		if err != nil {
 			return source, err
 		}
+		if seen[key.(string)] {
+			return source, errors.New("duplicate firewall source field")
+		}
+		seen[key.(string)] = true
 		if key != "prefixes" {
 			pointer, ok := fields[key.(string)]
 			if !ok {
@@ -179,6 +192,9 @@ func (g *Guard) decodeSource(d *json.Decoder) (sourceState, error) {
 		return source, err
 	}
 	if staged != "" {
+		// Keep the old inline checkpoint readable by an unconfirmed rollback
+		// binary. In-memory ranges may migrate now; compaction must wait.
+		g.legacySources = true
 		err = g.migrateSourceFile(&source, staged, sourcePath(g.dir, source.ID, source.Generation))
 	}
 	return source, err

@@ -62,7 +62,7 @@ func (g *Guard) commitSnapshot(id string, version uint64) error {
 			exemption.IP = key
 			next.Exemptions[exemption.IP] = exemption
 		}
-		if len(next.Bans) > masterBanLimit || len(next.Exemptions) > 100000 {
+		if len(next.Bans) > masterBanLimit || len(next.Exemptions) > maxFirewallExemptions {
 			return errors.New("dynamic snapshot capacity exceeded")
 		}
 	}
@@ -73,11 +73,6 @@ func (g *Guard) commitSnapshot(id string, version uint64) error {
 				localCount++
 				next.Bans[prefix] = ban
 			}
-		}
-	}
-	for prefix := range g.state.Bans {
-		if _, exists := next.Bans[prefix]; !exists {
-			g.resetAt[prefix] = time.Now().UTC()
 		}
 	}
 	grants := make([]protocol.FirewallExemption, 0, len(next.Exemptions))

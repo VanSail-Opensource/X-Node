@@ -46,6 +46,8 @@ func TestMalformedXHTTPSettingsPreserveServingListenerAndAccountedStreams(t *tes
 		{"h2Params": badH2},
 		{"extra": map[string]any{"h2Params": badH2}},
 		{"extra": map[string]any{"downloadSettings": map[string]any{"network": "xhttp", "xhttpSettings": map[string]any{"h2Params": badH2}}}},
+		{"downloadSettings": map[string]any{"network": "xhttp", "port": 443}},
+		{"downloadSettings": map[string]any{"address": "127.0.0.1", "port": 443, "network": "tcp"}},
 	} {
 		t.Run(fmt.Sprint(index), func(t *testing.T) {
 			invalid := editNative(t, config, func(root map[string]any) {

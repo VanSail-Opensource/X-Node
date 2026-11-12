@@ -75,3 +75,9 @@ unused credit. Restart converts unsealed reservations into durable unknown
 proofs without usable markers. It never invents usage or unused balances.
 Acknowledgments retire only the matching final digest. Corruption, capacity and
 I/O failures preserve the original evidence and disable hourly access alone.
+
+`RequiresCompatibleBinary` validates the retained journal for upgrade and
+rollback checks without opening a live store or recovering obligations. Any
+issued sequence requires hourly-aware binaries even after ACK compaction. An
+absent or pristine journal does not impose that requirement. The compatibility
+tests verify that inspection preserves live activation and the original bytes.

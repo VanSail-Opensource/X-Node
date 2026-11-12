@@ -3,6 +3,7 @@ package update
 import (
 	"encoding/json"
 	"errors"
+	"github.com/VanSail-Opensource/X-Node/internal/hourly"
 	"github.com/VanSail-Opensource/X-Node/internal/protocol"
 	"os"
 	"path/filepath"
@@ -15,23 +16,16 @@ import (
 func (m *Manager) Pending() bool {
 	// The transaction is atomically replaced; do not join the installer here.
 	// Pending is called from the main loop and reconnect hello during shutdown.
-	transaction, err := m.read()
-	if os.IsNotExist(err) {
-		return false
-	}
-	if err != nil {
-		return true
-	}
-	switch transaction.Status {
-	case "confirmed", "rolled_back", "failed":
-		return false
-	default:
-		return true
-	}
+	pending, err := PendingTransaction(m.Dir)
+	return err != nil || pending
 }
 
 // requiredCapabilities prevents downgrades from silently ignoring cached policy or journals.
 func (m *Manager) requiredCapabilities() ([]string, error) {
+	hourlyRequired, err := hourly.RequiresCompatibleBinary(filepath.Join(filepath.Dir(m.Dir), "hourly-credits.json"))
+	if err != nil {
+		return nil, errors.New("cannot inspect hourly credit compatibility")
+	}
 	nativeFirewall, err := m.nativeFirewallRequired()
 	if err != nil {
 		return nil, err
@@ -54,25 +48,26 @@ func (m *Manager) requiredCapabilities() ([]string, error) {
 	}
 	controlRequired := false
 	ownershipRequired := false
-	compatRequired := false
 	if _, e := os.Stat(filepath.Join(filepath.Dir(m.Dir), "firewall", "original-services.json")); e == nil {
 		ownershipRequired = true
 	} else if !os.IsNotExist(e) {
 		return nil, e
 	}
-	if _, e := os.Stat(filepath.Join(filepath.Dir(m.Dir), "firewall", "original-compat.json")); e == nil {
-		compatRequired = true
-	} else if !os.IsNotExist(e) {
-		return nil, e
+	compatRequired, err := m.xtablesCompatibilityRequired()
+	if err != nil {
+		return nil, err
 	}
 	if _, e := os.Stat(filepath.Join(filepath.Dir(m.Dir), "firewall", "controlled-v1")); e == nil {
 		controlRequired = true
 	} else if !os.IsNotExist(e) {
 		return nil, e
 	}
-	raw, err := os.ReadFile(filepath.Join(filepath.Dir(m.Dir), "state.json"))
+	raw, err := state.ReadRecoveryFile(filepath.Join(filepath.Dir(m.Dir), "state.json"), state.MaxStoreBytes)
 	if os.IsNotExist(err) {
 		caps := []string{}
+		if hourlyRequired {
+			caps = append(caps, protocol.HourlyCapability)
+		}
 		if portRangesRequired {
 			caps = append(caps, protocol.FirewallPortRangesCapability)
 		}
@@ -100,10 +95,11 @@ func (m *Manager) requiredCapabilities() ([]string, error) {
 		return nil, errors.New("cannot inspect private-state compatibility")
 	}
 	var data state.Data
-	if len(raw) > state.MaxStoreBytes || json.Unmarshal(raw, &data) != nil {
+	if len(raw) > state.MaxStoreBytes || json.Unmarshal(raw, &data) != nil || data.AgentID == "" {
 		return nil, errors.New("invalid private-state compatibility data")
 	}
 	required := map[string]bool{}
+	required[protocol.HourlyCapability] = hourlyRequired
 	required[protocol.FirewallPortRangesCapability] = portRangesRequired
 	required["firewall_cidr_exemptions_v1"] = cidrRequired
 	required["disk_firewall_sources_v1"] = diskRequired
@@ -115,6 +111,9 @@ func (m *Manager) requiredCapabilities() ([]string, error) {
 		required["volatile_connection_controls_v1"] = true
 	}
 	for _, user := range data.Users {
+		if user.Hourly != nil {
+			required[protocol.HourlyCapability] = true
+		}
 		if user.WhitelistEnabled || len(user.WhitelistedIPs) > 0 {
 			required["member_source_whitelist_v1"] = true
 		}
@@ -146,6 +145,9 @@ func (m *Manager) requiredCapabilities() ([]string, error) {
 	for _, config := range []*protocol.Config{data.Config, data.DesiredConfig} {
 		if config != nil {
 			for _, user := range config.Users {
+				if user.Hourly != nil {
+					required[protocol.HourlyCapability] = true
+				}
 				if user.WhitelistEnabled || len(user.WhitelistedIPs) > 0 {
 					required["member_source_whitelist_v1"] = true
 				}

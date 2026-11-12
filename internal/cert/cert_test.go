@@ -9,13 +9,13 @@ import (
 	"crypto/x509/pkix"
 	"encoding/pem"
 	"math/big"
-	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/caddyserver/certmagic"
 
 	"github.com/VanSail-Opensource/X-Node/internal/config"
+	"github.com/VanSail-Opensource/X-Node/internal/protocol"
 )
 
 // generateSelfSignedPair returns a fresh self-signed certificate and matching
@@ -171,12 +171,10 @@ func TestLoadPEMFromStorage_RejectsMismatchedPair(t *testing.T) {
 	if m.HasCert() {
 		t.Error("manager should not store invalid pair")
 	}
-	_ = filepath.Join(dir, "stub")
 }
 
-// TestACMEFingerprint covers the config-equality logic that decides whether
-// Reconfigure must tear down a running certmagic instance.
-func TestACMEFingerprint(t *testing.T) {
+// The live pool key determines whether profiles may share a manager and material.
+func TestManagedProfileKeyBindsConfiguration(t *testing.T) {
 	base := config.CertConfig{
 		CertMode:    "dns",
 		Domain:      "a.example.com",
@@ -195,11 +193,14 @@ func TestACMEFingerprint(t *testing.T) {
 		{"mode", func(c *config.CertConfig) { c.CertMode = "http" }, true},
 		{"email", func(c *config.CertConfig) { c.Email = "other@example.com" }, true},
 		{"provider", func(c *config.CertConfig) { c.DNSProvider = "alidns" }, true},
+		{"http_port", func(c *config.CertConfig) { c.HTTPPort = 8080 }, true},
+		{"propagation", func(c *config.CertConfig) { c.PropagationDelay = "10s" }, true},
+		{"timeout", func(c *config.CertConfig) { c.StartupTimeoutSeconds = 60 }, true},
 		{"env_value", func(c *config.CertConfig) { c.DNSEnv = map[string]string{"CLOUDFLARE_API_TOKEN": "other"} }, true},
 		{"env_key_only", func(c *config.CertConfig) { c.DNSEnv = map[string]string{"OTHER": "tok"} }, true},
 	}
 
-	baseFp := acmeFingerprint(base)
+	baseFp := managedProfileKey(t, base)
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			cfg := base
@@ -211,7 +212,7 @@ func TestACMEFingerprint(t *testing.T) {
 				}
 				tc.mutate(&cfg)
 			}
-			got := acmeFingerprint(cfg)
+			got := managedProfileKey(t, cfg)
 			if (got != baseFp) != tc.differs {
 				t.Errorf("differs=%v but got==base=%v", tc.differs, got == baseFp)
 			}
@@ -219,9 +220,8 @@ func TestACMEFingerprint(t *testing.T) {
 	}
 }
 
-// TestACMEFingerprintEnvOrderStable ensures map iteration order does not
-// affect the fingerprint (must be sorted internally).
-func TestACMEFingerprintEnvOrderStable(t *testing.T) {
+// Environment insertion order must not split an otherwise identical pool profile.
+func TestManagedProfileKeyEnvironmentOrderStable(t *testing.T) {
 	a := config.CertConfig{
 		CertMode: "dns", Domain: "x", DNSProvider: "p",
 		DNSEnv: map[string]string{"A": "1", "B": "2", "C": "3"},
@@ -230,7 +230,16 @@ func TestACMEFingerprintEnvOrderStable(t *testing.T) {
 		CertMode: "dns", Domain: "x", DNSProvider: "p",
 		DNSEnv: map[string]string{"C": "3", "A": "1", "B": "2"},
 	}
-	if acmeFingerprint(a) != acmeFingerprint(b) {
+	if managedProfileKey(t, a) != managedProfileKey(t, b) {
 		t.Fatal("fingerprint not order-independent")
 	}
+}
+
+func managedProfileKey(t *testing.T, cfg config.CertConfig) string {
+	t.Helper()
+	key, ok := ProfileKey(protocol.Config{Certificates: map[string]protocol.Certificate{"tls": {Config: cfg}}}, "tls")
+	if !ok {
+		t.Fatal("configured profile has no identity")
+	}
+	return key
 }

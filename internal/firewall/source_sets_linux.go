@@ -14,9 +14,6 @@ import (
 
 // Large inventories are populated in unreferenced generation sets through
 // bounded transactions. Only the final selector swap changes packet behavior.
-func prepareSources(ctx context.Context, sources []protocol.FirewallSource) (map[string]string, error) {
-	return prepareSourcesFrom(ctx, "", sources)
-}
 func prepareSourcesFrom(ctx context.Context, dir string, sources []protocol.FirewallSource) (map[string]string, error) {
 	targets := map[string]string{}
 	active, err := activeSourceSets(ctx)

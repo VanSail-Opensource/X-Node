@@ -1,5 +1,10 @@
 # Agent orchestration
 
+`synchronization.go` registers member and authenticated-transit credentials,
+control tokens, provider secrets and native configuration secrets with the shared
+log redactor. `transit_redaction_test.go` checks agent/native stream, console and
+command-error redaction so peer credentials cannot bypass the member protections.
+
 `command_certificates.go` captures actor-owned desired profiles and runs bounded
 ACME work through the same durable Jobs executor. Journal replay precedes current
 revision/profile eligibility. `command_reload.go` verifies candidate identity
@@ -30,6 +35,10 @@ returning; failure retains the last valid discovery. Periodic reporting replays
 bounded batches only on a negotiated connection, and `state_receive.go` persists
 acknowledgements. Journal corruption disables generated DDNS jobs and logs a
 warning while ordinary traffic/runtime startup remains available.
+Scheduled DDNS jobs use distinct bounded receipt IDs even when due in the same
+tick. Refresh and daily update clocks advance only after worker admission;
+busy workers leave the job due for the next maintenance tick.
+`utilities_schedule_test.go` covers multiple DDNS jobs and busy utility slots.
 
 `agent.go` owns serialized desired-state and runtime activation. Utility jobs use
 two bounded workers; they submit traffic captures back to the actor instead of
@@ -62,6 +71,9 @@ utilities without failing ordinary agent startup. See `docs/job-journal.md`.
 `job_recovery_test.go`, `job_recovery_io_test.go`, `job_execution_test.go` and
 `job_execution_restart_test.go` cover limits, privacy, recovery, disk stalls,
 intent fencing, partial outcomes and restart replay in hosted CI.
+`job_terminal_failure_test.go` additionally covers private terminal refusal
+evidence, restart capacity, strict legacy wire compatibility and failed completion
+durability. Proven failures stay evictable across restart; legacy ambiguity does not.
 
 Hosted cases in `accounting_test.go` and `job_privacy_test.go` verify closed-stream
 attribution and transient read results. Real stream tests live with the runtime.
@@ -154,3 +166,8 @@ this feature and preserves its evidence without stopping legacy traffic.
 Historical mixed traffic reports use the independently negotiated hourly
 accounting receipt header, allowing ordinary accounting to drain after hourly
 storage failure while live hourly admission remains disabled.
+
+`BinaryCapabilities` reports compiled format support for `--version` and the
+updater's recovery checks. It includes hourly support independently of live
+journal health; `runtimeCapabilities` still omits hourly admission whenever its
+credit store is unavailable. Static version metadata grants no live authority.

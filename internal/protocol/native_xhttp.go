@@ -4,14 +4,20 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strings"
 )
 
 // Keep this pure selection equivalent to the pinned Xray v26.10.31
 // conf.StreamConfig.Build and conf.SplitHTTPConfig.Build. Native Build also
 // reads TLS files; it cannot run before managed certificate preparation.
 type nativeXHTTPStream struct {
-	XHTTP     *nativeXHTTPSettings `json:"xhttpSettings"`
-	SplitHTTP *nativeXHTTPSettings `json:"splithttpSettings"`
+	Address   string                     `json:"address"`
+	Port      uint16                     `json:"port"`
+	Network   string                     `json:"network"`
+	Method    *string                    `json:"method"`
+	Socket    map[string]json.RawMessage `json:"sockopt"`
+	XHTTP     *nativeXHTTPSettings       `json:"xhttpSettings"`
+	SplitHTTP *nativeXHTTPSettings       `json:"splithttpSettings"`
 }
 
 type nativeXHTTPSettings struct {
@@ -65,6 +71,19 @@ func validateNativeXHTTP(raw json.RawMessage) error {
 				var http2 http.HTTP2Config
 				if len(settings.H2Params) > 0 && json.Unmarshal(settings.H2Params, &http2) != nil {
 					return errors.New("invalid XHTTP h2Params configuration")
+				}
+				if download := settings.DownloadSettings; download != nil {
+					network := download.Network
+					if download.Method != nil {
+						network = *download.Method
+					}
+					// The pinned dialer dereferences Destination and asserts the
+					// download protocol is XHTTP after accepting the native build.
+					// Reject those unsafe shapes before any listener can start.
+					network = strings.ToLower(network)
+					if download.Address == "" || download.Port == 0 || network != "xhttp" && network != "splithttp" {
+						return errors.New("XHTTP download requires an address, port and XHTTP transport")
+					}
 				}
 				stream = settings.DownloadSettings
 			}

@@ -68,7 +68,7 @@ func TestUnreadableUpgradeTransactionDoesNotLookIdle(t *testing.T) {
 
 func TestUpgradeObserversNeverWaitForInstaller(t *testing.T) {
 	m := &Manager{Dir: t.TempDir()}
-	if err := m.write(Transaction{Status: "pending"}); err != nil {
+	if err := m.write(transactionFixture(filepath.Dir(m.Dir))); err != nil {
 		t.Fatal(err)
 	}
 	m.mu.Lock()
@@ -97,7 +97,7 @@ func TestRollbackPublishesBothBinariesBeforeAsynchronousRestart(t *testing.T) {
 	if err := os.MkdirAll(m.Dir, 0700); err != nil {
 		t.Fatal(err)
 	}
-	tx := Transaction{Status: "pending", NodePath: filepath.Join(dir, "x-node"), CLIPath: filepath.Join(dir, "xnodectl")}
+	tx := transactionFixture(dir)
 	for _, target := range []string{tx.NodePath, tx.CLIPath} {
 		if err := os.WriteFile(target+".old", []byte("previous binary"), 0755); err != nil {
 			t.Fatal(err)

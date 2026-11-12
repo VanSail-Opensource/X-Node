@@ -60,6 +60,9 @@ func (g *Guard) Update(ctx context.Context, update protocol.FirewallUpdate) erro
 	if err := g.admitMasterBans(record); err != nil {
 		return err
 	}
+	if err := g.admitExemptions(record); err != nil {
+		return err
+	}
 	if err := g.markExemptionFormat(record.Exemptions); err != nil {
 		return err
 	}

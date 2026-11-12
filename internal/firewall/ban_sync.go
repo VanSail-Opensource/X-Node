@@ -32,13 +32,10 @@ func (g *Guard) Sync(ctx context.Context, update protocol.FirewallUpdate) error 
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	currentVersion := g.state.MasterVersion
-	if update.SourcesOnly {
-		currentVersion = g.state.SourceMasterVersion
-	}
 	if update.Version < currentVersion {
 		return nil
 	}
-	if !update.SourcesOnly && update.Version == g.state.MasterVersion && update.SnapshotID == g.state.SnapshotID {
+	if update.Version == g.state.MasterVersion && update.SnapshotID == g.state.SnapshotID {
 		if g.dirty {
 			return g.enforceMode(ctx, false)
 		}

@@ -67,7 +67,7 @@ type Lease struct {
 	user                                     *userState
 	cancel                                   func()
 	accounting                               *accountingCounters
-	accountingPeriod                         string
+	accountingKey                            accountingKey
 	tracked                                  bool
 	finished                                 chan struct{}
 	finishOnce                               sync.Once

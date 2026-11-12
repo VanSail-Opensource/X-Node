@@ -473,13 +473,6 @@ func (c Config) Validate() error {
 	return nil
 }
 
-func uHost(u *url.URL) string {
-	if u == nil {
-		return ""
-	}
-	return u.Hostname()
-}
-
 func Clone[T any](value T) T {
 	b, _ := json.Marshal(value)
 	var out T

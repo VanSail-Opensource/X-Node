@@ -15,9 +15,9 @@ CLI can configure a private bootstrap using `CheckLinux` without host mutations.
 The installer skips package installation when its dependencies already exist;
 apt-get is an optional dependency installer rather than an OS compatibility gate.
 
-`CheckDebian` remains a legacy fixture-only helper. The destructive
-`cmd/host-fixture` now requires an exact disposable marker and Debian 13 or
-Ubuntu 24.04; production operations use `CheckLinux` and capability checks.
+The destructive `cmd/host-fixture` owns its exact disposable marker and Debian 13
+or Ubuntu 24.04 gate; production operations use `CheckLinux` and capability
+checks. The uncalled legacy Debian-only helper has been removed.
 
 `lock_linux.go` provides process-scoped file locking for durable operations;
 `lock_other.go` supplies the non-Linux build boundary. Live host behavior belongs

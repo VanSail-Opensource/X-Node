@@ -1,6 +1,6 @@
 # Native Xray capability inventory
 
-Pinned upstream tag: `v26.10.29`, commit `0afec66085a8`.
+Pinned upstream tag: `v26.10.31`, commit `a4a3dff5b20c2faae567b742c172c7b95e75c083`.
 
 The renderer keeps native root objects and validates them with the pinned Xray loader. Root fields are checked against upstream `infra/conf.Config`, so a new unsupported root field produces a clear validation failure.
 

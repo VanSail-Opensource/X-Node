@@ -94,14 +94,9 @@ func (m *Manager) Check(ctx context.Context, version string) (Release, error) {
 	return result, nil
 }
 func (m *Manager) read() (Transaction, error) {
-	var t Transaction
-	b, e := os.ReadFile(filepath.Join(m.Dir, "transaction.json"))
-	if e != nil {
-		return t, e
-	}
-	e = json.Unmarshal(b, &t)
-	return t, e
+	return readTransaction(filepath.Join(m.Dir, "transaction.json"))
 }
+
 func (m *Manager) write(t Transaction) error {
 	b, e := json.Marshal(t)
 	if e != nil {

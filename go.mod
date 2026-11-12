@@ -1,6 +1,6 @@
 module github.com/VanSail-Opensource/X-Node
 
-go 1.27.3
+go 1.27.4
 
 require (
 	aead.dev/minisign v0.3.0

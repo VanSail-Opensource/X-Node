@@ -7,6 +7,10 @@ the agent lifetime. `profile_status.go` publishes all actor-declared desired
 profiles. `profile_serving.go` records exact prepared fingerprints immediately
 after runtime success, independently from accepted state and manager renewal.
 `prepared_candidate.go` fences manual activation to immutable acquired bytes.
+Managers are immutable per complete `ProfileKey`. Configuration changes select a
+new pooled manager; the retired direct `Manager.Reconfigure` path and its partial
+fingerprint are removed. `cert_test.go` checks the live pool identity, including
+provider credentials, challenge port, propagation delay and startup timeout.
 
 The preparation mutex serializes cache creation/cleanup, with cancellable waits;
 manager operation gates are per profile. Long ACME calls never own metadata or

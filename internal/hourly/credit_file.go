@@ -57,7 +57,7 @@ func readCreditFile(path string) ([]byte, error) {
 	return raw, nil
 }
 
-// Do not use state.AtomicWrite: its parent-directory barrier is unchecked.
+// Keep the credit-specific writer's strict byte bound and error classification.
 func writeCreditFile(path string, raw []byte) error {
 	if len(raw) > creditJournalMaxBytes {
 		return ErrCreditCapacity

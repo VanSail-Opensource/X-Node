@@ -51,6 +51,7 @@ func (j *Jobs) execute(ctx context.Context, cancel context.CancelFunc, slots cha
 			result.Status, result.Error = "uncertain", "cancelled mutation requires native outcome reconciliation"
 		}
 	}
+	result.terminalFailure = result.Status == "failed" && (!executed || definiteJobRefusal(err))
 	if persistentJob(command) {
 		result = j.recordCompletion(boundedJobResult(result))
 	} else {

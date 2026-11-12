@@ -13,7 +13,7 @@ func TestNativeFirewallPreventsUnsafeBinaryDowngrade(t *testing.T) {
 		t.Fatal(err)
 	}
 	m := &Manager{Dir: filepath.Join(dir, "updates")}
-	if err := os.WriteFile(filepath.Join(fw, "policy.json"), []byte(`{"engine":1}`), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(fw, "policy.json"), []byte(`{"engine":1,"policy":{}}`), 0600); err != nil {
 		t.Fatal(err)
 	}
 	if err := m.checkCapabilities([]byte(`{"capabilities":[]}`)); err == nil {

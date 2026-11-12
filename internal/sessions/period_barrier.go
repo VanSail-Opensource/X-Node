@@ -25,7 +25,7 @@ func (r *Registry) QuiescePeriod(ctx context.Context, id int, period string) (fu
 	r.periodFences[key]++
 	var tracked []*Lease
 	for _, lease := range r.inflight {
-		if lease.Info.UserID == id && lease.accountingPeriod == period {
+		if (lease.Info.UserID == id || lease.accountingKey.user == id) && lease.accountingKey.period == period {
 			tracked = append(tracked, lease)
 		}
 	}

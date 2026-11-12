@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/VanSail-Opensource/X-Node/internal/httpguard"
+	"github.com/VanSail-Opensource/X-Node/internal/state"
 )
 
 func Prepare(ctx context.Context, dir string, p Policy, hashes map[string]string, client *http.Client, refresh bool) (string, error) {
@@ -27,11 +28,15 @@ func Prepare(ctx context.Context, dir string, p Policy, hashes map[string]string
 			return "", errors.New("invalid asset URL")
 		}
 	}
+	previous, err := resolveGeneration(dir)
+	if err != nil {
+		return "", err
+	}
 	if err := pruneAbandonedStages(ctx, dir, time.Now()); err != nil {
 		return "", err
 	}
 	if len(p.Assets) == 0 {
-		return Resolve(dir), nil
+		return previous, nil
 	}
 	if client == nil {
 		client = &http.Client{Timeout: 2 * time.Minute}
@@ -39,7 +44,6 @@ func Prepare(ctx context.Context, dir string, p Policy, hashes map[string]string
 	if e := os.MkdirAll(dir, 0700); e != nil {
 		return "", e
 	}
-	previous := Resolve(dir)
 	stage, e := os.MkdirTemp(dir, ".assets-")
 	if e != nil {
 		return "", e
@@ -124,10 +128,16 @@ func Prepare(ctx context.Context, dir string, p Policy, hashes map[string]string
 	generation := hex.EncodeToString(hash.Sum(nil))
 	target := filepath.Join(dir, generation)
 	if _, e = os.Stat(target); os.IsNotExist(e) {
+		if e = state.SyncDirectory(stage); e != nil {
+			return "", e
+		}
 		if e = os.Rename(stage, target); e != nil {
 			return "", e
 		}
 	} else if e != nil {
+		return "", e
+	}
+	if e = state.SyncDirectory(dir); e != nil {
 		return "", e
 	}
 	if e = prunePrepared(dir, target); e != nil {

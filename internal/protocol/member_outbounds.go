@@ -3,35 +3,13 @@ package protocol
 import (
 	"encoding/json"
 	"errors"
-	"net/netip"
+	"strings"
 )
-
-var reservedProxyPrefixes = []netip.Prefix{
-	netip.MustParsePrefix("0.0.0.0/8"), netip.MustParsePrefix("100.64.0.0/10"),
-	netip.MustParsePrefix("192.0.0.0/24"), netip.MustParsePrefix("192.0.2.0/24"),
-	netip.MustParsePrefix("198.18.0.0/15"), netip.MustParsePrefix("198.51.100.0/24"),
-	netip.MustParsePrefix("203.0.113.0/24"), netip.MustParsePrefix("240.0.0.0/4"),
-	netip.MustParsePrefix("64:ff9b::/96"), netip.MustParsePrefix("64:ff9b:1::/48"),
-	netip.MustParsePrefix("2001:db8::/32"), netip.MustParsePrefix("2001::/32"),
-	netip.MustParsePrefix("2002::/16"),
-}
 
 // PublicProxyAddress admits literal public addresses only, preventing node DNS rebinding.
 func PublicProxyAddress(raw string) bool {
-	ip, err := netip.ParseAddr(raw)
-	if err != nil || ip.Zone() != "" {
-		return false
-	}
-	ip = ip.Unmap()
-	if !ip.IsGlobalUnicast() || ip.IsPrivate() || ip.IsLoopback() || ip.IsLinkLocalUnicast() {
-		return false
-	}
-	for _, prefix := range reservedProxyPrefixes {
-		if prefix.Contains(ip) {
-			return false
-		}
-	}
-	return true
+	_, err := AutomaticLeaseAddress(raw)
+	return err == nil
 }
 
 // ValidateMemberOutbounds guards master-generated member proxies independently on the agent.
@@ -83,11 +61,8 @@ func ValidateMemberOutbounds(raw json.RawMessage, tags []string) error {
 				}
 			}
 		}
-		if socket, ok := out.Stream["sockopt"].(map[string]any); ok && len(socket) > 0 {
-			target, _ := socket["dialerProxy"].(string)
-			if len(socket) != 1 || !owned[target] {
-				return errors.New("member socket overrides are not permitted")
-			}
+		if err := validateMemberTransport(out.Stream, owned); err != nil {
+			return err
 		}
 		if out.Protocol == "hysteria" {
 			address, _ := out.Settings["address"].(string)
@@ -127,7 +102,8 @@ func memberLocalFile(value any) bool {
 	switch value := value.(type) {
 	case map[string]any:
 		for key, item := range value {
-			if key == "certificateFile" || key == "keyFile" || key == "certFile" || key == "caFile" || key == "unix" {
+			switch strings.ToLower(key) {
+			case "certificatefile", "keyfile", "certfile", "cafile", "unix":
 				return true
 			}
 			if memberLocalFile(item) {

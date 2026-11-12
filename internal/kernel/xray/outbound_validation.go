@@ -1,6 +1,7 @@
 package xray
 
 import (
+	"encoding/json"
 	"errors"
 	"github.com/VanSail-Opensource/X-Node/internal/protocol"
 	"sort"
@@ -23,16 +24,11 @@ func validateOutbounds(outs []any) error {
 		if _, exists := edges[tag]; exists {
 			return errors.New("duplicate outbound tag")
 		}
-		edges[tag] = nil
-		proxy, _ := out["proxySettings"].(map[string]any)
-		if target, _ := proxy["tag"].(string); target != "" {
-			edges[tag] = append(edges[tag], target)
+		dependencies, err := outboundDependencies(out)
+		if err != nil {
+			return err
 		}
-		stream, _ := out["streamSettings"].(map[string]any)
-		sock, _ := stream["sockopt"].(map[string]any)
-		if target, _ := sock["dialerProxy"].(string); target != "" {
-			edges[tag] = append(edges[tag], target)
-		}
+		edges[tag] = dependencies
 	}
 	color := map[string]int{}
 	var visit func(string) error
@@ -66,4 +62,12 @@ func validateOutbounds(outs []any) error {
 		}
 	}
 	return nil
+}
+
+func outboundDependencies(out any) ([]string, error) {
+	raw, err := json.Marshal(out)
+	if err != nil {
+		return nil, err
+	}
+	return protocol.NativeOutboundDependencies(raw)
 }

@@ -51,7 +51,11 @@ func (j *Jobs) writeHistory(history []JobResult) error {
 	if len(history) > maxJobHistory {
 		return errJobCapacity
 	}
-	raw, err := marshalJobBounded(durableJobHistory(history), maxJobJournalBytes-1)
+	receipts := make([]journalJobResult, 0, len(history))
+	for _, result := range durableJobHistory(history) {
+		receipts = append(receipts, journalJobResult{JobResult: result, TerminalFailure: result.terminalFailure})
+	}
+	raw, err := marshalJobBounded(receipts, maxJobJournalBytes-1)
 	if err != nil {
 		return err
 	}

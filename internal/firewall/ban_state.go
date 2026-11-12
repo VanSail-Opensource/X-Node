@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/netip"
+	"os"
 	"path/filepath"
 	"reflect"
 	"sort"
@@ -14,6 +15,9 @@ import (
 	"github.com/VanSail-Opensource/X-Node/internal/protocol"
 	"github.com/VanSail-Opensource/X-Node/internal/state"
 )
+
+const maxPendingFirewallEvents = 4096
+const maxFirewallExemptions = 100000
 
 type sourceState struct {
 	protocol.FirewallSource
@@ -42,12 +46,11 @@ type observedHit struct {
 	at   time.Time
 }
 type hitWindow struct {
-	prefix   string
-	first    time.Time
-	count    uint64
-	reported bool
-	until    time.Time
-	last     time.Time
+	prefix string
+	first  time.Time
+	count  uint64
+	until  time.Time
+	last   time.Time
 }
 
 // Guard separates observations from durable, master-authorized restrictions.
@@ -73,7 +76,6 @@ type Guard struct {
 	kernelReady       atomic.Bool
 	dropped           atomic.Uint64
 	exemptionMasks    map[int]bool
-	resetAt           map[string]time.Time
 	eventOrder        []string
 	eventStart        int
 	windows           map[string]hitWindow
@@ -83,6 +85,7 @@ type Guard struct {
 	legacySources     bool
 	retainBulk        bool
 	haveSnapshot      bool
+	writeCheckpoint   func(string, []byte, os.FileMode) (bool, error)
 	journalBytes      int64
 	applying          bool
 	kernelError       string
@@ -93,7 +96,7 @@ func emptyBans() banState {
 	return banState{Bans: map[string]protocol.FirewallBan{}, Exemptions: map[string]protocol.FirewallExemption{}, Sources: map[string]sourceState{}, Events: map[string]protocol.FirewallEvent{}, JournalEpoch: state.ID(), EventNamespace: state.ID()}
 }
 func OpenGuard(dir string, manager *Manager) (*Guard, error) {
-	g := &Guard{dir: dir, manager: manager, state: emptyBans(), hits: make(chan observedHit, 4096), acks: make(chan []string, 32), resetAt: map[string]time.Time{}, windows: map[string]hitWindow{}, dirty: true, sourcesDirty: true, compacted: time.Now()}
+	g := &Guard{dir: dir, manager: manager, state: emptyBans(), hits: make(chan observedHit, 4096), acks: make(chan []string, 32), windows: map[string]hitWindow{}, dirty: true, sourcesDirty: true, compacted: time.Now()}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	release, err := g.lockBulk(ctx)

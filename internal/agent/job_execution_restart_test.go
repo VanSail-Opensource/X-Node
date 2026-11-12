@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
+	"path/filepath"
 	"sync/atomic"
 	"testing"
 
@@ -121,6 +122,15 @@ func TestCancellationBeforeMutationPreventsExecution(t *testing.T) {
 			}
 			if !blockedIntent && writes != 0 {
 				t.Fatal("already-cancelled admission wrote a mutation intent")
+			}
+			if blockedIntent {
+				restarted, err := NewJobs(filepath.Dir(jobs.path), jobs.send)
+				if err != nil || restarted.recovery != "" {
+					t.Fatal("cancelled intent did not restart safely", err)
+				}
+				if receipts := restarted.Snapshot(); len(receipts) != 1 || receipts[0].Status != "failed" || !receipts[0].terminalFailure {
+					t.Fatal("cancellation before execution became an uncertain mutation", receipts)
+				}
 			}
 		})
 	}

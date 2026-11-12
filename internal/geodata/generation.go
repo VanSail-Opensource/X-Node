@@ -2,7 +2,6 @@ package geodata
 
 import (
 	"context"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"github.com/VanSail-Opensource/X-Node/internal/state"
@@ -11,22 +10,14 @@ import (
 	"path/filepath"
 )
 
-// Resolve returns one immutable verified domain-asset generation.
+// Resolve preserves the read-only legacy fallback. Mutation and cleanup use
+// resolveGeneration so uncertain recovery evidence cannot authorize deletion.
 func Resolve(dir string) string {
-	b, e := os.ReadFile(filepath.Join(dir, "active.json"))
-	if e != nil {
+	path, err := resolveGeneration(dir)
+	if err != nil {
 		return dir
 	}
-	var data struct {
-		Generation string `json:"generation"`
-	}
-	if json.Unmarshal(b, &data) != nil || len(data.Generation) != 64 {
-		return dir
-	}
-	if _, e = hex.DecodeString(data.Generation); e != nil {
-		return dir
-	}
-	return filepath.Join(dir, data.Generation)
+	return path
 }
 
 // Ensure preserves the public download-and-publish helper used by local utilities.
@@ -41,13 +32,17 @@ func Ensure(ctx context.Context, dir string, p Policy, hashes map[string]string,
 // Activate publishes a verified generation only after native activation succeeds.
 func Activate(dir, target string) error {
 	name := filepath.Base(target)
-	if filepath.Clean(filepath.Dir(target)) != filepath.Clean(dir) || len(name) != 64 {
+	if filepath.Clean(filepath.Dir(target)) != filepath.Clean(dir) || !generationName(name) {
 		return errors.New("invalid asset generation")
 	}
-	if _, err := hex.DecodeString(name); err != nil {
+	previous, err := resolveGeneration(dir)
+	if err != nil {
 		return err
 	}
-	previous := Resolve(dir)
+	retained, err := generationPointer(dir, "previous.json", "", true)
+	if err != nil {
+		return err
+	}
 	if previous != target {
 		raw, err := json.Marshal(map[string]string{"generation": filepath.Base(previous)})
 		if err != nil {
@@ -56,15 +51,8 @@ func Activate(dir, target string) error {
 		if err = state.AtomicWrite(filepath.Join(dir, "previous.json"), raw, 0600); err != nil {
 			return err
 		}
-	} else if raw, err := os.ReadFile(filepath.Join(dir, "previous.json")); err == nil {
-		var pointer struct {
-			Generation string `json:"generation"`
-		}
-		if json.Unmarshal(raw, &pointer) == nil && len(pointer.Generation) == 64 {
-			if _, err := hex.DecodeString(pointer.Generation); err == nil {
-				previous = filepath.Join(dir, pointer.Generation)
-			}
-		}
+	} else if retained != "" {
+		previous = retained
 	}
 	raw, err := json.Marshal(map[string]string{"generation": name})
 	if err != nil {
@@ -78,10 +66,7 @@ func Activate(dir, target string) error {
 		return err
 	}
 	for _, entry := range entries {
-		if !entry.IsDir() || len(entry.Name()) != 64 {
-			continue
-		}
-		if _, err := hex.DecodeString(entry.Name()); err != nil {
+		if !entry.IsDir() || !generationName(entry.Name()) {
 			continue
 		}
 		path := filepath.Join(dir, entry.Name())

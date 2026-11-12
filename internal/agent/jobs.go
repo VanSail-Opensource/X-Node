@@ -12,13 +12,19 @@ import (
 )
 
 type JobResult struct {
-	ID           string    `json:"id"`
-	Command      string    `json:"command"`
-	Status       string    `json:"status"`
-	Data         any       `json:"data,omitempty"`
-	Error        string    `json:"error,omitempty"`
-	Finished     time.Time `json:"finished,omitempty"`
-	encodedBytes int
+	ID              string    `json:"id"`
+	Command         string    `json:"command"`
+	Status          string    `json:"status"`
+	Data            any       `json:"data,omitempty"`
+	Error           string    `json:"error,omitempty"`
+	Finished        time.Time `json:"finished,omitempty"`
+	encodedBytes    int
+	terminalFailure bool // Private journal evidence; never changes command.result.
+}
+
+type journalJobResult struct {
+	JobResult
+	TerminalFailure bool `json:"terminal_failure,omitempty"`
 }
 
 type Jobs struct {

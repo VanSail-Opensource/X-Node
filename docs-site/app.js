@@ -252,6 +252,9 @@
     try { localStorage.setItem("xnode-docs-theme", theme); } catch { /* Theme still applies for this visit. */ }
   });
   window.addEventListener("hashchange", render);
-  window.addEventListener("resize", () => { if (!window.matchMedia("(max-width: 850px)").matches) toggleMenu(false); });
+  window.addEventListener("resize", () => {
+    if (!window.matchMedia("(max-width: 850px)").matches) toggleMenu(false);
+    else sidebar.inert = !sidebar.classList.contains("open");
+  });
   render();
 })();

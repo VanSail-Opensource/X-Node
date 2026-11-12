@@ -28,9 +28,9 @@ func TestXHTTPPolicyValidatesOnlyEffectiveHTTP2Settings(t *testing.T) {
 		{"download invalid", `{"xhttpSettings":{"downloadSettings":{"xhttpSettings":{"h2Params":false}}}}`, false},
 		{"extra download invalid", `{"xhttpSettings":{"extra":{"downloadSettings":{"xhttpSettings":{"h2Params":false}}}}}`, false},
 		{"extra discards download", `{"xhttpSettings":{"downloadSettings":{"xhttpSettings":{"h2Params":false}},"extra":{}}}`, true},
-		{"download alias and extra", `{"xhttpSettings":{"downloadSettings":{"splithttpSettings":{"h2Params":false,"extra":{}}}}}`, true},
+		{"download alias and extra", `{"xhttpSettings":{"downloadSettings":{"address":"8.8.8.8","port":443,"network":"xhttp","splithttpSettings":{"h2Params":false,"extra":{}}}}}`, true},
 		{"TLS placeholder", `{"security":"tls","tlsSettings":{"certificates":[{"certificateFile":"/missing/cert","keyFile":"/missing/key"}]},"xhttpSettings":{"h2Params":{}}}`, true},
-		{"download TLS placeholder", `{"xhttpSettings":{"downloadSettings":{"security":"tls","tlsSettings":{"certificates":[{"certificateFile":"/missing/cert","keyFile":"/missing/key"}]},"xhttpSettings":{"h2Params":{}}}}}`, true},
+		{"download TLS placeholder", `{"xhttpSettings":{"downloadSettings":{"address":"8.8.8.8","port":443,"network":"xhttp","security":"tls","tlsSettings":{"certificates":[{"certificateFile":"/missing/cert","keyFile":"/missing/key"}]},"xhttpSettings":{"h2Params":{}}}}}`, true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			for _, direction := range []string{"inbounds", "outbounds"} {

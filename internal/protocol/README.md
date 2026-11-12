@@ -18,6 +18,17 @@ calling builders or reading node-local TLS files. HTTP/2 types come from Go's
 upstream typed builder and cover ignored fields and certificate placeholders.
 Known HTTP/2 field types are checked wherever configured, including inactive
 transport settings; unknown fields retain the upstream JSON behavior.
+Effective download streams must also contain an address, nonzero port and an
+XHTTP transport: the pinned native builder accepts incomplete download settings
+that would later panic in its dialer. Builder-backed fixtures reject those
+shapes before listeners change, preserving native method/alias/extra precedence.
+
+Member outbounds apply their literal-public-address and owned-peer socket rules
+to every effective XHTTP download stream. Case-insensitive native field names
+cannot bypass socket or local-file restrictions. Public endpoint validation
+shares the special-purpose IPv4/IPv6 exclusions used by automatic firewall
+leases; deprecated site-local IPv6 and non-public IPv6 allocation space are
+never treated as public proxy destinations.
 
 `user_identity.go` shares credential/accounting identity equality and validates
 existing `replaces_id` moves against the original authorization snapshots.

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/VanSail-Opensource/X-Node/internal/protocol"
@@ -98,5 +99,25 @@ func TestFailedTerminalReceiptPersistenceStillReplaysUncertain(t *testing.T) {
 	}
 	if result := executionResult(t, results); result.Status != "uncertain" {
 		t.Fatal("restart discarded an uncommitted terminal receipt")
+	}
+}
+
+func TestTerminalFailureMarkerSharesPerReceiptByteLimit(t *testing.T) {
+	const limit = 512
+	result := JobResult{ID: "boundary", Command: "runtime.reload", Status: "failed", Data: "", terminalFailure: true}
+	base, err := json.Marshal(result)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The public shape fits exactly; its private proof marker must also fit
+	// before this receipt can be retained as a terminal result.
+	result.Data = strings.Repeat("x", limit-len(base))
+	bounded := limitJobResult(result, limit)
+	raw, err := marshalJobBounded(journalJobResult{JobResult: bounded, TerminalFailure: bounded.terminalFailure}, limit)
+	if err != nil || len(raw) != bounded.encodedBytes || len(raw) > limit {
+		t.Fatal("private proof marker exceeded the per-receipt byte bound", err, len(raw), bounded.encodedBytes)
+	}
+	if bounded.Status != "uncertain" || bounded.terminalFailure {
+		t.Fatal("oversized persistent receipt did not retain its conservative fallback")
 	}
 }

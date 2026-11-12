@@ -126,7 +126,6 @@ func (m *Manager) acquireACME(ctx, lifetime context.Context, solver *certmagic.D
 			return result
 		}
 		m.acmeCancel = stop
-		m.acmeFingerprint = acmeFingerprint(m.cfg)
 		m.acmeStarted = true
 	}
 	if renew {

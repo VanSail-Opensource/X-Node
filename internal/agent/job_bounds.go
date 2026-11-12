@@ -63,7 +63,11 @@ func limitJobResult(result JobResult, limit int) JobResult {
 			result.Data = nil
 		}
 	}
-	raw, err := marshalJobBounded(result, limit)
+	marshalLimit := limit
+	if result.terminalFailure {
+		marshalLimit -= len(`,"terminal_failure":true`)
+	}
+	raw, err := marshalJobBounded(result, marshalLimit)
 	if err != nil {
 		result.Data = nil
 		result.terminalFailure = false

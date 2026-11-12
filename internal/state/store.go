@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/VanSail-Opensource/X-Node/internal/protocol"
@@ -97,7 +98,16 @@ func Open(dir string) (*Store, error) {
 // case another process grows it after Stat. Corrupt recovery evidence must not
 // exhaust the agent before its configured state bound can be enforced.
 func readStateFile(path string) ([]byte, error) {
-	f, err := os.Open(path)
+	checked, err := os.Lstat(path)
+	if err != nil {
+		return nil, err
+	}
+	if !checked.Mode().IsRegular() || checked.Size() > MaxStoreBytes {
+		return nil, errors.New("invalid persisted state")
+	}
+	// The agent is Linux-only. Nonblocking/no-follow flags also protect the
+	// interval between Lstat and open from a swapped FIFO or symbolic link.
+	f, err := os.OpenFile(path, os.O_RDONLY|syscall.O_NONBLOCK|syscall.O_NOFOLLOW, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -106,7 +116,7 @@ func readStateFile(path string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	if !info.Mode().IsRegular() || info.Size() > MaxStoreBytes {
+	if !os.SameFile(checked, info) || !info.Mode().IsRegular() || info.Size() > MaxStoreBytes {
 		return nil, errors.New("invalid persisted state")
 	}
 	b, err := io.ReadAll(io.LimitReader(f, MaxStoreBytes+1))

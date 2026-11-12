@@ -3,7 +3,9 @@ package firewall
 import (
 	"context"
 	"encoding/json"
+	jsonv2 "encoding/json/v2"
 	"errors"
+	"github.com/VanSail-Opensource/X-Node/internal/protocol"
 	"github.com/VanSail-Opensource/X-Node/internal/state"
 	"os"
 	"path/filepath"
@@ -32,15 +34,31 @@ type record struct {
 func (m *Manager) path() string { return filepath.Join(m.Dir, "pending.json") }
 func readRecord(path string) (record, error) {
 	var p record
-	b, err := os.ReadFile(path)
+	b, err := state.ReadRecoveryFile(path, state.MaxStoreBytes)
 	if err != nil {
 		return p, err
 	}
-	if err = json.Unmarshal(b, &p); err != nil {
+	if err = jsonv2.Unmarshal(b, &p, jsonv2.RejectUnknownMembers(true)); err != nil {
 		return p, err
 	}
 	if p.Engine < 0 || p.Engine > 1 {
 		return p, errors.New("unsupported firewall state version")
+	}
+	switch p.Status {
+	case "unmanaged":
+		return p, nil
+	case "pending", "confirmed", "failed", "rolled_back":
+		if p.ID == "" || p.Deadline.IsZero() {
+			return p, errors.New("incomplete firewall recovery state")
+		}
+		var required struct {
+			Policy *protocol.FirewallPolicy `json:"policy"`
+		}
+		if json.Unmarshal(b, &required) != nil || required.Policy == nil {
+			return p, errors.New("missing firewall recovery policy")
+		}
+	default:
+		return p, errors.New("invalid firewall recovery status")
 	}
 	return p, nil
 }

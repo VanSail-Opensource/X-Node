@@ -11,6 +11,8 @@ the read to reject concurrent growth. Invalid files, FIFOs and symlinks
 are rejected without changing their evidence. Atomic writes acknowledge success only after the containing
 directory sync and close succeed; a rename with an uncertain durability barrier
 does not publish a fresh in-memory authorization view.
+`recovery_file.go` exposes the same bounded read-only regular-file boundary to
+upgrade and firewall recovery, with each caller selecting its document limit.
 
 `dns_migration.go` normalizes both accepted and staged legacy resolver settings
 in memory during `Open`, before bootstrap or configuration readers see them.

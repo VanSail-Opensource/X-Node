@@ -6,11 +6,9 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"io"
 	"os"
 	"path/filepath"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/VanSail-Opensource/X-Node/internal/protocol"
@@ -58,7 +56,7 @@ func Open(dir string) (*Store, error) {
 		return nil, err
 	}
 	s := &Store{path: filepath.Join(dir, "state.json")}
-	b, err := readStateFile(s.path)
+	b, err := ReadRecoveryFile(s.path, MaxStoreBytes)
 	if err == nil {
 		if len(b) > MaxStoreBytes || json.Unmarshal(b, &s.data) != nil || s.data.AgentID == "" {
 			return nil, errors.New("invalid persisted state")
@@ -92,41 +90,6 @@ func Open(dir string) (*Store, error) {
 	}
 	s.authorizationSequence = 1
 	return s, nil
-}
-
-// Check the file before allocating its contents and retain the read limit in
-// case another process grows it after Stat. Corrupt recovery evidence must not
-// exhaust the agent before its configured state bound can be enforced.
-func readStateFile(path string) ([]byte, error) {
-	checked, err := os.Lstat(path)
-	if err != nil {
-		return nil, err
-	}
-	if !checked.Mode().IsRegular() || checked.Size() > MaxStoreBytes {
-		return nil, errors.New("invalid persisted state")
-	}
-	// The agent is Linux-only. Nonblocking/no-follow flags also protect the
-	// interval between Lstat and open from a swapped FIFO or symbolic link.
-	f, err := os.OpenFile(path, os.O_RDONLY|syscall.O_NONBLOCK|syscall.O_NOFOLLOW, 0)
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
-	info, err := f.Stat()
-	if err != nil {
-		return nil, err
-	}
-	if !os.SameFile(checked, info) || !info.Mode().IsRegular() || info.Size() > MaxStoreBytes {
-		return nil, errors.New("invalid persisted state")
-	}
-	b, err := io.ReadAll(io.LimitReader(f, MaxStoreBytes+1))
-	if err != nil {
-		return nil, err
-	}
-	if len(b) > MaxStoreBytes {
-		return nil, errors.New("invalid persisted state")
-	}
-	return b, nil
 }
 
 func (s *Store) Snapshot() Data { s.mu.Lock(); defer s.mu.Unlock(); return protocol.Clone(s.data) }

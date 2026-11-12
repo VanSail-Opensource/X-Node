@@ -3,9 +3,9 @@ package firewall
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"github.com/VanSail-Opensource/X-Node/internal/state"
+	"github.com/VanSail-Opensource/X-Node/internal/update"
 	"os"
 	"path/filepath"
 )
@@ -68,20 +68,7 @@ func (m *Manager) installBoot(ctx context.Context) error {
 	return err
 }
 func (m *Manager) upgradePending() (bool, error) {
-	b, err := os.ReadFile(filepath.Join(filepath.Dir(m.Dir), "updates", "transaction.json"))
-	if os.IsNotExist(err) {
-		return false, nil
-	}
-	if err != nil {
-		return false, err
-	}
-	var t struct {
-		Status string `json:"status"`
-	}
-	if err = json.Unmarshal(b, &t); err != nil {
-		return false, err
-	}
-	return t.Status == "pending", nil
+	return update.PendingTransaction(filepath.Join(filepath.Dir(m.Dir), "updates"))
 }
 
 // Migrate defers boot persistence until the binary upgrade is confirmed.

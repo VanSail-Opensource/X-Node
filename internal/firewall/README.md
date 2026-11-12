@@ -51,6 +51,15 @@ hosts extend it for slow systemd/UFW startup. Recovery leaves the
 transaction pending if restoration fails, so the watchdog can retry. Late
 confirmation and stale watchdog IDs cannot replay obsolete snapshots.
 
+The first `original.nft` snapshot is published after its iptables-owned tables
+and manifest are durable; it marks a complete native/iptables snapshot. Interrupted
+preparation can retry without skipping missing dependencies. An empty manifest
+records that no compatibility tables were present. Strict bounded record reads
+reject null, incomplete, duplicate-field and unsupported recovery states before
+any host mutation, while legacy engine-zero confirmed policies remain readable.
+Boot and source migrations share the updater's strict transaction interpretation;
+unavailable upgrade evidence never grants first-adoption permission.
+
 ## Persistence, migration, and lifecycle
 
 Confirmed `policy.json` is authoritative. Disk records retain legacy flat fields

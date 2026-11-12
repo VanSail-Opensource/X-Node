@@ -50,3 +50,9 @@ dependencies and private journals remain protected. Corrupt transactions fail
 closed before installation or cleanup.
 Unreadable transactions report unavailable and retain the pending compatibility
 fence; status inspection never converts corrupt recovery state into idle.
+Transaction reads are bounded to 64 KiB, reject nonregular files, duplicate or
+unknown fields, incomplete metadata, unsupported states and unsafe executable
+paths. Firewall boot/source migrations use the same read-only interpretation.
+Private state and firewall compatibility candidates are bounded before reading;
+null or missing policy cannot authorize replacement or cleanup. A completed
+empty original xtables manifest imposes no unnecessary recovery capability.

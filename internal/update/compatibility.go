@@ -16,19 +16,8 @@ import (
 func (m *Manager) Pending() bool {
 	// The transaction is atomically replaced; do not join the installer here.
 	// Pending is called from the main loop and reconnect hello during shutdown.
-	transaction, err := m.read()
-	if os.IsNotExist(err) {
-		return false
-	}
-	if err != nil {
-		return true
-	}
-	switch transaction.Status {
-	case "confirmed", "rolled_back", "failed":
-		return false
-	default:
-		return true
-	}
+	pending, err := PendingTransaction(m.Dir)
+	return err != nil || pending
 }
 
 // requiredCapabilities prevents downgrades from silently ignoring cached policy or journals.
@@ -59,23 +48,21 @@ func (m *Manager) requiredCapabilities() ([]string, error) {
 	}
 	controlRequired := false
 	ownershipRequired := false
-	compatRequired := false
 	if _, e := os.Stat(filepath.Join(filepath.Dir(m.Dir), "firewall", "original-services.json")); e == nil {
 		ownershipRequired = true
 	} else if !os.IsNotExist(e) {
 		return nil, e
 	}
-	if _, e := os.Stat(filepath.Join(filepath.Dir(m.Dir), "firewall", "original-compat.json")); e == nil {
-		compatRequired = true
-	} else if !os.IsNotExist(e) {
-		return nil, e
+	compatRequired, err := m.xtablesCompatibilityRequired()
+	if err != nil {
+		return nil, err
 	}
 	if _, e := os.Stat(filepath.Join(filepath.Dir(m.Dir), "firewall", "controlled-v1")); e == nil {
 		controlRequired = true
 	} else if !os.IsNotExist(e) {
 		return nil, e
 	}
-	raw, err := os.ReadFile(filepath.Join(filepath.Dir(m.Dir), "state.json"))
+	raw, err := state.ReadRecoveryFile(filepath.Join(filepath.Dir(m.Dir), "state.json"), state.MaxStoreBytes)
 	if os.IsNotExist(err) {
 		caps := []string{}
 		if hourlyRequired {
@@ -108,7 +95,7 @@ func (m *Manager) requiredCapabilities() ([]string, error) {
 		return nil, errors.New("cannot inspect private-state compatibility")
 	}
 	var data state.Data
-	if len(raw) > state.MaxStoreBytes || json.Unmarshal(raw, &data) != nil {
+	if len(raw) > state.MaxStoreBytes || json.Unmarshal(raw, &data) != nil || data.AgentID == "" {
 		return nil, errors.New("invalid private-state compatibility data")
 	}
 	required := map[string]bool{}

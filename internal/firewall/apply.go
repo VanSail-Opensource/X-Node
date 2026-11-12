@@ -143,17 +143,19 @@ func (m *Manager) prepare(ctx context.Context, id string, p protocol.FirewallPol
 		return tx, err
 	}
 	if _, err = os.Stat(filepath.Join(m.Dir, "original.nft")); os.IsNotExist(err) {
-		if err = state.AtomicWrite(filepath.Join(m.Dir, "original.nft"), snapshot, 0600); err != nil {
-			return tx, err
-		}
 		originals, saveErr := m.saveCompat(ctx, compat, "original")
 		if saveErr != nil {
 			return tx, saveErr
 		}
-		if len(originals) > 0 {
-			if err = writeOriginalCompat(m.Dir, originals); err != nil {
-				return tx, err
-			}
+		// original.nft is the existing first-snapshot marker. Publish it only
+		// after all iptables-owned tables and their manifest are durable, so a
+		// failed first prepare cannot make retries skip missing recovery data.
+		// Persist an empty manifest too, replacing any incomplete prior attempt.
+		if err = writeOriginalCompat(m.Dir, originals); err != nil {
+			return tx, err
+		}
+		if err = state.AtomicWrite(filepath.Join(m.Dir, "original.nft"), snapshot, 0600); err != nil {
+			return tx, err
 		}
 	} else if err != nil {
 		return tx, err

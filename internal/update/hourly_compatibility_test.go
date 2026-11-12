@@ -18,7 +18,7 @@ func TestBinaryCompatibilityRetainsEveryHourlyPolicySnapshot(t *testing.T) {
 		t.Run(location, func(t *testing.T) {
 			dir := t.TempDir()
 			users := []protocol.User{{ID: 1, Hourly: &protocol.HourlyUser{Owner: protocol.HourlyOwner{ID: "owner", Generation: 1}, EnrollmentID: "enrollment"}}}
-			data := state.Data{}
+			data := state.Data{AgentID: "fixture"}
 			switch location {
 			case "authorization":
 				data.Users = users
@@ -61,7 +61,7 @@ func TestRetainedCreditJournalBlocksIncompatibleRollbackWithoutOrdinaryState(t *
 	}
 	assertHourlyCompatibilityRequired(t, m)
 	// The old binary is inspected before either member of the installed pair moves.
-	tx := Transaction{Status: "pending", NodePath: filepath.Join(dir, "x-node"), CLIPath: filepath.Join(dir, "xnodectl")}
+	tx := transactionFixture(dir)
 	for _, target := range []string{tx.NodePath, tx.CLIPath} {
 		if err = os.WriteFile(target, []byte("current binary"), 0755); err != nil {
 			t.Fatal(err)

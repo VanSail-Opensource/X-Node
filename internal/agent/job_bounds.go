@@ -50,6 +50,9 @@ func wireJobResult(result JobResult) JobResult {
 }
 
 func limitJobResult(result JobResult, limit int) JobResult {
+	if result.Status != "failed" {
+		result.terminalFailure = false
+	}
 	if len(result.Error) > 1024 {
 		result.Error = strings.ToValidUTF8(result.Error[:1024], "")
 	}
@@ -63,6 +66,7 @@ func limitJobResult(result JobResult, limit int) JobResult {
 	raw, err := marshalJobBounded(result, limit)
 	if err != nil {
 		result.Data = nil
+		result.terminalFailure = false
 		result.Status, result.Error = "failed", "job result exceeded its safe serialization limit"
 		if persistentJob(result.Command) {
 			result.Status = "uncertain"
@@ -80,6 +84,9 @@ func limitJobResult(result JobResult, limit int) JobResult {
 		result.Data = nil
 	}
 	result.encodedBytes = len(raw)
+	if result.terminalFailure {
+		result.encodedBytes += len(`,"terminal_failure":true`)
+	}
 	return result
 }
 

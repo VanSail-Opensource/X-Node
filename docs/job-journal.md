@@ -38,6 +38,14 @@ are required; duplicate/case-aliased metadata, trailing input and I/O uncertaint
 fail closed. The 16 MiB total limit includes whitespace and bounds even a single
 large JSON scalar; discarded containers are streamed without a full object tree.
 
+Newly persisted failed receipts include private `terminal_failure` evidence only
+when execution was never entered or a typed refusal proves a terminal outcome.
+These receipts remain failed and evictable after restart, so rejected stale hourly
+sessions cannot fill the journal with artificial obligations. The field never
+enters `command.result` or `jobs.list`. Legacy failures without this evidence,
+oversized recovery, and unsuccessful completion durability barriers remain
+uncertain. Duplicate, case-aliased or contradictory terminal evidence fails closed.
+
 Before compaction, `job_evidence.go` preserves the original bytes in a private,
 content-addressed sibling with file/directory barriers. Existing evidence is
 verified and synced before reuse. The primary is replaced atomically only after

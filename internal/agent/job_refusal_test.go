@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"errors"
+	"path/filepath"
 	"sync/atomic"
 	"testing"
 
@@ -29,6 +30,7 @@ func TestHourlyDefiniteRefusalsRemainTerminalAcrossReplay(t *testing.T) {
 			if result := executionResult(t, results); result.Status != "failed" {
 				t.Fatal("proven refusal became uncertain", result.Status)
 			}
+			jobs, results = executionJobs(t, filepath.Dir(jobs.path))
 			if err := jobs.Start(context.Background(), "rejected-hourly", protocol.HourlyCreditInstallCommand, fn); err != nil {
 				t.Fatal(err)
 			}

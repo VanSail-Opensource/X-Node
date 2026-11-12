@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -56,11 +57,13 @@ func (a *Agent) scheduleUtilities(ctx context.Context, now time.Time) {
 		if now.Sub(a.lastDDNS[job.ID]) < interval {
 			continue
 		}
-		a.lastDDNS[job.ID] = now
 		job := job
-		_ = a.Jobs.Start(ctx, "internal-ddns-"+fmt.Sprint(now.UnixNano()), "ddns", func(ctx context.Context, progress func(any)) (any, error) {
+		id := fmt.Sprintf("internal-ddns-%x-%d", sha256.Sum256([]byte(job.ID)), now.UnixNano())
+		if err := a.Jobs.Start(ctx, id, "ddns", func(ctx context.Context, progress func(any)) (any, error) {
 			return a.runDDNS(ctx, c, job)
-		})
+		}); err == nil {
+			a.lastDDNS[job.ID] = now
+		}
 	}
 	if next := a.geoNext.Load(); next > 0 && now.UnixNano() >= next && !a.geoRunning.Load() {
 		p, e := geodata.FromNative(c.Xray)
@@ -77,8 +80,7 @@ func (a *Agent) scheduleUtilities(ctx context.Context, now time.Time) {
 		}
 	}
 	if now.Sub(a.lastUpdate) >= 24*time.Hour {
-		a.lastUpdate = now
-		_ = a.Jobs.Start(ctx, "internal-update-"+fmt.Sprint(now.UnixNano()), "update.check", func(ctx context.Context, progress func(any)) (any, error) {
+		if err := a.Jobs.Start(ctx, "internal-update-"+fmt.Sprint(now.UnixNano()), "update.check", func(ctx context.Context, progress func(any)) (any, error) {
 			release, e := a.Updater.Check(ctx, c.Updates.Version)
 			if e != nil {
 				return nil, e
@@ -87,6 +89,8 @@ func (a *Agent) scheduleUtilities(ctx context.Context, now time.Time) {
 				return a.Updater.Install(ctx, "internal-update", release.Version, progress)
 			}
 			return release, nil
-		})
+		}); err == nil {
+			a.lastUpdate = now
+		}
 	}
 }

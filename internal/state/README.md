@@ -5,6 +5,11 @@ revisions, bans and IP blocks. `desired.go` stages validated activation targets;
 acceptance clears them. `connection_controls.go` excludes connection-derived
 admission decisions from durable snapshots. `configuration.go` provides bounded
 configuration copies and metadata without copying traffic or credentials.
+Recovery checks the state file's type and 64 MiB size limit before allocating
+contents, and also caps the read to reject concurrent growth. Invalid evidence
+is retained. Atomic writes acknowledge success only after the containing
+directory sync and close succeed; a rename with an uncertain durability barrier
+does not publish a fresh in-memory authorization view.
 
 `dns_migration.go` normalizes both accepted and staged legacy resolver settings
 in memory during `Open`, before bootstrap or configuration readers see them.

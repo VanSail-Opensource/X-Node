@@ -87,7 +87,7 @@ func readLegacyJobRecord(decoder *jsontext.Decoder) (JobResult, error) {
 		}
 		var field uint8
 		var maximum int
-		for _, name := range []string{"id", "command", "status", "finished"} {
+		for _, name := range []string{"id", "command", "status", "finished", "terminal_failure"} {
 			if key.String() != name && strings.EqualFold(key.String(), name) {
 				return JobResult{}, errLegacyJobMetadata
 			}
@@ -101,6 +101,8 @@ func readLegacyJobRecord(decoder *jsontext.Decoder) (JobResult, error) {
 			field, maximum = 4, 32
 		case "finished":
 			field, maximum = 8, 64
+		case "terminal_failure":
+			field = 16
 		default:
 			if err := decoder.SkipValue(); err != nil {
 				return JobResult{}, errLegacyJobMetadata
@@ -112,6 +114,13 @@ func readLegacyJobRecord(decoder *jsontext.Decoder) (JobResult, error) {
 		}
 		seen |= field
 		token, err := decoder.ReadToken()
+		if field == 16 {
+			if err != nil || token.Kind() != 't' && token.Kind() != 'f' {
+				return JobResult{}, errLegacyJobMetadata
+			}
+			result.terminalFailure = token.Kind() == 't'
+			continue
+		}
 		if err != nil || token.Kind() != '"' {
 			return JobResult{}, errLegacyJobMetadata
 		}
@@ -139,6 +148,9 @@ func readLegacyJobRecord(decoder *jsontext.Decoder) (JobResult, error) {
 		}
 	}
 	if end, err := decoder.ReadToken(); err != nil || end.Kind() != '}' || seen&7 != 7 {
+		return JobResult{}, errLegacyJobMetadata
+	}
+	if result.terminalFailure && result.Status != "failed" {
 		return JobResult{}, errLegacyJobMetadata
 	}
 	return result, nil

@@ -60,7 +60,12 @@ func (j *Jobs) loadHistory() error {
 		if err == nil {
 			decoder := json.NewDecoder(bytes.NewReader(raw))
 			decoder.UseNumber()
-			err = decoder.Decode(&entries)
+			var receipts []journalJobResult
+			err = decoder.Decode(&receipts)
+			for _, receipt := range receipts {
+				receipt.JobResult.terminalFailure = receipt.TerminalFailure
+				entries = append(entries, receipt.JobResult)
+			}
 		}
 		_, _ = digest.Write(raw)
 	}
@@ -70,7 +75,7 @@ func (j *Jobs) loadHistory() error {
 	preserve := metadataOnly
 	var history []JobResult
 	for _, entry := range durableJobHistory(entries) {
-		if metadataOnly || entry.Status == "running" || entry.Status == "cancelled" || entry.Status == "failed" {
+		if metadataOnly || entry.Status == "running" || entry.Status == "cancelled" || entry.Status == "failed" && !entry.terminalFailure {
 			preserve = true
 			entry.Status, entry.Error = "uncertain", "recovered mutation requires native outcome reconciliation"
 		}

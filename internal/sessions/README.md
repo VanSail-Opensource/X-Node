@@ -55,6 +55,12 @@ transient. Hosted cases cover quota races, expiry, counters and quiescence.
 
 `period_barrier.go` finishes revoked period handlers without closing renewed streams.
 `period_barrier_test.go` covers late old bytes, active-period rejection and renewal continuity in hosted CI.
+Each lease retains its original principal/period accounting key when verified
+identity replacement moves its live principal. Principal and period barriers
+include handlers still writing that original key, close them, and wait for their
+native completion. Newly admitted replacement leases remain independent.
+`accounting_identity_barrier_test.go` covers delayed barriers and late payload
+accounting after identity replacement.
 
 `activity.go` samples per-lease payload counters without an idle grace period.
 Active connection/IP telemetry and lists share that snapshot; admission and

@@ -4,12 +4,14 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/VanSail-Opensource/X-Node/internal/protocol"
+	"github.com/VanSail-Opensource/X-Node/internal/state"
 	"github.com/VanSail-Opensource/X-Node/internal/update"
 )
 
@@ -105,5 +107,45 @@ func TestLegacySourceCheckpointWaitsForUpgradeConfirmation(t *testing.T) {
 	confirmed, err := OpenGuard(g.dir, g.manager)
 	if err != nil || confirmed.legacySources || confirmed.state.Sources["feed"].PrefixCount != 1 {
 		t.Fatal("confirmed migration did not retain the source", err)
+	}
+}
+
+func TestSourceCheckpointDirectorySyncFailureKeepsPublishedReceipts(t *testing.T) {
+	g, _ := guardFixture(t)
+	now := time.Now().UTC()
+	event := func(ip string) journalRecord {
+		return journalRecord{Events: []protocol.FirewallEvent{{Kind: "detected", IP: ip, Rule: "xray_invalid", Count: 1, FirstSeen: now, Time: now}}}
+	}
+	if err := g.appendJournal(event("8.8.8.8")); err != nil {
+		t.Fatal(err)
+	}
+	previousEpoch := g.state.JournalEpoch
+	failure := errors.New("injected checkpoint directory sync failure")
+	// The state-package regression injects failure immediately after the real
+	// rename. Here replay that writer result through the complete source path.
+	g.writeCheckpoint = func(path string, data []byte, mode os.FileMode) (bool, error) {
+		published, err := state.AtomicWritePublished(path, data, mode)
+		if err != nil {
+			return published, err
+		}
+		return published, failure
+	}
+	chunk := protocol.FirewallUpdate{Version: 1, SourcesOnly: true, SnapshotID: "published-source", Final: true, SourcesComplete: true, Sources: []protocol.FirewallSource{{ID: "feed", Generation: "first", Until: now.Add(time.Hour), RefreshSeconds: 3600, Prefixes: []string{"8.8.8.0/24"}}}}
+	if err := g.Sync(context.Background(), chunk); !errors.Is(err, failure) {
+		t.Fatal("injected post-rename failure was not reported", err)
+	}
+	if g.state.JournalEpoch == previousEpoch || g.state.SourceMasterVersion != 1 || !g.haveSnapshot {
+		t.Fatal("published checkpoint rolled back in memory", g.state.JournalEpoch, previousEpoch, g.state.SourceMasterVersion)
+	}
+	g.writeCheckpoint = nil
+	if err := g.appendJournal(event("8.8.4.4")); err != nil {
+		t.Fatal(err)
+	}
+	restarted, err := OpenGuard(g.dir, g.manager)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if restarted.state.JournalEpoch != g.state.JournalEpoch || restarted.state.SourceMasterVersion != 1 || len(restarted.state.Events) != 2 {
+		t.Fatal("published checkpoint or acknowledged follow-up receipt was lost", restarted.state.JournalEpoch, restarted.state.SourceMasterVersion, restarted.state.Events)
 	}
 }

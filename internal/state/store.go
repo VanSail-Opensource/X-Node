@@ -143,12 +143,24 @@ func (s *Store) Ban(id int, until time.Time) error {
 	})
 }
 func AtomicWrite(path string, b []byte, mode os.FileMode) error {
+	_, err := AtomicWritePublished(path, b, mode)
+	return err
+}
+
+// AtomicWritePublished reports whether Rename published the new file, even when
+// its following directory sync fails. A true result with an error is not a
+// durability guarantee: dependent receipts must sync the directory before ACK.
+func AtomicWritePublished(path string, b []byte, mode os.FileMode) (bool, error) {
+	return atomicWriteWithDirectorySync(path, b, mode, SyncDirectory)
+}
+
+func atomicWriteWithDirectorySync(path string, b []byte, mode os.FileMode, syncDirectory func(string) error) (bool, error) {
 	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
-		return err
+		return false, err
 	}
 	f, err := os.CreateTemp(filepath.Dir(path), ".xnode-*")
 	if err != nil {
-		return err
+		return false, err
 	}
 	tmp := f.Name()
 	defer os.Remove(tmp)
@@ -163,12 +175,12 @@ func AtomicWrite(path string, b []byte, mode os.FileMode) error {
 		err = closeErr
 	}
 	if err != nil {
-		return err
+		return false, err
 	}
 	if err = os.Rename(tmp, path); err != nil {
-		return err
+		return false, err
 	}
-	return SyncDirectory(filepath.Dir(path))
+	return true, syncDirectory(filepath.Dir(path))
 }
 
 // SyncDirectory makes new/replaced filenames durable before their state is

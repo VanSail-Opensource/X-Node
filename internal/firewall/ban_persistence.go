@@ -118,11 +118,19 @@ func (g *Guard) writeSnapshot(value banState) error {
 	if err := writer.Close(); err != nil {
 		return err
 	}
-	if err := state.AtomicWrite(g.file("bans.json.gz"), buffer.Bytes(), 0600); err != nil {
-		return err
+	write := g.writeCheckpoint
+	if write == nil {
+		write = state.AtomicWritePublished
 	}
-	g.haveSnapshot = true
-	return nil
+	published, err := write(g.file("bans.json.gz"), buffer.Bytes(), 0600)
+	if published {
+		// Rename is already visible even if its directory sync failed. Keep
+		// subsequent journal records on that epoch; appendPrepared syncs the
+		// journal and this directory before applying or acknowledging them.
+		g.haveSnapshot = true
+		g.state.JournalEpoch = value.JournalEpoch
+	}
+	return err
 }
 func (g *Guard) compact() error {
 	if err := g.flushPending(); err != nil {
@@ -146,7 +154,6 @@ func (g *Guard) compact() error {
 	if err = g.writeSnapshot(next); err != nil {
 		return err
 	}
-	g.state.JournalEpoch = next.JournalEpoch
 	if err = os.Remove(g.file("bans.journal.gz")); err != nil && !os.IsNotExist(err) {
 		return err
 	}

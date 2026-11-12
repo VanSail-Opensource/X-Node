@@ -142,9 +142,9 @@ func (g *Guard) syncSources(ctx context.Context, update protocol.FirewallUpdate)
 		g.mu.Unlock()
 		return err
 	}
-	// A new journal epoch means the checkpoint was already published. An
-	// obsolete journal unlink can still fail afterwards; retaining the old
-	// memory state would write subsequent receipts under a retired epoch.
+	// A new journal epoch means Rename already published the checkpoint.
+	// Directory sync or obsolete journal unlink can still fail afterwards;
+	// retaining old memory would append receipts under a retired epoch.
 	g.closeSourceLookups()
 	g.dirty, g.sourcesDirty = true, true
 	g.mu.Unlock()

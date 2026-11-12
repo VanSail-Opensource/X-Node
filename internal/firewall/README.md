@@ -154,9 +154,12 @@ Hosted `BenchmarkDuplicateFirewallAcknowledgment` compares duplicate journal
 writes with the no-op path on the same private state fixture.
 Acknowledged events and expired records are pruned; torn final journal members
 are removed without losing committed records. Compaction epochs prevent stale
-journal replay, and expiry acknowledgments cannot remove a newer source. If old
-journal cleanup fails after publishing a source checkpoint, memory retains the
-published epoch so later receipts remain readable after restart.
+journal replay, and expiry acknowledgments cannot remove a newer source.
+If directory sync or old-journal cleanup fails after a source checkpoint rename,
+memory retains that visible checkpoint's epoch. Every subsequent journal append
+syncs both its file and the shared directory before applying or acknowledging the
+record, completing any uncertain checkpoint directory barrier. The publication
+and source-recovery regressions cover this boundary and restart of later receipts.
 Expiry shares the detector's 4096 pending-event budget. Full queues defer only
 durable retirement/report creation; absolute deadlines still remove kernel and
 operational restrictions. ACKs resume retirement without discarding reports.

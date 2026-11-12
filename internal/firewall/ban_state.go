@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/netip"
+	"os"
 	"path/filepath"
 	"reflect"
 	"sort"
@@ -84,6 +85,7 @@ type Guard struct {
 	legacySources     bool
 	retainBulk        bool
 	haveSnapshot      bool
+	writeCheckpoint   func(string, []byte, os.FileMode) (bool, error)
 	journalBytes      int64
 	applying          bool
 	kernelError       string

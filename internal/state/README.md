@@ -12,6 +12,12 @@ are rejected without changing their evidence. Atomic writes acknowledge success 
 directory sync and close succeed; a rename with an uncertain durability barrier
 does not publish a fresh in-memory authorization view.
 `SyncDirectory` shares that barrier with append journals that create new filenames.
+`AtomicWritePublished` separately reports successful rename visibility when the
+following directory barrier fails. Snapshot/journal callers retain the published
+epoch and require a later directory sync before acknowledging dependent records;
+this does not relax the authorization store's success-only publication rule.
+`atomic_publication_test.go` covers failures before rename and after rename but
+before directory durability.
 `recovery_file.go` exposes the same bounded read-only regular-file boundary to
 upgrade and firewall recovery, with each caller selecting its document limit.
 

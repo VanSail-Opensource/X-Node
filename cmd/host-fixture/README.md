@@ -9,7 +9,8 @@ The default phase creates two network namespaces connected by dual-stack veth
 links. Python standard-library echo servers exercise allowed and closed input
 ports and TCP/UDP DNAT/masquerading for IPv4 and IPv6. Native nftables queries
 check retained rule handles, timed bans, meters, and foreign-table removal.
-Loopback DNS fixtures check readiness and actual TCP/UDP output redirection.
+Loopback DNS fixtures check readiness and prove host TCP/UDP DNS is not redirected
+by the retired resolver path.
 
 The `--abandon` subprocess applies a policy and exits without confirmation. The
 parent waits 45 seconds from process exit plus the bounded 30-second recovery
@@ -27,8 +28,9 @@ and the two-phase reboot contract.
 
 `ownership.go` retains the exact disposable marker/platform guard, prepares
 already-on nftables, disabled nftables, or Ubuntu UFW baselines, and checks
-takeover, reboot and uninstall ownership. The CI matrix runs all three cases
-in separate disposable VMs. The VM script verifies the official Debian SHA512
+takeover, reboot and uninstall ownership. The current CI matrix runs both Debian
+nftables modes in separate disposable VMs; Ubuntu UFW remains an optional harness
+case. The VM script verifies the official Debian SHA512
 or Ubuntu SHA256 image checksum before boot; no privileged fixture runs locally.
 `startup.go` waits for the actual agent process after its firewall dependencies
 finish, with a bounded deadline and unit-journal diagnostics.
@@ -42,7 +44,7 @@ watchdog and the watchdog's default recovery budget remain unchanged and are
 still exercised by the fixture.
 
 `firewall_control.go` validates real NFLOG reporting without autonomous bans,
-master-authorized nftables restrictions, repeated-hit refresh, exact IPv6
+master-authorized nftables restrictions, unchanged deadlines on repeated hits, exact IPv6
 exemptions and outbound/reply preservation. It leaves an authoritative ban and
 compact source generation for reboot verification. These destructive checks
 remain confined to the marked disposable VM.

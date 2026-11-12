@@ -166,3 +166,8 @@ this feature and preserves its evidence without stopping legacy traffic.
 Historical mixed traffic reports use the independently negotiated hourly
 accounting receipt header, allowing ordinary accounting to drain after hourly
 storage failure while live hourly admission remains disabled.
+
+`BinaryCapabilities` reports compiled format support for `--version` and the
+updater's recovery checks. It includes hourly support independently of live
+journal health; `runtimeCapabilities` still omits hourly admission whenever its
+credit store is unavailable. Static version metadata grants no live authority.

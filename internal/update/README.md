@@ -36,6 +36,14 @@ staged configurations. `persisted_compatibility_test.go` guards disk sources,
 CIDR exemptions, streamed country generations and domain-free file certificates
 against unsafe replacement or rollback binaries.
 
+Hourly policy in authorized, accepted or staged users requires
+`hourly_account_limits_v1` in replacement and rollback binary metadata. Retained
+hourly credit evidence requires it even after those users disappear, including
+ACK tombstones and the compacted sequence fence. The journal inspection is
+read-only: it never recovers a live credit, changes its activation authority or
+rewrites evidence. Corrupt journals block replacement. A pristine empty journal
+does not prevent the first hourly-capable installation from rolling back.
+
 `cleanup.go` removes disposable `.new` downloads under transaction ownership on
 install exit and confirmation/startup. Installed binaries, both `.old` rollback
 dependencies and private journals remain protected. Corrupt transactions fail

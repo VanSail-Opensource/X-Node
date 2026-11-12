@@ -40,11 +40,16 @@ func (a *Agent) initializeHourly() {
 }
 
 func (a *Agent) runtimeCapabilities() []string {
-	capabilities := append([]string(nil), Capabilities...)
 	if a.hourlyAvailable() {
-		capabilities = append(capabilities, protocol.HourlyCapability)
+		return BinaryCapabilities()
 	}
-	return capabilities
+	return append([]string(nil), Capabilities...)
+}
+
+// BinaryCapabilities reports format support for upgrade/rollback checks.
+// Operational hello remains gated on the actual hourly store/controller health.
+func BinaryCapabilities() []string {
+	return append(append([]string(nil), Capabilities...), protocol.HourlyCapability)
 }
 
 func (a *Agent) runHourly(ctx context.Context) func() {

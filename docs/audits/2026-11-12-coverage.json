@@ -1,17 +1,17 @@
 {
   "repository": "VanSail-Opensource/X-Node",
   "baseline_commit": "185f2d4d401e758ee0b6f4a5bebc2708f1805288",
-  "reviewed_commit": "49225410c3f776250b47c1ad186474e864906a73",
+  "reviewed_commit": "85f38d5b251e31b439b81a2d51a9186e21395079",
   "hash_kind": "git-blob-sha1",
   "review_completed": "2026-11-12",
-  "artifact_scope": "This records the completed review at the immutable reviewed code commit. The later report, coverage manifest and audit-directory README are authored audit artifacts outside that snapshot to avoid self-referential hashing. Git tree reconstruction records completed full-file reviews; inspecting metadata alone is not an audit.",
+  "artifact_scope": "This records the completed full-file review at the immutable reviewed code commit, excluding docs/audits/ (the report, coverage manifest and audit-directory README are authored audit artifacts). Excluding these artifacts avoids self-referential hashing; their earlier versions already exist in this commit. Git tree reconstruction records completed source reviews; metadata inspection alone is not an audit. Final-review follow-up XN-15 is included in this reviewed snapshot.",
   "counts": {
     "baseline": 741,
-    "reviewed": 771,
-    "added": 30,
+    "reviewed": 772,
+    "added": 31,
     "modified": 91,
     "removed": 0,
-    "full_read": 756,
+    "full_read": 757,
     "verified_generated": 14,
     "verified_dependency_lock": 1
   },
@@ -2251,10 +2251,10 @@
     {
       "path": "internal/firewall/ban_persistence.go",
       "baseline_blob_sha": "0ec54a9a4e2e5157460e543f89ea94fb59f5a915",
-      "reviewed_blob_sha": "2ba0aa2bb533bbfe48afd789887af1a623c30236",
+      "reviewed_blob_sha": "72183f04bca35b393eb23eaa3e7357350c3a220a",
       "change": "modified",
       "disposition": "full-read",
-      "note": "Complete file read; confirmed findings and fixes documented in accompanying report."
+      "note": "Final-review follow-up fully read and cross-reviewed: Keep snapshot epoch at actual rename boundary even when directory sync returns an error."
     },
     {
       "path": "internal/firewall/ban_recovery_integrity_test.go",
@@ -2291,10 +2291,10 @@
     {
       "path": "internal/firewall/ban_state.go",
       "baseline_blob_sha": "fba2a3d337b9f5aea29edc7fc1ce2561912dc13c",
-      "reviewed_blob_sha": "30aaeb6209fa47c883de707dc9d4bbbe2c4885da",
+      "reviewed_blob_sha": "066f873e44436547865b000093cc2d9061dc8292",
       "change": "modified",
       "disposition": "full-read",
-      "note": "Complete file read; confirmed findings and fixes documented in accompanying report."
+      "note": "Final-review follow-up fully read and cross-reviewed: Allow isolated per-Guard checkpoint failure injection."
     },
     {
       "path": "internal/firewall/ban_status.go",
@@ -2755,10 +2755,10 @@
     {
       "path": "internal/firewall/README.md",
       "baseline_blob_sha": "296582cb4daa15e91fc4074612b35e14827f4d4e",
-      "reviewed_blob_sha": "2aa06f0c5cac75c32e6b053d614cf0b83ea5bb7a",
+      "reviewed_blob_sha": "64a2e7dd01a5c7f34cc9a6f8e9a5733c0ff051c2",
       "change": "modified",
       "disposition": "full-read",
-      "note": "Complete file read; confirmed findings and fixes documented in accompanying report."
+      "note": "Final-review follow-up fully read and cross-reviewed: Explain final-review checkpoint synchronization failure and subsequent receipt durability."
     },
     {
       "path": "internal/firewall/reconcile_linux.go",
@@ -2923,10 +2923,10 @@
     {
       "path": "internal/firewall/source_recovery_test.go",
       "baseline_blob_sha": null,
-      "reviewed_blob_sha": "9335c581495c0d85d107129095d49bea056525c7",
+      "reviewed_blob_sha": "1dbb9c614448be6dcc7866a2644d2eef782795d1",
       "change": "added",
       "disposition": "full-read",
-      "note": "Complete file read; confirmed findings and fixes documented in accompanying report."
+      "note": "Final-review follow-up fully read and cross-reviewed: Full source-update failure followed by acknowledged append and restart must retain both preexisting and subsequent receipts."
     },
     {
       "path": "internal/firewall/source_retention.go",
@@ -2963,10 +2963,10 @@
     {
       "path": "internal/firewall/source_sync.go",
       "baseline_blob_sha": "8863402ebed890a6d43d2c8ddff03b4f39d048c6",
-      "reviewed_blob_sha": "eb2156a737b2d89700ed0e2ae46655de3d232e39",
+      "reviewed_blob_sha": "9973c23abcb16a761d7073840fd5a137a51788eb",
       "change": "modified",
       "disposition": "full-read",
-      "note": "Complete file read; confirmed findings and fixes documented in accompanying report."
+      "note": "Final-review follow-up fully read and cross-reviewed: Document visibility-aware rollback fence."
     },
     {
       "path": "internal/firewall/source_upgrade.go",
@@ -5241,6 +5241,14 @@
       "note": "Complete file read; confirmed findings and fixes documented in accompanying report."
     },
     {
+      "path": "internal/state/atomic_publication_test.go",
+      "baseline_blob_sha": null,
+      "reviewed_blob_sha": "6161b37ee918aac3629c78644109b1b635674119",
+      "change": "added",
+      "disposition": "full-read",
+      "note": "Final-review follow-up fully read and cross-reviewed: Inject actual post-rename directory barrier failure and distinguish failed rename with retained existing data."
+    },
+    {
       "path": "internal/state/authorization_failure_test.go",
       "baseline_blob_sha": "25714bb691dcc450d980c58203c1f937f3b12668",
       "reviewed_blob_sha": "25714bb691dcc450d980c58203c1f937f3b12668",
@@ -5363,10 +5371,10 @@
     {
       "path": "internal/state/README.md",
       "baseline_blob_sha": "67683e047ecfb56814ee8e8918036947573c4a6e",
-      "reviewed_blob_sha": "e6ffb8b88e447d0d1625be314d21ba20deb21b4c",
+      "reviewed_blob_sha": "f87e8c56cc680c6fc3561948e99a7552170c26e4",
       "change": "modified",
       "disposition": "full-read",
-      "note": "Complete file read; confirmed findings and fixes documented in accompanying report."
+      "note": "Final-review follow-up fully read and cross-reviewed: Explain rename visibility versus durability and list fault regressions."
     },
     {
       "path": "internal/state/recovery_bounds_test.go",
@@ -5403,10 +5411,10 @@
     {
       "path": "internal/state/store.go",
       "baseline_blob_sha": "dd7d1d7d0916d0a3ff2142e73ef64107bfe885c8",
-      "reviewed_blob_sha": "44839171f9e52598dac455e31ba350b297799525",
+      "reviewed_blob_sha": "ad27a8dbe20b9b83864a9524ef3eef3ebb597b06",
       "change": "modified",
       "disposition": "full-read",
-      "note": "Complete file read; confirmed findings and fixes documented in accompanying report."
+      "note": "Final-review follow-up fully read and cross-reviewed: Expose rename visibility separately from final directory durability without relaxing AtomicWrite error behavior."
     },
     {
       "path": "internal/state/traffic_legacy.go",

@@ -86,6 +86,17 @@ have one separate bounded executor. Ordinary utilities retain two workers and
 urgent controls retain one; overflow returns a busy response instead of allocating
 an unbounded queue. Immediate `jobs.list`/`update.status` remain available.
 
+Terminal results previously became visible before the worker released its slot.
+A fast follow-up could therefore receive a busy response after the prior command
+had completed. Workers now finalize durable or volatile receipt bookkeeping and
+encode the bounded result, release their slot once, then offer the result to the
+nonblocking transport queue. An idempotent deferred release covers early exits.
+The transport still bounds completion frames and never waits on a socket from
+this callback; no additional publisher queue or durable record is created.
+`job_completion_test.go` reproduces immediate same-lane successor admission from
+the result callback across successful, uncertain, refused, cancelled and failed
+journal-write outcomes without changing their receipt semantics.
+
 Native/provider locks now accept operation context. A cancelled DDNS job or
 superseded activation no longer waits for another operation merely to release
 its worker. DDNS's 30-second timeout includes lock waiting.

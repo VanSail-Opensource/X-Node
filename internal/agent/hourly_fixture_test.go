@@ -175,6 +175,9 @@ func (f *hourlyAgentFixture) frame(t *testing.T, p *hourlyTestPeer, kind, id str
 	for {
 		select {
 		case event := <-f.frames:
+			if event.peer == p && id != "" && event.message.ID == id && event.message.Type == "error" && kind != "error" {
+				t.Fatalf("hourly request %s/%s rejected: %s", kind, id, event.message.Data)
+			}
 			if event.peer == p && event.message.Type == kind && (id == "" || event.message.ID == id) {
 				return event.message
 			}

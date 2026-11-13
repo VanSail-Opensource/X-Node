@@ -41,9 +41,10 @@ type Jobs struct {
 	urgent       chan struct{}
 	accounting   chan struct{}
 	inspection   chan struct{}
-	send         func(protocol.Message, bool) bool
-	redact       func(string) string
-	write        func(string, []byte, os.FileMode) error
+	// Production uses Client.Send: a bounded queue offer with no network wait.
+	send   func(protocol.Message, bool) bool
+	redact func(string) string
+	write  func(string, []byte, os.FileMode) error
 }
 
 type runningJob struct {

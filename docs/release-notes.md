@@ -11,6 +11,10 @@ an explicit new attempt uses a new request ID. Exact argument fingerprints rejec
 same-ID changes without rounding large integers, and ambiguous duplicate JSON
 members are rejected before execution.
 
+Completed jobs finalize their receipt and release executor capacity before
+publishing the terminal result, so an immediate follow-up can use that capacity.
+Result publication remains a bounded, nonblocking transport queue offer.
+
 Retains the accepted proxy runtime while the master disconnects or restarts.
 Already accepted hourly rate grants retain their original deadlines, and installed
 centrally reserved full-speed byte credit remains usable within its paid expiry,

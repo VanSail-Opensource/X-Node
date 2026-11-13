@@ -49,6 +49,7 @@ type hourlyAgentFixture struct {
 	audit      chan hourlyTestFrame
 	config     protocol.Config
 	ackTraffic atomic.Bool
+	offline    atomic.Bool
 }
 
 func newHourlyAgentFixture(t *testing.T, negotiate, corrupt bool) *hourlyAgentFixture {
@@ -62,6 +63,10 @@ func prepareHourlyAgentFixture(t *testing.T, negotiate, corrupt bool, prepare fu
 	stopServer := make(chan struct{})
 	upgrader := websocket.Upgrader{Subprotocols: []string{"x-node.v1"}}
 	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if f.offline.Load() {
+			http.Error(w, "master restarting", http.StatusServiceUnavailable)
+			return
+		}
 		headers := http.Header{}
 		if negotiate {
 			headers.Set(protocol.HourlyAccountingHeader, protocol.HourlyAccountingFormat)
@@ -170,6 +175,9 @@ func (f *hourlyAgentFixture) frame(t *testing.T, p *hourlyTestPeer, kind, id str
 	for {
 		select {
 		case event := <-f.frames:
+			if event.peer == p && id != "" && event.message.ID == id && event.message.Type == "error" && kind != "error" {
+				t.Fatalf("hourly request %s/%s rejected: %s", kind, id, event.message.Data)
+			}
 			if event.peer == p && event.message.Type == kind && (id == "" || event.message.ID == id) {
 				return event.message
 			}

@@ -87,12 +87,12 @@ resolver access. No DNS listener is opened and no host packet is redirected.
 `dns_test.go` exercises real VLESS TCP/UDP queries against a controlled resolver,
 including one-query loop prevention. These regressions run in hosted Quality.
 
-Resolver mode is retired. `PrepareCached` first applies the protocol's
-`Config.NormalizeDNS` compatibility migration; legacy loopback behavior becomes
-an explicit native server before rendering. `dns.go` requires native servers
-when interception is enabled and contains no mode-dependent fallback. The
-deprecated upstream list remains inert. `dns_migration_test.go` covers this
-boundary without starting host services.
+Resolver mode and the inert upstream list are removed from the live protocol.
+`dns.go` requires explicit native servers when interception is enabled and has
+no mode-dependent fallback. Historical accepted state is normalized only by the
+bounded private snapshot reader before offline bootstrap. `dns_migration_test.go`
+checks that native preparation preserves explicit resolvers and requires a
+configured resolver, without starting host services.
 
 `inbound_config.go` and `inbound_observer.go` wrap public native proxy interfaces,
 retaining public user-management methods and existing listener update behavior.

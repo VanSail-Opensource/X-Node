@@ -43,7 +43,7 @@ func largeLegacyJournal(t *testing.T) []byte {
 	t.Helper()
 	raw, err := json.Marshal([]JobResult{
 		{ID: "large-read", Command: "firewall.status", Status: "completed", Data: strings.Repeat("x", maxJobJournalBytes)},
-		{ID: "old-mutation", Command: "runtime.reload", Status: "completed", Data: map[string]bool{"applied": true}},
+		{ID: "old-mutation", Command: "update.rollback", Status: "completed", Data: map[string]bool{"applied": true}},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -81,7 +81,7 @@ func TestOversizedLegacyJournalPreservesEvidenceAndUncertainty(t *testing.T) {
 		if err != nil || jobs.recovery != "" {
 			t.Fatal("compacted journal did not restart")
 		}
-		if err := jobs.Start(context.Background(), "old-mutation", "runtime.reload", func(context.Context, func(any)) (any, error) { t.Error("uncertain mutation replayed"); return nil, nil }); err != nil {
+		if err := jobs.Start(context.Background(), "old-mutation", "update.rollback", func(context.Context, func(any)) (any, error) { t.Error("uncertain mutation replayed"); return nil, nil }); err != nil {
 			t.Fatal(err)
 		}
 		if result := journalResult(t, results); result.Status != "uncertain" {
@@ -98,7 +98,7 @@ func TestOversizedLegacyJournalPreservesEvidenceAndUncertainty(t *testing.T) {
 }
 
 func TestUnverifiableJournalAllowsReadsButFencesDurableMutations(t *testing.T) {
-	for _, raw := range [][]byte{[]byte(`[{"id":"lost","command":"runtime.reload","status":"running"}`), bytes.Repeat([]byte(" "), legacyJobRecoveryMaxBytes+1)} {
+	for _, raw := range [][]byte{[]byte(`[{"id":"lost","command":"update.rollback","status":"running"}`), bytes.Repeat([]byte(" "), legacyJobRecoveryMaxBytes+1)} {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "jobs.json")
 		if err := os.WriteFile(path, raw, 0600); err != nil {
@@ -110,7 +110,7 @@ func TestUnverifiableJournalAllowsReadsButFencesDurableMutations(t *testing.T) {
 			if err != nil || jobs.recovery == "" {
 				t.Fatal("unknown identities did not enter recovery-only mode")
 			}
-			if err := jobs.Start(context.Background(), "new-mutation", "runtime.reload", func(context.Context, func(any)) (any, error) {
+			if err := jobs.Start(context.Background(), "new-mutation", "update.rollback", func(context.Context, func(any)) (any, error) {
 				t.Error("unverified mutation executed")
 				return nil, nil
 			}); err == nil {

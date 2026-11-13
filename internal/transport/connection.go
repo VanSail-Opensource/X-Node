@@ -12,7 +12,7 @@ import (
 )
 
 func (c *Client) connect(ctx context.Context) bool {
-	c.clearHourlySession()
+	c.suspendHourlySession()
 	c.computePool.Store(false)
 	c.compactTelemetry.Store(false)
 	c.openConnections.Store(false)
@@ -51,7 +51,7 @@ func (c *Client) connect(ctx context.Context) bool {
 	defer c.status(false)
 	c.acceptHourly(response, hourlyOffer)
 	c.acceptHourlyAccounting(response)
-	defer c.clearHourlySession()
+	defer c.suspendHourlySession()
 	c.computePool.Store(response.Header.Get(protocol.ComputePoolHeader) == protocol.ComputePoolFormat)
 	defer c.computePool.Store(false)
 	c.compactTelemetry.Store(response.Header.Get(protocol.TelemetryFormatHeader) == protocol.CompactTelemetryFormat)

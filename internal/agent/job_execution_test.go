@@ -87,7 +87,7 @@ func TestBlockedJournalWritesDoNotBlockAdmissionOrInspection(t *testing.T) {
 			}
 			var firstCalls, secondCalls, controlCalls atomic.Int32
 			first := func(context.Context, func(any)) (any, error) { firstCalls.Add(1); return nil, nil }
-			if err := executionStart(t, func() error { return jobs.Start(ctx, "first", "runtime.reload", first) }); err != nil {
+			if err := executionStart(t, func() error { return jobs.Start(ctx, "first", "update.rollback", first) }); err != nil {
 				t.Fatal(err)
 			}
 			executionAwait(t, blocked, "blocked journal write")
@@ -100,14 +100,14 @@ func TestBlockedJournalWritesDoNotBlockAdmissionOrInspection(t *testing.T) {
 			if len(seen) != 1 || seen[0].ID != "first" || seen[0].Status != "running" {
 				t.Fatal("blocked command lost its running identity", seen)
 			}
-			if err := executionStart(t, func() error { return jobs.Start(ctx, "first", "runtime.reload", first) }); err != nil {
+			if err := executionStart(t, func() error { return jobs.Start(ctx, "first", "update.rollback", first) }); err != nil {
 				t.Fatal("same-command retry blocked behind disk", err)
 			}
 			if err := executionStart(t, func() error { return jobs.Start(ctx, "first", "update.install", first) }); err == nil {
 				t.Fatal("running request identity accepted another command")
 			}
 			if err := executionStart(t, func() error {
-				return jobs.Start(ctx, "second", "geodata.refresh", func(context.Context, func(any)) (any, error) {
+				return jobs.Start(ctx, "second", "firewall.apply", func(context.Context, func(any)) (any, error) {
 					secondCalls.Add(1)
 					return nil, nil
 				})

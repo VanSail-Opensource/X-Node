@@ -11,10 +11,12 @@ import (
 
 // Scheduled and manual jobs share one serialized discovery/provider path.
 func (a *Agent) runDDNS(ctx context.Context, configuration protocol.Config, job protocol.DDNSJob) (dns.Result, error) {
-	a.dnsMu.Lock()
-	defer a.dnsMu.Unlock()
 	child, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
+	if err := a.dnsMu.LockContext(child); err != nil {
+		return dns.Result{}, err
+	}
+	defer a.dnsMu.Unlock()
 	if job.Generation != "" && a.ddnsJournal == nil {
 		return dns.Result{}, errors.New("DDNS journal unavailable")
 	}

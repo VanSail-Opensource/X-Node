@@ -13,7 +13,7 @@ func observationJob(command string) bool {
 }
 
 func persistentJob(command string) bool {
-	if observationJob(command) {
+	if observationJob(command) || repeatableJob(command) {
 		return false
 	}
 	switch command {
@@ -21,6 +21,21 @@ func persistentJob(command string) bool {
 		return false
 	}
 	return true
+}
+
+// These operations reconcile current desired state, or own their stronger
+// durable replay identity in the native store. A second generic intent cannot
+// make them safer, but a failed discovery/chunk used to fill the global journal
+// and eventually fence unrelated synchronization and paid-credit admission.
+// The bounded live receipt cache still suppresses duplicate request IDs.
+func repeatableJob(command string) bool {
+	switch command {
+	case "ddns", "ddns.run", "runtime.reload", "geodata.refresh",
+		"firewall.bans.sync", "firewall.bans.update", "firewall.geoip.sync", "firewall.confirm",
+		protocol.HourlyCreditInstallCommand, protocol.HourlyCreditSealCommand, protocol.HourlyCreditAckCommand:
+		return true
+	}
+	return false
 }
 
 func durableJobHistory(history []JobResult) []JobResult {

@@ -9,12 +9,14 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 
 	"github.com/VanSail-Opensource/X-Node/internal/protocol"
+	"github.com/VanSail-Opensource/X-Node/internal/state"
 )
 
 func NewJobs(dir string, send func(protocol.Message, bool) bool) (*Jobs, error) {
-	j := &Jobs{path: filepath.Join(dir, "jobs.json"), running: map[string]runningJob{}, slots: make(chan struct{}, 2), urgent: make(chan struct{}, 1), send: send, write: writeJobFile}
+	j := &Jobs{path: filepath.Join(dir, "jobs.json"), running: map[string]runningJob{}, slots: make(chan struct{}, 2), urgent: make(chan struct{}, 1), accounting: make(chan struct{}, 1), inspection: make(chan struct{}, 1), send: send, write: state.AtomicWrite}
 	if err := j.loadHistory(); err != nil {
 		j.recovery = err.Error()
 	}
@@ -38,11 +40,15 @@ func (j *Jobs) loadHistory() error {
 	if info.Size() > legacyJobRecoveryMaxBytes {
 		return errors.New("JOURNAL_RECOVERY_LIMIT: history exceeds bounded recovery capacity")
 	}
-	file, err := os.Open(j.path)
+	file, err := os.OpenFile(j.path, os.O_RDONLY|syscall.O_NONBLOCK|syscall.O_NOFOLLOW, 0)
 	if err != nil {
 		return errors.New("JOURNAL_UNREADABLE: history could not be opened")
 	}
 	defer file.Close()
+	opened, err := file.Stat()
+	if err != nil || !opened.Mode().IsRegular() || !os.SameFile(info, opened) || opened.Size() != info.Size() || !opened.ModTime().Equal(info.ModTime()) {
+		return errors.New("JOURNAL_UNREADABLE: history changed while opening")
+	}
 	var entries []JobResult
 	digest := sha256.New()
 	metadataOnly := info.Size() >= maxJobJournalBytes
@@ -73,6 +79,11 @@ func (j *Jobs) loadHistory() error {
 		return errors.New("JOURNAL_INVALID: history identities could not be verified")
 	}
 	preserve := metadataOnly
+	for _, entry := range entries {
+		// Keep the exact old receipt for inspection before retiring redundant
+		// generic history. Its native operation already owns replay authority.
+		preserve = preserve || repeatableJob(entry.Command)
+	}
 	var history []JobResult
 	for _, entry := range durableJobHistory(entries) {
 		if metadataOnly || entry.Status == "running" || entry.Status == "cancelled" || entry.Status == "failed" && !entry.terminalFailure {

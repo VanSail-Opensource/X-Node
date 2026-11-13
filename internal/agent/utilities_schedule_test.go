@@ -20,7 +20,9 @@ func TestScheduledDDNSJobsHaveDistinctReceiptsAndRetryBusyAdmission(t *testing.T
 		a.desired.DDNS = append(a.desired.DDNS, protocol.DDNSJob{ID: id, Provider: protocol.BuiltinDDNSProvider, IPv4: "192.0.2.1"})
 	}
 	// Hold provider execution so the third due job must encounter both slots busy.
-	a.dnsMu.Lock()
+	if err := a.dnsMu.LockContext(context.Background()); err != nil {
+		t.Fatal(err)
+	}
 	a.scheduleUtilities(context.Background(), now)
 	if len(a.lastDDNS) != 2 {
 		a.dnsMu.Unlock()

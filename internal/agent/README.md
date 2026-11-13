@@ -29,7 +29,7 @@ validation. `native_environment_test.go` verifies dependency-free rejection of
 unsafe configuration. See `docs/process-environment.md`.
 
 `ddns.go` shares scheduled/manual discovery and external-provider execution under
-the existing DNS utility lock. Built-in `builtin:panel` skips provider creation
+a cancellable DNS utility lock; its 30-second budget includes queue waiting. Built-in `builtin:panel` skips provider creation
 and DNS publication. Successful generated jobs append a durable change before
 returning; failure retains the last valid discovery. Periodic reporting replays
 bounded batches only on a negotiated connection, and `state_receive.go` persists
@@ -41,8 +41,9 @@ busy workers leave the job due for the next maintenance tick.
 `utilities_schedule_test.go` covers multiple DDNS jobs and busy utility slots.
 
 `agent.go` owns serialized desired-state and runtime activation. Utility jobs use
-two bounded workers; they submit traffic captures back to the actor instead of
-mutating sampling baselines concurrently.
+two bounded bulk workers and separate control, hourly-credit and inspection
+slots. Traffic captures return to the actor instead of mutating sampling
+baselines concurrently.
 
 Validated desired configuration is staged before binding listeners. Startup
 retries that target after a previous bind failure, retaining the last applied
@@ -62,7 +63,9 @@ and `agent.error` retain the redacted underlying failure for storage diagnostics
 the existing workers; `job_journal.go` persists pre-execution intents and final
 receipts outside the control-reader mutex. `job_bounds.go` limits serialized
 receipt/history bytes while preserving exact integers. `job_privacy.go` excludes
-observations and existing volatile controls from disk. `job_loader.go` and
+observations, repeatable reconciliation and native-journal-owned commands from
+generic disk receipts. A failed DDNS or full generic mutation journal cannot
+fence independent credit installation, sync or status work. `job_loader.go` and
 `job_recovery.go` recover bounded legacy metadata; `job_evidence.go` preserves
 private original bytes before compaction. Unverifiable history fences durable
 utilities without failing ordinary agent startup. See `docs/job-journal.md`.
@@ -90,15 +93,22 @@ its joined background tasks keep disk/kernel work off the control reader and Xra
 payload paths. New report frames are gated by `master_controlled`, protecting
 rolling upgrades with older masters. Typed firewall snapshot/delta commands use
 the existing utility executor. Read-only firewall status never enters durable job history.
-`geodata_schedule.go` owns completion-based hour intervals and bounded refresh retries; related hosted fixtures cover superseded configuration and successful/failure completion. GeoIP remains master-only.
+`geodata_schedule.go` owns completion-based hour intervals and bounded refresh
+retries. Downloads use an isolated private stage without the native activation
+lock; verified publication briefly owns that lock and preserves serving/rollback
+generations. Cancelled native/provider waiters release executor capacity.
+`utility_availability_test.go` and geodata adoption tests cover slow downloads,
+cancellation, serving-generation retention and uncertain recovery references.
+GeoIP remains master-only.
 
 `native_prepare.go` shares asset injection across activation and command validation. Certificate preflight uses an isolated pool and never issues ACME certificates or changes active certificate status. `Jobs.StartControl` reserves one bounded utility slot for urgent bans, traffic barriers and firewall confirmation; ordinary jobs retain two slots. Session/metrics commands no longer clone configuration and accounting journals unnecessarily.
 
 `commands.go` dispatches protocol commands with execution deadlines; `command_connections.go` owns ephemeral connection/IP controls. `command_reload.go` waits for actor-owned activation, propagates supersession and keeps traffic acknowledgments available. `command_reload_test.go` covers queued versus completed activation. Immediate read-only `update.status` and `jobs.list` replies remain independent of occupied utility slots.
 
 `job_result_test.go` covers failed completion writes after a persisted intent;
-the uncertain outcome survives replay without repeating execution. Running IDs
-are bound to command names and remain visible in recovery inspection.
+the uncertain outcome survives replay without repeating execution. Running and retained live IDs bind command names and canonical argument digests
+without persisting secret arguments. Duplicate object members reject before
+admission; exact JSON integers remain distinct in replay identities.
 
 Incremental activation uses `activation.go` and the exhaustive consumer planner in
 `internal/protocol/changes.go`/`actions.go`. Controls can acknowledge an already
@@ -123,7 +133,7 @@ remain owned by the actor while activation runs in the serialized worker.
 
 `reports.go` coalesces periodic/status/replay requests in one joined worker. Report encoding runs outside the actor. Local status uses a bounded socket query. `status.go` uses value-only state metadata and rejects a summary built across a revision change. `reporting_test.go` covers request coalescing, shutdown and ACK-driven replay.
 
-`cadence.go` owns independent actor sampling/report tickers, reset only when master intervals change. `cadence_test.go` verifies start-to-start ticks, unchanged state and interval changes in hosted fake-time tests. The one-second maintenance ticker handles expiry, activation retries, utilities and watchdog independently. Active IP reporting is mandatory; the deprecated saved switch is ignored. `status_socket.go` exposes current non-secret state through the private `localstatus` query; reporting never writes status files.
+`cadence.go` owns independent actor sampling/report tickers, reset only when master intervals change. `cadence_test.go` verifies start-to-start ticks, unchanged state and interval changes in hosted fake-time tests. The one-second maintenance ticker handles expiry, activation retries, utilities and watchdog independently. Active IP reporting is mandatory; the retired live switch is no longer accepted. `status_socket.go` exposes current non-secret state through the private `localstatus` query; reporting never writes status files.
 
 `activity_test.go` verifies flush/sample independence with fake time. `activity.go` keeps throughput/activity sampling baselines independent of manual accounting captures, so a flush cannot consume the next configured rate sample. `accounting.go` returns queue-pressure barriers as retryable command failures without pausing admission.
 
@@ -154,8 +164,9 @@ Unsupported masters cannot activate hourly identities. Existing identities and
 native accounting retain their normal paths when hourly storage is unavailable.
 
 `hourly_receive.go` applies memory-only grants and delays successful shrink ACKs
-until native handoffs drain. `hourly_commands.go` uses the existing utility job
-executor for durable install, seal and exact proof ACK commands. It never waits
+until native handoffs drain. `hourly_commands.go` uses a dedicated bounded executor for durable install,
+seal and exact proof ACK commands. The native credit journal owns recovery,
+so a second generic receipt is not written. It never waits
 on the reserved traffic/control executor. `hourly_publish.go` coalesces bounded
 demand/progress frames and replays immutable credit proofs. Live progress records
 admitted bytes; only a frozen and durably sealed proof can return unused credit.

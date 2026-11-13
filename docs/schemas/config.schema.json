@@ -111,17 +111,48 @@
     "ddns": {
       "items": {
         "additionalProperties": false,
+        "anyOf": [
+          {
+            "properties": {
+              "ipv4": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "ipv4"
+            ]
+          },
+          {
+            "properties": {
+              "ipv6": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "ipv6"
+            ]
+          }
+        ],
         "properties": {
           "generation": {
+            "maxLength": 128,
+            "pattern": "^[A-Za-z0-9._-]*$",
             "type": "string"
           },
           "id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9._-]+$",
             "type": "string"
           },
           "interface": {
             "type": "string"
           },
           "interval_seconds": {
+            "maximum": 86400,
+            "minimum": 0,
             "type": "integer"
           },
           "ipv4": {
@@ -143,6 +174,8 @@
             "type": "string"
           },
           "ttl_seconds": {
+            "maximum": 2147483647,
+            "minimum": 0,
             "type": "integer"
           },
           "zone": {
@@ -162,26 +195,8 @@
     "dns": {
       "additionalProperties": false,
       "properties": {
-        "mode": {
-          "deprecated": true,
-          "description": "Deprecated compatibility input. Empty/xray/smartdns are accepted; effective DNS always uses Xray. Legacy loopback behavior is migrated to native dns.servers.",
-          "enum": [
-            "",
-            "xray",
-            "smartdns"
-          ],
-          "type": "string"
-        },
         "redirect": {
           "type": "boolean"
-        },
-        "upstreams": {
-          "deprecated": true,
-          "description": "Ignored compatibility input. Configure upstream resolvers through native Xray dns.servers.",
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
         }
       },
       "required": [],
@@ -459,9 +474,6 @@
     "telemetry": {
       "additionalProperties": false,
       "properties": {
-        "include_active_ips": {
-          "type": "boolean"
-        },
         "report_seconds": {
           "type": "integer"
         },

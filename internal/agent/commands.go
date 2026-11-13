@@ -20,9 +20,18 @@ func (a *Agent) command(ctx context.Context, m protocol.Message) error {
 	if e := protocol.Decode(m.Data, &request); e != nil {
 		return e
 	}
+	if protocol.ClassifyAction(request.Name) == protocol.ReconcileAction {
+		return errors.New("unsupported utility command")
+	}
 	args := request.Args
 	if len(args) == 0 {
 		args = []byte("{}")
+	}
+	// Bind live replays to normalized object arguments without persisting
+	// credentials or duplicating native financial/certificate replay stores.
+	var err error
+	if args, err = canonicalCommandArgs(args); err != nil {
+		return err
 	}
 	if request.Name == protocol.CertificateRunCommand {
 		var input protocol.CertificateRunArgs
@@ -61,19 +70,26 @@ func (a *Agent) command(ctx context.Context, m protocol.Message) error {
 			configuration, _ = a.Store.Configuration()
 		}
 	}
-	start := a.Jobs.Start
+	slots := a.Jobs.slots
 	switch request.Name {
+	case protocol.HourlyCreditInstallCommand, protocol.HourlyCreditSealCommand, protocol.HourlyCreditAckCommand:
+		// Durable reserved bytes must not wait behind bulk downloads or flushes.
+		slots = a.Jobs.accounting
 	case "traffic.flush", "firewall.confirm", "firewall.bans.update", "firewall.protected.sync", protocol.AutomaticLeaseCommand:
-		start = a.Jobs.StartControl
+		slots = a.Jobs.urgent
 	case "firewall.bans.sync":
 		var chunk struct {
 			SourcesOnly bool `json:"sources_only"`
 		}
 		if json.Unmarshal(args, &chunk) == nil && !chunk.SourcesOnly {
-			start = a.Jobs.StartControl
+			slots = a.Jobs.urgent
+		}
+	default:
+		if protocol.ClassifyAction(request.Name) == protocol.ObserveAction {
+			slots = a.Jobs.inspection
 		}
 	}
-	return start(ctx, m.ID, request.Name, func(ctx context.Context, progress func(any)) (any, error) {
+	return a.Jobs.start(ctx, m.ID, request.Name, slots, args, func(ctx context.Context, progress func(any)) (any, error) {
 		ctx, cancel := context.WithTimeout(ctx, protocol.CommandTimeout(request.Name))
 		defer cancel()
 		switch request.Name {
@@ -88,7 +104,9 @@ func (a *Agent) command(ctx context.Context, m protocol.Message) error {
 			if err != nil {
 				return nil, err
 			}
-			a.nativeMu.Lock()
+			if err := a.nativeMu.LockContext(ctx); err != nil {
+				return nil, err
+			}
 			defer a.nativeMu.Unlock()
 			policy, err := geodata.FromNative(config.Xray)
 			if err != nil {
@@ -176,12 +194,12 @@ func (a *Agent) command(ctx context.Context, m protocol.Message) error {
 				DNSRedirect bool                    `json:"dns_redirect,omitempty"`
 			}
 			if e := protocol.Decode(args, &p); e != nil {
-				return nil, e
+				return nil, refuseJob(e)
 			}
 			candidate := protocol.Clone(configuration)
 			candidate.Firewall = p.Policy
 			if err := protocol.ValidateNativePolicies(candidate); err != nil {
-				return nil, err
+				return nil, refuseJob(err)
 			}
 			return a.Firewall.Apply(ctx, m.ID, p.Policy, p.DNSRedirect)
 		case "speedtest":
@@ -197,7 +215,7 @@ func (a *Agent) command(ctx context.Context, m protocol.Message) error {
 				Version string `json:"version,omitempty"`
 			}
 			if e := protocol.Decode(args, &p); e != nil {
-				return nil, e
+				return nil, refuseJob(e)
 			}
 			return a.Updater.Install(ctx, m.ID, p.Version, progress)
 		case "update.rollback":

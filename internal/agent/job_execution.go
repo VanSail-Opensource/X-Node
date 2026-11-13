@@ -2,18 +2,28 @@ package agent
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
+	"sync"
 	"time"
 
 	"github.com/VanSail-Opensource/X-Node/internal/protocol"
 )
 
-func (j *Jobs) execute(ctx context.Context, cancel context.CancelFunc, slots chan struct{}, id, command string, fn func(context.Context, func(any)) (any, error)) {
-	defer func() { <-slots; cancel() }()
-	result := JobResult{ID: id, Command: command, Status: "completed"}
+func (j *Jobs) execute(ctx context.Context, cancel context.CancelFunc, slots chan struct{}, id, command string, fingerprint [sha256.Size]byte, fn func(context.Context, func(any)) (any, error)) {
+	release := sync.OnceFunc(func() { <-slots; cancel() })
+	defer release()
+	publish := func(result JobResult) {
+		// Finish receipt bookkeeping and payload encoding before admitting a
+		// successor. The bounded send callback must not wait for network I/O.
+		message := protocol.New("command.result", id, 0, result)
+		release()
+		j.send(message, true)
+	}
+	result := JobResult{ID: id, Command: command, Status: "completed", fingerprint: fingerprint}
 	if ctx.Err() != nil {
 		result.Status, result.Error = "cancelled", "job cancelled before execution"
-		j.finishVolatile(boundedJobResult(result))
+		publish(j.finishVolatile(boundedJobResult(result)))
 		return
 	}
 	if persistentJob(command) {
@@ -22,7 +32,7 @@ func (j *Jobs) execute(ctx context.Context, cancel context.CancelFunc, slots cha
 			if errors.Is(err, errJobCapacity) {
 				result.Error = "job receipt capacity exhausted; command was not executed"
 			}
-			j.finishVolatile(boundedJobResult(result))
+			publish(j.finishVolatile(boundedJobResult(result)))
 			return
 		}
 	}
@@ -55,16 +65,16 @@ func (j *Jobs) execute(ctx context.Context, cancel context.CancelFunc, slots cha
 	if persistentJob(command) {
 		result = j.recordCompletion(boundedJobResult(result))
 	} else {
-		j.finishVolatile(wireJobResult(result))
+		publish(j.finishVolatile(wireJobResult(result)))
 		return
 	}
 	j.mu.Lock()
 	delete(j.running, id)
 	j.mu.Unlock()
-	j.send(protocol.New("command.result", id, 0, result), true)
+	publish(result)
 }
 
-func (j *Jobs) finishVolatile(result JobResult) {
+func (j *Jobs) finishVolatile(result JobResult) JobResult {
 	remember := result
 	if result.encodedBytes > maxJobResultBytes && !observationJob(result.Command) {
 		result.Status, result.Error, result.Data = "uncertain", "volatile result exceeded its safe replay limit", nil
@@ -81,5 +91,5 @@ func (j *Jobs) finishVolatile(result JobResult) {
 		}
 	}
 	j.mu.Unlock()
-	j.send(protocol.New("command.result", result.ID, 0, result), true)
+	return result
 }

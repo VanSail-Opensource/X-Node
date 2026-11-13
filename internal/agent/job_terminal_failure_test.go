@@ -16,7 +16,7 @@ func TestTerminalFailuresRemainEvictableAfterRestart(t *testing.T) {
 	dir := t.TempDir()
 	jobs, _ := executionJobs(t, dir)
 	for i := range maxJobHistory {
-		result := boundedJobResult(JobResult{ID: fmt.Sprint(i), Command: protocol.HourlyCreditInstallCommand, Status: "failed", terminalFailure: true})
+		result := boundedJobResult(JobResult{ID: fmt.Sprint(i), Command: protocol.CertificateRunCommand, Status: "failed", terminalFailure: true})
 		var err error
 		jobs.history, err = retainJob(jobs.history, result, true)
 		if err != nil {
@@ -32,7 +32,7 @@ func TestTerminalFailuresRemainEvictableAfterRestart(t *testing.T) {
 			t.Fatal("proven terminal failure became a protected obligation")
 		}
 	}
-	if err := jobs.Start(context.Background(), "fresh", "runtime.reload", func(context.Context, func(any)) (any, error) {
+	if err := jobs.Start(context.Background(), "fresh", "update.rollback", func(context.Context, func(any)) (any, error) {
 		return map[string]bool{"applied": true}, nil
 	}); err != nil {
 		t.Fatal(err)
@@ -44,7 +44,7 @@ func TestTerminalFailuresRemainEvictableAfterRestart(t *testing.T) {
 
 func TestTerminalFailureMarkerNeverEntersCommandWire(t *testing.T) {
 	jobs, results := executionJobs(t, t.TempDir())
-	if err := jobs.Start(context.Background(), "refused", protocol.HourlyCreditInstallCommand, func(context.Context, func(any)) (any, error) {
+	if err := jobs.Start(context.Background(), "refused", protocol.CertificateRunCommand, func(context.Context, func(any)) (any, error) {
 		return nil, refuseJob(errors.New("stale session"))
 	}); err != nil {
 		t.Fatal(err)
@@ -82,7 +82,7 @@ func TestFailedTerminalReceiptPersistenceStillReplaysUncertain(t *testing.T) {
 		}
 		return write(path, raw, mode)
 	}
-	if err := jobs.Start(context.Background(), "refused", protocol.HourlyCreditInstallCommand, func(context.Context, func(any)) (any, error) {
+	if err := jobs.Start(context.Background(), "refused", protocol.CertificateRunCommand, func(context.Context, func(any)) (any, error) {
 		return nil, refuseJob(errors.New("stale session"))
 	}); err != nil {
 		t.Fatal(err)
@@ -91,7 +91,7 @@ func TestFailedTerminalReceiptPersistenceStillReplaysUncertain(t *testing.T) {
 		t.Fatal("failed persistence exposed an evictable terminal result")
 	}
 	jobs, results = executionJobs(t, dir)
-	if err := jobs.Start(context.Background(), "refused", protocol.HourlyCreditInstallCommand, func(context.Context, func(any)) (any, error) {
+	if err := jobs.Start(context.Background(), "refused", protocol.CertificateRunCommand, func(context.Context, func(any)) (any, error) {
 		t.Error("unproved terminal result executed again")
 		return nil, nil
 	}); err != nil {
@@ -104,7 +104,7 @@ func TestFailedTerminalReceiptPersistenceStillReplaysUncertain(t *testing.T) {
 
 func TestTerminalFailureMarkerSharesPerReceiptByteLimit(t *testing.T) {
 	const limit = 512
-	result := JobResult{ID: "boundary", Command: "runtime.reload", Status: "failed", Data: "", terminalFailure: true}
+	result := JobResult{ID: "boundary", Command: "update.rollback", Status: "failed", Data: "", terminalFailure: true}
 	base, err := json.Marshal(result)
 	if err != nil {
 		t.Fatal(err)

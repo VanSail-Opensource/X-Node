@@ -16,7 +16,6 @@ func TestDemandReplayCannotExtendOriginalDeadline(t *testing.T) {
 		t.Fatal("pending nonce was replaced before expiry")
 	}
 	g := f.grant(t, 1, 0, 0)
-	f.credit(t, 10)
 	f.clock.Advance(time.Second)
 	if f.interrupted.Load() != 0 {
 		t.Fatal("grant deadline disconnected an idle flow")
@@ -37,12 +36,13 @@ func TestShrinkWaitsForInterruptAndStartedHandoffOutsideLocks(t *testing.T) {
 	}
 	g := f.grant(t, 1, 1000, 100)
 	f.credit(t, 10)
-	p := acquireAdmission(t, flow, Download, 10, 1)
+	f.clock.Advance(time.Millisecond)
+	p := acquireAdmission(t, flow, Download, 11, 1)
 	if err = p.Begin(); err != nil {
 		t.Fatal(err)
 	}
-	// The first handoff exhausted full-speed credit. A fresh reduced-rate
-	// bucket starts empty, so earn the probe's one byte before reserving it.
+	// The handoff consumed all credit and one reduced-rate byte. Earn the
+	// probe's one byte before reserving it; the rate-bound handoff must drain.
 	f.clock.Advance(time.Millisecond)
 	probe := acquireAdmission(t, f.flow, Upload, 1, 1)
 	probe.Complete(NotHandedOff)

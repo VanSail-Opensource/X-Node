@@ -1,6 +1,7 @@
 package transport
 
 import (
+	"bytes"
 	"sync"
 
 	"github.com/VanSail-Opensource/X-Node/internal/protocol"
@@ -26,6 +27,16 @@ func (q *messageLane) offer(m protocol.Message, replace bool) (bool, bool) {
 	size := len(m.Data) + 128
 	if size > q.limit {
 		return false, false
+	}
+	// A traffic head is immutable and repeatedly offered until its ACK arrives.
+	// Retain one queued copy during an outage; duplicates used to fill this
+	// lane and force reconnects before the master could drain the real backlog.
+	if m.Type == "traffic.report" && m.ID != "" {
+		for _, queued := range q.frames {
+			if queued.Type == m.Type && queued.ID == m.ID {
+				return queued.V == m.V && queued.Revision == m.Revision && queued.BaseRevision == m.BaseRevision && bytes.Equal(queued.Data, m.Data), false
+			}
+		}
 	}
 	replaced := replace && len(q.frames) > 0
 	if replaced {

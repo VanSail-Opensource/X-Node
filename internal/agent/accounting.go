@@ -89,14 +89,14 @@ func (a *Agent) captureTrafficFrom(current state.Traffic) error {
 
 func (a *Agent) flushTraffic(ctx context.Context, raw []byte) (any, error) {
 	if !a.Client.TrafficStreams() {
-		return nil, errors.New("traffic stream negotiation is required for a flush")
+		return nil, refuseJob(errors.New("traffic stream negotiation is required for a flush"))
 	}
 	var args protocol.TrafficFlush
 	if err := protocol.Decode(raw, &args); err != nil {
-		return nil, err
+		return nil, refuseJob(err)
 	}
 	if args.UserID < 0 || args.AccountingPeriod != "" && (!args.Quiesce || args.UserID <= 0 || !protocol.ValidName(args.AccountingPeriod)) {
-		return nil, errors.New("invalid traffic flush user")
+		return nil, refuseJob(errors.New("invalid traffic flush user"))
 	}
 	child, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
@@ -121,6 +121,9 @@ func (a *Agent) flushTraffic(ctx context.Context, raw []byte) (any, error) {
 	}
 	select {
 	case result := <-request.result:
+		if errors.Is(result.err, state.ErrTrafficBusy) {
+			return nil, refuseJob(result.err)
+		}
 		return result.barrier, result.err
 	case <-child.Done():
 		return nil, child.Err()

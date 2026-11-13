@@ -48,9 +48,9 @@ func TestPaidNativeStreamsSurviveMasterOutageAndRestart(t *testing.T) {
 	defer closeClient()
 	dial := func() net.Conn {
 		t.Helper()
-		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-		defer cancel()
-		connection, err := client.Transport.(*http.Transport).DialContext(ctx, "tcp", listener.Addr().String())
+		// Xray keeps the direct Dial context for the stream lifetime. Ending a
+		// dial-only context here would close the stream before its first write.
+		connection, err := client.Transport.(*http.Transport).DialContext(t.Context(), "tcp", listener.Addr().String())
 		if err != nil {
 			t.Fatal("paid stream admission failed", err)
 		}
@@ -58,13 +58,16 @@ func TestPaidNativeStreamsSurviveMasterOutageAndRestart(t *testing.T) {
 	}
 	exchange := func(connection net.Conn, text string) {
 		t.Helper()
-		_ = connection.SetDeadline(time.Now().Add(3 * time.Second))
+		// Direct Xray connections do not implement net.Conn deadlines. Closing
+		// the pipe bounds each exchange without canceling healthy stream state.
+		deadline := time.AfterFunc(3*time.Second, func() { _ = connection.Close() })
+		defer deadline.Stop()
 		if _, err := connection.Write([]byte(text)); err != nil {
-			t.Fatal("existing paid stream lost its native writer", err)
+			t.Fatalf("existing paid stream lost its native writer at %s: %v", text, err)
 		}
 		response := make([]byte, len(text))
 		if _, err := io.ReadFull(connection, response); err != nil || !bytes.Equal(response, []byte(text)) {
-			t.Fatal("paid stream stopped forwarding during a master lifecycle change", err)
+			t.Fatalf("paid stream stopped forwarding at %s: %v", text, err)
 		}
 	}
 	stream := dial()

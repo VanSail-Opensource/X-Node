@@ -15,7 +15,7 @@ import (
 func TestSerializedReceiptAndAggregateBounds(t *testing.T) {
 	var history []JobResult
 	for i := 0; i < 200; i++ {
-		result := boundedJobResult(JobResult{ID: fmt.Sprint(i), Command: "runtime.reload", Status: "completed", Data: strings.Repeat("x", 48<<10)})
+		result := boundedJobResult(JobResult{ID: fmt.Sprint(i), Command: "update.rollback", Status: "completed", Data: strings.Repeat("x", 48<<10)})
 		var err error
 		history, err = retainJob(history, result, true)
 		if err != nil {
@@ -26,7 +26,7 @@ func TestSerializedReceiptAndAggregateBounds(t *testing.T) {
 			t.Fatal("aggregate byte or receipt bound failed")
 		}
 	}
-	oversized := boundedJobResult(JobResult{ID: "large", Command: "runtime.reload", Status: "completed", Data: strings.Repeat("x", maxJobResultBytes)})
+	oversized := boundedJobResult(JobResult{ID: "large", Command: "update.rollback", Status: "completed", Data: strings.Repeat("x", maxJobResultBytes)})
 	if oversized.Status != "uncertain" || oversized.Data != nil {
 		t.Fatal("truncated mutation was exposed as completed")
 	}
@@ -39,12 +39,12 @@ func TestUncertainReceiptsCannotBeEvictedForAnotherMutation(t *testing.T) {
 		t.Fatal(err)
 	}
 	for i := 0; i < maxJobHistory; i++ {
-		jobs.history, err = retainJob(jobs.history, boundedJobResult(JobResult{ID: fmt.Sprint(i), Command: "runtime.reload", Status: "uncertain"}), true)
+		jobs.history, err = retainJob(jobs.history, boundedJobResult(JobResult{ID: fmt.Sprint(i), Command: "update.rollback", Status: "uncertain"}), true)
 		if err != nil {
 			t.Fatal(err)
 		}
 	}
-	if err := jobs.Start(context.Background(), "overflow", "runtime.reload", func(context.Context, func(any)) (any, error) {
+	if err := jobs.Start(context.Background(), "overflow", "update.rollback", func(context.Context, func(any)) (any, error) {
 		t.Error("capacity failure executed mutation")
 		return nil, nil
 	}); err != nil {

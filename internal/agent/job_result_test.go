@@ -32,7 +32,7 @@ func TestFailedResultJournalRemainsUncertainOnReplay(t *testing.T) {
 	}
 	calls := 0
 	mutate := func(context.Context, func(any)) (any, error) { calls++; return map[string]bool{"applied": true}, nil }
-	if err := jobs.Start(context.Background(), "mutation", "runtime.reload", mutate); err != nil {
+	if err := jobs.Start(context.Background(), "mutation", "update.rollback", mutate); err != nil {
 		t.Fatal(err)
 	}
 	read := func() {
@@ -48,7 +48,7 @@ func TestFailedResultJournalRemainsUncertainOnReplay(t *testing.T) {
 		}
 	}
 	read()
-	if err := jobs.Start(context.Background(), "mutation", "runtime.reload", mutate); err != nil {
+	if err := jobs.Start(context.Background(), "mutation", "update.rollback", mutate); err != nil {
 		t.Fatal(err)
 	}
 	read()

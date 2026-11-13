@@ -13,8 +13,4 @@ func TestScopedDNSAllowsLoopbackAndPublicResolvers(t *testing.T) {
 	if c.Validate() == nil {
 		t.Fatal("missing DNS configuration accepted")
 	}
-	c.DNS.Mode = "smartdns"
-	if e := c.Validate(); e != nil {
-		t.Fatal(e)
-	}
 }

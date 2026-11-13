@@ -32,7 +32,7 @@ func (a *Agent) retireHourlyCredits(ctx context.Context) {
 		if len(installs) == 0 {
 			continue
 		}
-		session, day := a.Client.HourlySession(), time.Now().UTC().Format(time.DateOnly)
+		session, day := a.Client.HourlyAuthoritySession(), time.Now().UTC().Format(time.DateOnly)
 		for n := 0; n < min(4, len(installs)); n++ {
 			install := installs[(int(cursor%uint64(len(installs)))+n)%len(installs)]
 			if ctx.Err() != nil {

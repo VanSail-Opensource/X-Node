@@ -6,6 +6,7 @@ type Permit struct {
 	flow              *Flow
 	bucket            *bucket
 	grant             *grantState
+	session           string
 	direction         Direction
 	bytes             int
 	reduced           uint64
@@ -29,7 +30,12 @@ func (p *Permit) Begin() error {
 	if p.started || p.finished {
 		return ErrRevoked
 	}
-	valid := !p.flow.closed && !p.flow.fenced && c.authorized(p.flow.binding, now) && c.session != "" && p.grant == p.bucket.grant && p.grant.grant.SessionID == c.session && p.grant.deadline.After(now) && p.bucket.scope.DayUTC == now.UTC().Format(time.DateOnly)
+	valid := !p.flow.closed && !p.flow.fenced && c.authorized(p.flow.binding, now) && c.session != "" && p.session == c.session && p.bucket.scope.DayUTC == now.UTC().Format(time.DateOnly)
+	if p.grant != nil {
+		valid = valid && p.grant == p.bucket.grant && p.grant.grant.SessionID == c.session && p.grant.deadline.After(now)
+	} else {
+		valid = valid && p.reduced == 0
+	}
 	for _, a := range p.credits {
 		valid = valid && !a.credit.frozen && a.credit.installed.marker.active()
 	}
@@ -52,7 +58,10 @@ func (p *Permit) Begin() error {
 		a.credit.held -= a.bytes
 		a.credit.admitted[p.direction] += a.bytes
 	}
-	deadline := p.grant.deadline
+	deadline := time.Date(now.UTC().Year(), now.UTC().Month(), now.UTC().Day()+1, 0, 0, 0, 0, time.UTC)
+	if p.grant != nil && p.grant.deadline.Before(deadline) {
+		deadline = p.grant.deadline
+	}
 	if paid := c.authorizations[p.flow.binding].PaidThrough; paid.Before(deadline) {
 		deadline = paid
 	}

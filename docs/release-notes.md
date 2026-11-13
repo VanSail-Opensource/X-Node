@@ -1,3 +1,48 @@
+# X-Node v2.0.29
+
+Keeps unrelated work available under failed jobs, queue pressure and master
+outages. Accounting and inspection commands have independent bounded workers;
+repeatable desired-state operations no longer fill a second durable command
+journal. Native credit, firewall and other operation identities retain their
+own replay fences. Existing generic receipts are preserved before redundant
+history is retired, and uncertain non-repeatable mutations still require outcome
+reconciliation. Failed live receipts replay without rerunning the same command;
+an explicit new attempt uses a new request ID. Exact argument fingerprints reject
+same-ID changes without rounding large integers, and ambiguous duplicate JSON
+members are rejected before execution.
+
+Retains the accepted proxy runtime while the master disconnects or restarts.
+Already accepted hourly rate grants retain their original deadlines, and installed
+centrally reserved full-speed byte credit remains usable within its paid expiry,
+UTC day, byte ceiling and healthy original process/session. Failed reconnects do
+not mint tokens or credit. A successful new session fences old authority and
+settles the original credit partition; exhausted credit with an expired rate
+grant pauses until the master supplies new authority. Agent process restart does
+not make unsealed old credit spendable. See the [hourly contract](hourly-account-limits.md).
+
+Scheduled geodata downloads stage outside native activation locks. Cancelled
+utilities can leave native/DDNS lock waits promptly. Duplicate immutable traffic
+replays already waiting in the bounded transport lane are coalesced without
+acknowledging, replacing or rewriting financial reports, and obsolete overflow
+signals cannot repeatedly tear down a new connection. New ordinary traffic remains
+bounded and volatile until acknowledged; this release does not make crash or
+overflow accounting lossless.
+
+Validates DDNS address families, usable sources, HTTPS discovery, TTL bounds,
+IDNA names, apex/wildcard records and exact zone containment before provider work.
+Removes retired `dns.mode` and `dns.upstreams` from the live protocol: use
+`dns.redirect` with native `xray.dns.servers`. Bounded accepted/staged snapshot
+recovery preserves established effective resolvers during offline boot and strips
+retired fields on the next ordinary durable write, retaining revisions and
+accounting identity. The ignored `telemetry.include_active_ips` field is removed;
+active-IP sampling remains mandatory. Upgrade the matching Carpool master before rolling out this
+agent so newly synchronized configurations use the current DNS shape.
+
+See the [availability audit](audits/2026-11-13-availability.md) for all reviewed
+areas, regression evidence and retained recovery boundaries. The release remains
+subject to the protected-main Quality gate, Debian host checks, both architecture
+builds and the existing signed-manifest publication workflow.
+
 # X-Node v2.0.28
 
 Fixes Hysteria inbound activation. The managed-inbound observation wrapper

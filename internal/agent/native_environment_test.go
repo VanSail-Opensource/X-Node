@@ -17,7 +17,7 @@ func TestUnsafeEnvironmentRejectedBeforeAssetsOrCertificates(t *testing.T) {
 	if err := a.validateNative(context.Background(), c, geodata.Policy{}); err == nil {
 		t.Fatal("validation accepted unsafe environment")
 	}
-	if _, _, err := a.prepareNative(context.Background(), context.Background(), c, geodata.Policy{}); err == nil {
+	if _, _, err := a.prepareCertificateNative(context.Background(), context.Background(), c, geodata.Policy{}, false, nil); err == nil {
 		t.Fatal("activation accepted unsafe environment")
 	}
 	if err := a.activate(context.Background(), applyJob{Context: context.Background(), Config: c, RefreshAssets: true}); err == nil {

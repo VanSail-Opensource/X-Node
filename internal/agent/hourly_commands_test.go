@@ -16,8 +16,12 @@ func (f *hourlyAgentFixture) grantedFlow(t *testing.T, peer *hourlyTestPeer, int
 		t.Fatal(err)
 	}
 	t.Cleanup(flow.Close)
-	if p, _, err := flow.TryAcquire(hourly.Upload, 1, 1); err != nil || p != nil {
-		t.Fatal("fresh flow bypassed absent grant", err)
+	if p, _, err := flow.TryAcquire(hourly.Upload, 1, 1); err != nil {
+		t.Fatal(err)
+	} else if p != nil {
+		// An installed prepaid credit may already cover this probe without
+		// borrowing reduced-rate capacity. Do not consume it in the fixture.
+		p.Complete(hourly.NotHandedOff)
 	}
 	demand := f.demand(t, peer, "")
 	g := protocol.HourlyGrant{SessionID: peer.session, Owner: u.Hourly.Owner, Nonce: demand.Nonce, Sequence: 1, DayUTC: f.install(peer, "unused", 1).DayUTC, LifetimeMillis: 10000, RateBytesPerSecond: 1000, BurstBytes: 16384}

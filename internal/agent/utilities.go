@@ -15,6 +15,10 @@ import (
 func (a *Agent) ensureAssets(ctx context.Context, c protocol.Config, p geodata.Policy, refresh bool) (string, error) {
 	a.geoMu.Lock()
 	defer a.geoMu.Unlock()
+	return prepareAssets(ctx, filepath.Join(a.Dir, "geodata"), c, p, refresh)
+}
+
+func prepareAssets(ctx context.Context, dir string, c protocol.Config, p geodata.Policy, refresh bool) (string, error) {
 	if ctx.Err() != nil {
 		return "", ctx.Err()
 	}
@@ -38,7 +42,7 @@ func (a *Agent) ensureAssets(ctx context.Context, c protocol.Config, p geodata.P
 	}
 	client, closeClient := lazyAssetClient(ctx, c, p)
 	defer closeClient()
-	return geodata.Prepare(ctx, filepath.Join(a.Dir, "geodata"), p, c.AssetHashes, client, refresh)
+	return geodata.Prepare(ctx, dir, p, c.AssetHashes, client, refresh)
 }
 func (a *Agent) scheduleUtilities(ctx context.Context, now time.Time) {
 	notifySystemd("WATCHDOG=1")
@@ -59,7 +63,7 @@ func (a *Agent) scheduleUtilities(ctx context.Context, now time.Time) {
 		}
 		job := job
 		id := fmt.Sprintf("internal-ddns-%x-%d", sha256.Sum256([]byte(job.ID)), now.UnixNano())
-		if err := a.Jobs.Start(ctx, id, "ddns", func(ctx context.Context, progress func(any)) (any, error) {
+		if err := a.Jobs.Start(ctx, id, "ddns.run", func(ctx context.Context, progress func(any)) (any, error) {
 			return a.runDDNS(ctx, c, job)
 		}); err == nil {
 			a.lastDDNS[job.ID] = now

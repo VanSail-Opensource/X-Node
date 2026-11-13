@@ -1,8 +1,13 @@
 # Master WebSocket transport
 
 `hourly.go` independently negotiates operational hourly enforcement through an
-exact format/session echo. It clears the admission session synchronously on
-disconnect or disable. `hourly_accounting.go` separately accepts the exact
+exact format/session echo. Disconnect immediately clears wire negotiation but
+retains the already accepted local authority session: reduced-rate leases keep
+their original deadline, and centrally reserved byte credit remains spendable
+within its paid/UTC-day boundaries. Failed reconnects cannot renew either limit.
+A successful new handshake fences the old session, including a master that no
+longer supports hourly admission. Disable and client shutdown revoke authority
+synchronously. `hourly_accounting.go` separately accepts the exact
 response header `X-XNode-Hourly-Accounting: v1`, so historical traffic receipts
 remain available when local hourly credit storage disables admission. A current
 live-v1 negotiation also establishes receipt compatibility for older supporting

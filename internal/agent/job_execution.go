@@ -2,15 +2,16 @@ package agent
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
 	"time"
 
 	"github.com/VanSail-Opensource/X-Node/internal/protocol"
 )
 
-func (j *Jobs) execute(ctx context.Context, cancel context.CancelFunc, slots chan struct{}, id, command string, fn func(context.Context, func(any)) (any, error)) {
+func (j *Jobs) execute(ctx context.Context, cancel context.CancelFunc, slots chan struct{}, id, command string, fingerprint [sha256.Size]byte, fn func(context.Context, func(any)) (any, error)) {
 	defer func() { <-slots; cancel() }()
-	result := JobResult{ID: id, Command: command, Status: "completed"}
+	result := JobResult{ID: id, Command: command, Status: "completed", fingerprint: fingerprint}
 	if ctx.Err() != nil {
 		result.Status, result.Error = "cancelled", "job cancelled before execution"
 		j.finishVolatile(boundedJobResult(result))

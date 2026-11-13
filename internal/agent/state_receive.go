@@ -60,6 +60,9 @@ func (a *Agent) handle(ctx context.Context, m protocol.Message) {
 				var p protocol.UsersDelta
 				e = protocol.Decode(m.Data, &p)
 				if e == nil {
+					e = p.Validate()
+				}
+				if e == nil {
 					users := map[int]protocol.User{}
 					for _, u := range d.Users {
 						users[u.ID] = u
@@ -70,9 +73,19 @@ func (a *Agent) handle(ctx context.Context, m protocol.Message) {
 					for _, u := range p.Upsert {
 						users[u.ID] = u
 					}
-					c.Users = []protocol.User{}
-					for _, u := range users {
-						c.Users = append(c.Users, u)
+					c.Users = make([]protocol.User, 0, len(users))
+					// Preserve existing order and append only newly introduced users.
+					// Random map order caused unchanged identities to rebuild Xray.
+					for _, old := range d.Users {
+						if user, ok := users[old.ID]; ok {
+							c.Users = append(c.Users, user)
+							delete(users, old.ID)
+						}
+					}
+					for _, added := range p.Upsert {
+						if user, ok := users[added.ID]; ok {
+							c.Users = append(c.Users, user)
+						}
 					}
 				}
 			case "user.controls":
@@ -106,7 +119,7 @@ func (a *Agent) handle(ctx context.Context, m protocol.Message) {
 				}
 			}
 			if e == nil {
-				e = c.Validate()
+				e = c.ValidateUsers()
 			}
 		}
 		if e != nil {

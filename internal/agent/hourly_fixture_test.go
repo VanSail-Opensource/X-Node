@@ -49,6 +49,7 @@ type hourlyAgentFixture struct {
 	audit      chan hourlyTestFrame
 	config     protocol.Config
 	ackTraffic atomic.Bool
+	offline    atomic.Bool
 }
 
 func newHourlyAgentFixture(t *testing.T, negotiate, corrupt bool) *hourlyAgentFixture {
@@ -62,6 +63,10 @@ func prepareHourlyAgentFixture(t *testing.T, negotiate, corrupt bool, prepare fu
 	stopServer := make(chan struct{})
 	upgrader := websocket.Upgrader{Subprotocols: []string{"x-node.v1"}}
 	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if f.offline.Load() {
+			http.Error(w, "master restarting", http.StatusServiceUnavailable)
+			return
+		}
 		headers := http.Header{}
 		if negotiate {
 			headers.Set(protocol.HourlyAccountingHeader, protocol.HourlyAccountingFormat)

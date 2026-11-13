@@ -99,6 +99,7 @@ func (c *Client) status(v bool) {
 	}
 }
 func (c *Client) Run(ctx context.Context) {
+	defer c.clearHourlySession()
 	defer func() {
 		if c.reportEncoder != nil {
 			_ = c.reportEncoder.Close()
@@ -107,6 +108,12 @@ func (c *Client) Run(ctx context.Context) {
 	}()
 	backoff := time.Second
 	for ctx.Err() == nil {
+		// An overflow already ended the old connection (or occurred offline).
+		// Its reset notification must not immediately tear down the replacement.
+		select {
+		case <-c.reset:
+		default:
+		}
 		if c.connect(ctx) {
 			backoff = time.Second
 		} else {

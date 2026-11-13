@@ -13,11 +13,14 @@ Preserve the generated agent identity and private state when upgrading. Removing
 
 Firewall ownership is complete. Configure allowed services/forwarding explicitly,
 then confirm the apply transaction over WSS. DNS interception belongs to Xray
-user routing. Resolver selection is retired. Deprecated SmartDNS configuration
-with interception and no native `dns.servers` is normalized into explicit
-`127.0.0.1` Xray DNS before activation, preserving the previously effective
-externally managed upstream. Existing native DNS servers win. Host services are
-never changed and the ignored `dns.upstreams` compatibility field remains inert.
+user routing. Resolver selection and the ignored upstream list are removed
+from the live contract. Send only `dns.redirect` and explicit native
+`xray.dns.servers`. The private snapshot reader preserves a historical accepted
+or staged SmartDNS loopback fallback during offline boot; new input cannot use
+`dns.mode` or `dns.upstreams`. Existing explicit native servers win. The next
+ordinary state write removes these retired fields without changing revisions,
+accounting identity or staged-versus-accepted configuration. Host services stay
+externally managed.
 
 ## Native firewall engine
 

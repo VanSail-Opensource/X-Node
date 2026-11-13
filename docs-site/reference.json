@@ -22,13 +22,13 @@
       "key": "command-lifecycle",
       "title": "Command lifecycle",
       "description": "Accepted jobs, progress, results, cancellation and deduplication.",
-      "body": "## Submit a typed command\n```json\n{\"v\":1,\"type\":\"command\",\"id\":\"list-001\",\"data\":{\"name\":\"connections.list\",\"args\":{\"limit\":100}}}\n```\n\nThe agent emits `command.accepted`, optional `command.progress`, then `command.result`. Match the operation using the request ID. Progress data is command-specific. Results contain `id`, `command`, `status`, completion time and optional `data` or `error`.\n\n## Concurrency and retries\nTwo utility workers and a reserved control slot execute jobs. Up to 128 durable mutation receipts survive restart; up to 128 observation results remain in memory only. Each retained history is bounded below 2 MiB, with at most 64 KiB per retained result. Uncertain mutation IDs remain protected from eviction. Use unique IDs beyond the completed-receipt window and reconcile uncertain operations using their original retained IDs.\n\n`jobs.list` returns the current retained job view. On activation_commands_v1 agents, runtime.reload and geodata.refresh complete after activation. Continue to observe telemetry and state activation for ongoing readiness.\n\n## Cancellation\n```json\n{\"v\":1,\"type\":\"command.cancel\",\"data\":{\"id\":\"list-001\"}}\n```\n\nCancellation propagates through the command context. It cannot reverse a DNS-provider mutation that has already succeeded, a committed firewall transaction or an installed release. Query retained results before deciding whether to retry.\n\n## Host safety\nPrivileged actions use typed argument structures. Firewall changes include an independent rollback watchdog and require confirmation from the master after connectivity testing. Update installation requires authenticated release artifacts. Speedtests use an isolated Xray client with bounded transfers and cancellation.\n\n## Acceptance and recovery\nBound acceptance to 30 seconds independently of protocol-defined execution deadlines. Distinguish undelivered, rejected, failed and uncertain results. Reload completion follows activation on activation_commands_v1 agents. Use update.status after reconnect; retained transaction plus current revision readiness confirms upgrade completion."
+      "body": "## Submit a typed command\n```json\n{\"v\":1,\"type\":\"command\",\"id\":\"list-001\",\"data\":{\"name\":\"connections.list\",\"args\":{\"limit\":100}}}\n```\n\nThe agent emits `command.accepted`, optional `command.progress`, then `command.result`. Match the operation using the request ID. Progress data is command-specific. Results contain `id`, `command`, `status`, completion time and optional `data` or `error`.\n\n## Concurrency and retries\nTwo bulk utility workers and separate control, hourly-credit and inspection slots execute bounded jobs. Up to 128 durable mutation receipts survive restart; up to 128 observation or repeatable/native-owned command results remain in memory only. Each retained history is bounded below 2 MiB, with at most 64 KiB per retained result. Uncertain mutation IDs remain protected from eviction. Live IDs bind canonical argument digests, reject changed arguments and preserve exact integers. Repeatable DDNS/reload/versioned sync and hourly native-journal work do not write duplicate generic receipts. Use unique IDs beyond the completed-receipt window or for deliberate retries of terminal failures; reconcile uncertain mutations using their original retained IDs.\n\n`jobs.list` returns the current retained job view. On activation_commands_v1 agents, runtime.reload and geodata.refresh complete after activation. Continue to observe telemetry and state activation for ongoing readiness.\n\n## Cancellation\n```json\n{\"v\":1,\"type\":\"command.cancel\",\"data\":{\"id\":\"list-001\"}}\n```\n\nCancellation propagates through the command context. It cannot reverse a DNS-provider mutation that has already succeeded, a committed firewall transaction or an installed release. Query retained results before deciding whether to retry.\n\n## Host safety\nPrivileged actions use typed argument structures. Firewall changes include an independent rollback watchdog and require confirmation from the master after connectivity testing. Update installation requires authenticated release artifacts. Speedtests use an isolated Xray client with bounded transfers and cancellation.\n\n## Acceptance and recovery\nBound acceptance to 30 seconds independently of protocol-defined execution deadlines. Distinguish undelivered, rejected, failed and uncertain results. Reload completion follows activation on activation_commands_v1 agents. Use update.status after reconnect; retained transaction plus current revision readiness confirms upgrade completion."
     },
     {
       "key": "users-and-ips",
       "title": "Users, IPs & admission",
       "description": "Privacy-aware active-IP reporting and precise user/IP controls.",
-      "body": "## User identity and limits\nEach user has a positive numeric `id`, credentials, eligible `inbound_tags` and optional per-agent quotas. `active_ip_limit` counts distinct current source IPs; `connection_limit` counts authenticated logical TCP streams and UDP associations across every eligible inbound. Zero quotas are unlimited.\n\n`speed_limit_mbps` is the normal rate and `burst_speed_limit_mbps` is the always enforced ceiling. After `speed_limit_after_seconds` consecutive seconds above normal (default 10), the normal cap applies. Traffic below 90% of normal for `speed_limit_reset_seconds` (default 1) restores bursts. Upload/download and all inbounds share this policy. `users.speed` reports its active rate. `block_new` prevents new admission while preserving established eligible streams. Master decisions implement approximate global totals; the agent does not request a master reservation for every stream.\n\n## Active IPs are requested data\nBy default, routine user telemetry omits source IP addresses. Set `telemetry.include_active_ips: true` in accepted configuration to request active IPs in recurring reports, or issue `users.active_ips` for a one-time query. Every reported IP is associated with its `user_id`; an IP without an active stream is not an online observation.\n\nSession details returned by an explicit `connections.list` query include their source IP and user identity. Turning recurring reporting off does not prevent the master from making an explicit detail request.\n\n## Drop or temporarily block an IP\nUse `ips.control` with a literal `source_ip`, optional `user_id`, `drop` and/or `block_seconds`. Omit `user_id` for an agent-wide IP action; supply it for that user's sessions. `drop: true` closes matching current sessions. A temporary block of 1–604800 seconds rejects future admission until its durable deadline; combining both closes current sessions and prevents immediate reconnection.\n\n`unblock: true` removes the matching temporary IP restriction. It cannot be combined with `block_seconds`; it may accompany a drop. User/IP blocks match the canonical address, including IPv4-mapped IPv6 normalization. They are admission controls rather than a new host firewall ruleset.\n\n## Explain blocked admission\n`telemetry.report` includes a per-user admission status in `users.status[userID]` with an explicit `limited` boolean, a reason when restricted, and a `scope` of `new_connection` or `new_ip`. Reaching an active-IP quota restricts additional source IPs; already active source addresses remain eligible when other quotas permit. `admission.rejected` reports an attempted rejection with `user_id`, `limited: true` and a machine-readable `reason`. Its source IP is included only when recurring IP reporting has been requested.\n\nRejection reasons are `block_new`, `ip_temp_block`, `torrent_ban`, `active_ip_limit`, `connection_limit`, `blocked_port`, `ineligible` and `storage_backpressure`. A user-wide status describes restrictions known from the current snapshot; an IP-specific decision also depends on the attempted source IP.\n\n## Revocation and cleanup\nCredential rotation removes old authorization before new credentials are installed. Removing a user or inbound eligibility closes existing affected sessions. Reservations are released exactly once on failure, closure or UDP expiry. Session lists are snapshots: a returned session may close before a later control request."
+      "body": "## User identity and limits\nEach user has a positive numeric `id`, credentials, eligible `inbound_tags` and optional per-agent quotas. `active_ip_limit` counts distinct current source IPs; `connection_limit` counts authenticated logical TCP streams and UDP associations across every eligible inbound. Zero quotas are unlimited.\n\n`speed_limit_mbps` is the normal rate and `burst_speed_limit_mbps` is the always enforced ceiling. After `speed_limit_after_seconds` consecutive seconds above normal (default 10), the normal cap applies. Traffic below 90% of normal for `speed_limit_reset_seconds` (default 1) restores bursts. Upload/download and all inbounds share this policy. `users.speed` reports its active rate. `block_new` prevents new admission while preserving established eligible streams. Master decisions implement approximate global totals; the agent does not request a master reservation for every stream.\n\n## Active IP observations\nRecurring active-user telemetry includes sampled source IP addresses. Issue `users.active_ips` for an immediate query. Every reported IP is associated with its `user_id`; an IP without an active stream is not an online observation. The retired `telemetry.include_active_ips` field is rejected by current configuration.\n\nSession details returned by an explicit `connections.list` query include their source IP and user identity. These details remain memory-only on the agent.\n\n## Drop or temporarily block an IP\nUse `ips.control` with a literal `source_ip`, optional `user_id`, `drop` and/or `block_seconds`. Omit `user_id` for an agent-wide IP action; supply it for that user's sessions. `drop: true` closes matching current sessions. A temporary block of 1–604800 seconds rejects future admission until its durable deadline; combining both closes current sessions and prevents immediate reconnection.\n\n`unblock: true` removes the matching temporary IP restriction. It cannot be combined with `block_seconds`; it may accompany a drop. User/IP blocks match the canonical address, including IPv4-mapped IPv6 normalization. They are admission controls rather than a new host firewall ruleset.\n\n## Explain blocked admission\n`telemetry.report` includes a per-user admission status in `users.status[userID]` with an explicit `limited` boolean, a reason when restricted, and a `scope` of `new_connection` or `new_ip`. Reaching an active-IP quota restricts additional source IPs; already active source addresses remain eligible when other quotas permit. `admission.rejected` reports an attempted rejection with `user_id`, `limited: true` and a machine-readable `reason`. Its canonical source IP accompanies the attempted admission when available.\n\nRejection reasons are `block_new`, `ip_temp_block`, `torrent_ban`, `active_ip_limit`, `connection_limit`, `blocked_port`, `ineligible` and `storage_backpressure`. A user-wide status describes restrictions known from the current snapshot; an IP-specific decision also depends on the attempted source IP.\n\n## Revocation and cleanup\nCredential rotation removes old authorization before new credentials are installed. Removing a user or inbound eligibility closes existing affected sessions. Reservations are released exactly once on failure, closure or UDP expiry. Session lists are snapshots: a returned session may close before a later control request."
     },
     {
       "key": "reliable-traffic",
@@ -63,14 +63,11 @@
     "users.block_new": "Reject newly admitted streams while retaining eligible established streams.",
     "telemetry.sample_seconds": "Sample interval, default 1 second. Zero selects the default.",
     "telemetry.report_seconds": "Report interval, default 2 seconds. Zero selects the default.",
-    "telemetry.include_active_ips": "Explicit request to include user-associated active IPs in recurring reports; default false.",
     "torrent.enabled": "Enable classified BitTorrent detection, flow blocking and temporary user bans.",
     "torrent.ban_seconds": "Ban duration, default 600 seconds (10 minutes). Zero selects the default.",
     "updates.enabled": "Permit policy-driven automatic stable release installation. Default false.",
     "updates.version": "Optional selected stable release version.",
-    "dns.mode": "Deprecated compatibility input. Empty, xray and smartdns normalize to xray; legacy SmartDNS interception without explicit native servers retains an explicit 127.0.0.1 upstream.",
     "dns.redirect": "Intercept managed authenticated user DNS through native Xray DNS; internal resolver queries bypass interception. Configure native dns.servers.",
-    "dns.upstreams": "Retained inert compatibility field. Configure native Xray dns.servers; the agent does not manage SmartDNS services.",
     "providers.type": "Supported DNS-provider implementation name.",
     "providers.credentials": "Provider-specific credential map delivered securely over WSS.",
     "certificates.provider": "Named provider for certificate DNS challenge operations.",
@@ -97,8 +94,8 @@
     "ddns.interface": "Interface used for local address discovery.",
     "ddns.ipv4_url": "HTTPS address-discovery endpoint for IPv4.",
     "ddns.ipv6_url": "HTTPS address-discovery endpoint for IPv6.",
-    "ddns.ttl_seconds": "Provider record TTL in seconds.",
-    "ddns.interval_seconds": "Refresh interval, default 300 seconds (5 minutes).",
+    "ddns.ttl_seconds": "Provider record TTL in seconds, 0 through 2147483647; zero selects the 300-second default.",
+    "ddns.interval_seconds": "Refresh interval from 0 through 86400 seconds; zero selects 300 seconds (5 minutes).",
     "firewall.enabled": "Enable agent ownership of the host ruleset.",
     "firewall.protect": "Enable probe protection and temporary source-prefix bans.",
     "firewall.tcp_ports": "Allowed TCP listener ports.",
@@ -201,8 +198,7 @@
           "users": [],
           "telemetry": {
             "sample_seconds": 1,
-            "report_seconds": 5,
-            "include_active_ips": false
+            "report_seconds": 5
           }
         }
       }
@@ -295,7 +291,7 @@
       "name": "telemetry.report",
       "direction": "Agent → master",
       "description": "Report runtime state, user admission status and immutable host metrics.",
-      "body": "## Current snapshot\nThe payload includes `agent_id`, `boot_id`, `time`, `connected`, `liveness`, `ready`, `synchronized`, `config_revision`, `users`, `machine`, `certificates` and transport-drop information. Envelope `revision` tracks accepted authorization.\n\n## Users and privacy\nReplace the master's current online connection set. Missing user entries mean zero observations. `users.status[userID]` supplies `user_id`, `limited: true/false`, a reason when blocked and `scope` (`new_connection` or `new_ip`). `users.connections` contains sampled traffic-active counts; `users.total_connections` on open_connections_v1 agents also includes idle open client flows and `users.active_ips` is present only when requested. IP/destination-specific restrictions are reported for attempted admissions; they do not claim that every new user stream is blocked. Source IPs are omitted by default. `telemetry.include_active_ips: true` explicitly requests user-associated active IPs in recurring snapshots. An explicit `users.active_ips` query obtains one-time details.\n\n## Delivery\nThe default report interval is two seconds. This is a disposable snapshot and needs no acknowledgement. Billing uses acknowledged traffic.report streams with durable master receipts.\n\n## Measured speed\nusers.rates reports upload_bytes_per_second, download_bytes_per_second and sample_seconds. These measured byte rates are independent of users.speed decimal Mbps limits."
+      "body": "## Current snapshot\nThe payload includes `agent_id`, `boot_id`, `time`, `connected`, `liveness`, `ready`, `synchronized`, `config_revision`, `users`, `machine`, `certificates` and transport-drop information. Envelope `revision` tracks accepted authorization.\n\n## Users and privacy\nReplace the master's current online connection set. Missing user entries mean zero observations. `users.status[userID]` supplies `user_id`, `limited: true/false`, a reason when blocked and `scope` (`new_connection` or `new_ip`). `users.connections` contains sampled traffic-active counts; `users.total_connections` on open_connections_v1 agents also includes idle open client flows and `users.active_ips` contains the sampled active source set. IP/destination-specific restrictions are reported for attempted admissions; they do not claim that every new user stream is blocked. Source IP observations accompany recurring snapshots. An explicit `users.active_ips` query obtains immediate details; there is no reporting opt-out field.\n\n## Delivery\nThe default report interval is two seconds. This is a disposable snapshot and needs no acknowledgement. Billing uses acknowledged traffic.report streams with durable master receipts.\n\n## Measured speed\nusers.rates reports upload_bytes_per_second, download_bytes_per_second and sample_seconds. These measured byte rates are independent of users.speed decimal Mbps limits."
     },
     {
       "name": "telemetry.compact",
@@ -386,7 +382,7 @@
       "name": "admission.rejected",
       "direction": "Agent → master",
       "description": "Explain why an attempted new user connection was denied.",
-      "body": "## Rejection event\nReports the `user_id`, `limited: true` and a machine-readable `reason` when a new authenticated stream is denied. The source IP is included only when recurring IP reporting has been requested.\n\nReasons identify the actual restriction, such as a master block, temporary ban, active-IP/connection quota, blocked destination or accounting backpressure. Rejection counters also appear in telemetry; an event stream is bounded and should not be used as billing data.\n\n## Fields\n| Field | Meaning |\n| --- | --- |\n| `user_id` | Numeric authenticated user identity |\n| `limited` | Always `true` for a rejected admission |\n| `reason` | `storage_backpressure`, `ineligible`, `block_new`, `torrent_ban`, `ip_temp_block`, `blocked_port`, `connection_limit` or `active_ip_limit` |\n| `scope` | `new_ip` for an active-IP quota, otherwise `new_connection` |\n| `source_ip` | Included only when recurring IP reporting is requested |",
+      "body": "## Rejection event\nReports the `user_id`, `limited: true` and a machine-readable `reason` when a new authenticated stream is denied. The canonical source IP accompanies the attempted admission when available.\n\nReasons identify the actual restriction, such as a master block, temporary ban, active-IP/connection quota, blocked destination or accounting backpressure. Rejection counters also appear in telemetry; an event stream is bounded and should not be used as billing data.\n\n## Fields\n| Field | Meaning |\n| --- | --- |\n| `user_id` | Numeric authenticated user identity |\n| `limited` | Always `true` for a rejected admission |\n| `reason` | `storage_backpressure`, `ineligible`, `block_new`, `torrent_ban`, `ip_temp_block`, `blocked_port`, `connection_limit` or `active_ip_limit` |\n| `scope` | `new_ip` for an active-IP quota, otherwise `new_connection` |\n| `source_ip` | Included only when recurring IP reporting is requested |",
       "example": {
         "v": 1,
         "type": "admission.rejected",
@@ -423,7 +419,7 @@
       "name": "command.accepted",
       "direction": "Agent → master",
       "description": "Confirm that a command entered the bounded utility job queue.",
-      "body": "## Job acceptance\nCorrelate the request ID with the submitted command. Acceptance indicates queued work, not successful completion. Two utility workers and a reserved control slot execute jobs. Retried retained IDs return the existing retained result rather than repeating the operation."
+      "body": "## Job acceptance\nCorrelate the request ID with the submitted command. Acceptance indicates queued work, not successful completion. Two bulk utility workers and separate control, hourly-credit and inspection slots execute bounded jobs. Retried retained IDs return the existing retained result rather than repeating the operation."
     },
     {
       "name": "command.progress",
@@ -435,7 +431,7 @@
       "name": "command.result",
       "direction": "Agent → master",
       "description": "Return completion status, data or an error for a utility command.",
-      "body": "## Final result\nResults contain operation id, command, status, completion time and optional data or error. Up to 128 durable mutation receipts survive restart; up to 128 volatile observation results remain memory-only, with byte bounds on both histories and retained entries. jobs.list exposes the retained view. Uncertain mutation receipts remain protected and must be reconciled using their original IDs.\n\nOn activation_commands_v1 agents, runtime.reload and geodata.refresh complete after activation and readiness. Acquired or queued work alone does not prove serving success. A late cancellation cannot reverse a committed mutation. See [command journal recovery](job-journal.md)."
+      "body": "## Final result\nResults contain operation id, command, status, completion time and optional data or error. Up to 128 durable mutation receipts survive restart; up to 128 volatile observation or repeatable/native-owned results remain memory-only, with byte bounds on both histories and retained entries. jobs.list exposes the retained view. Uncertain mutation receipts remain protected and must be reconciled using their original IDs.\n\nOn activation_commands_v1 agents, runtime.reload and geodata.refresh complete after activation and readiness. Acquired or queued work alone does not prove serving success. A late cancellation cannot reverse a committed mutation. See [command journal recovery](job-journal.md)."
     },
     {
       "name": "command.cancel",
@@ -536,19 +532,38 @@
     {
       "name": "hourly.credit.install",
       "description": "Durably install one centrally reserved full-speed byte-credit obligation.",
-      "args": {"reservation_id": "reservation-example", "issue_sequence": "1", "owner": {"id": "account-example", "generation": "0"}, "day_utc": "2026-11-09", "agent_id": "11111111111111111111111111111111", "boot_id": "22222222222222222222222222222222", "session_id": "33333333333333333333333333333333", "byte_ceiling": "1000000000", "kind": "free"},
+      "args": {
+        "reservation_id": "reservation-example",
+        "issue_sequence": "1",
+        "owner": {
+          "id": "account-example",
+          "generation": "0"
+        },
+        "day_utc": "2026-11-09",
+        "agent_id": "11111111111111111111111111111111",
+        "boot_id": "22222222222222222222222222222222",
+        "session_id": "33333333333333333333333333333333",
+        "byte_ceiling": "1000000000",
+        "kind": "free"
+      },
       "body": "Requires negotiated hourly_account_limits_v1. Arguments identify reservation_id, decimal globally monotonic issue_sequence, owner generation, day_utc, exact agent_id/boot_id/session_id, positive decimal byte_ceiling and kind free or extra. Persist before credit becomes usable; replay cannot mint a second obligation. Uses the existing utility executor with a 30-second execution timeout. Reserve centrally before sending. See [the hourly contract](hourly-account-limits.md)."
     },
     {
       "name": "hourly.credit.seal",
       "description": "Freeze credit admission and seal its exact final financial partition.",
-      "args": {"reservation_id": "reservation-example"},
+      "args": {
+        "reservation_id": "reservation-example"
+      },
       "body": "Arguments contain reservation_id and optional expected original installation. Uses the utility executor with a two-minute execution bound, leaving traffic/control work available. The financial admission barrier cancels unstarted reservations and preserves every byte already admitted by Begin. Native writer completion cannot refund those bytes. An exact never-issued installation can be proved wholly unused only through retained, checksummed sequence evidence. Timeout, disconnect or missing evidence never authorizes reclaiming a reservation."
     },
     {
       "name": "hourly.credit.ack",
       "description": "Retire the exact immutable proof already settled by the master.",
-      "args": {"reservation_id": "reservation-example", "issue_sequence": "1", "digest": "1111111111111111111111111111111111111111111111111111111111111111"},
+      "args": {
+        "reservation_id": "reservation-example",
+        "issue_sequence": "1",
+        "digest": "1111111111111111111111111111111111111111111111111111111111111111"
+      },
       "body": "Arguments contain reservation_id, decimal issue_sequence and exact digest. Settle the final proof durably and idempotently before acknowledging it. A mismatched acknowledgment cannot erase an obligation or proof. Uses the utility executor with a 30-second execution timeout; replay retains tombstone protection."
     },
     {
@@ -604,7 +619,7 @@
     {
       "name": "users.active_ips",
       "description": "Request current active source IPs associated with user IDs.",
-      "body": "## Explicit IP request\nReturns active user/IP observations on demand. Source IPs are associated with positive user IDs and reflect established logical sessions. A user with no active sessions has no active source addresses.\n\nSupply `user_id` to narrow the query, or omit it to inspect all current users. This command does not turn on recurring IP reporting. Configure `telemetry.include_active_ips` separately if recurring observations are required.\n\n## Result data\nThe result is an array of `{user_id, source_ip, connections}` observations, sorted by user ID and source address. `connections` counts active logical sessions from that address. An empty array means no matching active source IPs.\n\n```json\n[{\"user_id\":7,\"source_ip\":\"203.0.113.25\",\"connections\":2}]\n```",
+      "body": "## Explicit IP request\nReturns active user/IP observations on demand. Source IPs are associated with positive user IDs and reflect established logical sessions. A user with no active sessions has no active source addresses.\n\nSupply `user_id` to narrow the query, or omit it to inspect all current users. This immediate query is independent of the configured recurring sample/report intervals.\n\n## Result data\nThe result is an array of `{user_id, source_ip, connections}` observations, sorted by user ID and source address. `connections` counts active logical sessions from that address. An empty array means no matching active source IPs.\n\n```json\n[{\"user_id\":7,\"source_ip\":\"203.0.113.25\",\"connections\":2}]\n```",
       "fields": [
         [
           "user_id",
@@ -675,9 +690,24 @@
       "description": "Issue or renew one desired ACME profile and activate its fenced certificate material.",
       "body": "## Revision-bound ACME operation\nRequires certificate_lifecycle_v1. profile_id selects an ACME HTTP/DNS profile from the latest desired configuration, including a profile awaiting activation after a configuration failure. expected_revision must match that desired revision. issue reuses existing valid material; renew explicitly requests renewal outside the normal renewal window. File/content and self-signed profiles use normal configuration validation and activation.\n\n## Progress and result\nExecution is bounded to five minutes. Typed progress reports profile_id, action and phase. Acquisition and activation recheck desired profile identity/revision; the runtime verifies the acquired fingerprint before activation. A successful result contains profile_id, action, fingerprint, expires, applied and ready. Acquired material alone does not establish serving readiness.\n\n## Retry and uncertainty\nPersist the original command ID and agent identity. Same-ID retries return retained receipts before current eligibility checks. Never automatically issue a new command after an uncertain result or restart; reconcile retained results and public serving/acquired status first. Status, progress and durable results contain no PEM, private keys, credentials, raw provider errors or material paths. See [certificate lifecycle](certificates.md).",
       "fields": [
-        ["profile_id", "string", "Required", "Desired ACME certificate profile ID."],
-        ["action", "string", "Required", "issue or renew."],
-        ["expected_revision", "integer", "Required", "Positive expected desired configuration revision."]
+        [
+          "profile_id",
+          "string",
+          "Required",
+          "Desired ACME certificate profile ID."
+        ],
+        [
+          "action",
+          "string",
+          "Required",
+          "issue or renew."
+        ],
+        [
+          "expected_revision",
+          "integer",
+          "Required",
+          "Positive expected desired configuration revision."
+        ]
       ],
       "args": {
         "profile_id": "public-tls",

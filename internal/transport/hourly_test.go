@@ -69,7 +69,7 @@ func TestHourlyHandshakeRequiresExactEchoAndOperationalCapability(t *testing.T) 
 	}
 }
 
-func TestHourlyWebSocketNegotiationClearsBeforeDisconnectedStatus(t *testing.T) {
+func TestHourlyDisconnectClearsWireNegotiationAndRetainsBoundedLocalAuthority(t *testing.T) {
 	observed := make(chan string, 1)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		session := r.Header.Get(protocol.HourlySessionHeader)
@@ -136,9 +136,12 @@ func TestHourlyWebSocketNegotiationClearsBeforeDisconnectedStatus(t *testing.T) 
 		t.Fatal("socket did not disconnect")
 	}
 	if client.Hourly() || client.HourlySession() != "" || client.Connected() {
-		t.Fatal("disconnected socket retained hourly authority")
+		t.Fatal("disconnected socket retained wire negotiation")
 	}
-	for _, expected := range []string{session, ""} {
+	if client.HourlyAuthoritySession() != session {
+		t.Fatal("transport loss discarded accepted local grants or credit")
+	}
+	for _, expected := range []string{session} {
 		select {
 		case got := <-fences:
 			if got != expected {
@@ -147,6 +150,33 @@ func TestHourlyWebSocketNegotiationClearsBeforeDisconnectedStatus(t *testing.T) 
 		default:
 			t.Fatal("missing synchronous session fence")
 		}
+	}
+	select {
+	case <-fences:
+		t.Fatal("mere transport loss revoked bounded local authority")
+	default:
+	}
+	client.SetHourlyEnabled(false)
+	if client.HourlyAuthoritySession() != "" {
+		t.Fatal("explicit disable retained local authority")
+	}
+}
+
+func TestSuccessfulIncompatibleMasterFencesRetainedHourlyAuthority(t *testing.T) {
+	client := New("", "")
+	client.SetHourlyEnabled(true)
+	offered := client.offerHourly(http.Header{})
+	response := &http.Response{Header: http.Header{}}
+	response.Header.Set(protocol.HourlyHeader, protocol.HourlyFormat)
+	response.Header.Set(protocol.HourlySessionHeader, offered)
+	client.acceptHourly(response, offered)
+	client.suspendHourlySession()
+	if client.HourlyAuthoritySession() != offered || client.HourlySession() != "" {
+		t.Fatal("suspension confused wire negotiation with retained authority")
+	}
+	client.acceptHourly(&http.Response{Header: http.Header{}}, client.offerHourly(http.Header{}))
+	if client.HourlyAuthoritySession() != "" {
+		t.Fatal("a confirmed incompatible master retained old authority")
 	}
 }
 

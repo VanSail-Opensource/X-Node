@@ -32,7 +32,8 @@ func (a *Agent) Run(ctx context.Context) error {
 	}
 	child, cancel := context.WithCancel(ctx)
 	defer cancel()
-	defer a.runHourly(child)()
+	stopHourly := a.runHourly(child)
+	defer stopHourly()
 	status, err := a.listenStatus(child)
 	if err != nil {
 		return err
@@ -79,6 +80,7 @@ func (a *Agent) Run(ctx context.Context) error {
 	for {
 		select {
 		case <-ctx.Done():
+			stopHourly()
 			stopApply()
 			a.Runtime.Stop()
 			if e := a.captureTraffic(); e != nil {

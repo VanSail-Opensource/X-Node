@@ -54,36 +54,48 @@ func (s *CreditStore) creditRecord(credit InstalledCredit) (int, error) {
 }
 
 func (s *CreditStore) sealCandidate(candidate SealCandidate) (protocol.HourlyCreditProof, error) {
-	credit := candidate.credit
-	i, err := s.creditRecord(credit)
+	i, proof, err := s.candidateProof(candidate)
 	if err != nil {
 		return protocol.HourlyCreditProof{}, err
 	}
-	if !credit.marker.claimed.Load() {
-		return protocol.HourlyCreditProof{}, ErrCreditReplay
-	}
-	ceiling := credit.install.ByteCeiling
-	if candidate.admitted[0] > ceiling || candidate.admitted[1] > ceiling-candidate.admitted[0] || candidate.unused != ceiling-candidate.admitted[0]-candidate.admitted[1] {
-		return protocol.HourlyCreditProof{}, ErrCreditScope
-	}
-	proof := protocol.HourlyCreditProof{Install: credit.install, AdmittedUploadBytes: candidate.admitted[0], AdmittedDownloadBytes: candidate.admitted[1], UnusedBytes: candidate.unused}
-	proof.Digest = protocol.HourlyProofDigest(proof)
-	if err := protocol.ValidateHourlyProof(proof); err != nil {
-		return protocol.HourlyCreditProof{}, err
-	}
-	if previous := s.data.Records[i].Proof; previous != nil {
-		if previous.Digest != proof.Digest {
-			return protocol.HourlyCreditProof{}, ErrCreditScope
-		}
-		return *previous, nil
+	if s.data.Records[i].Proof != nil {
+		return proof, nil
 	}
 	next := s.snapshot()
 	next.Records[i].Proof = &proof
 	if err := s.persist(next); err != nil {
 		return protocol.HourlyCreditProof{}, err
 	}
-	credit.marker.invalidate()
+	candidate.credit.marker.invalidate()
 	return proof, nil
+}
+
+// candidateProof requires s.mu and never changes a record or its authority.
+func (s *CreditStore) candidateProof(candidate SealCandidate) (int, protocol.HourlyCreditProof, error) {
+	credit := candidate.credit
+	i, err := s.creditRecord(credit)
+	if err != nil {
+		return 0, protocol.HourlyCreditProof{}, err
+	}
+	if !credit.marker.claimed.Load() {
+		return 0, protocol.HourlyCreditProof{}, ErrCreditReplay
+	}
+	ceiling := credit.install.ByteCeiling
+	if candidate.admitted[0] > ceiling || candidate.admitted[1] > ceiling-candidate.admitted[0] || candidate.unused != ceiling-candidate.admitted[0]-candidate.admitted[1] {
+		return 0, protocol.HourlyCreditProof{}, ErrCreditScope
+	}
+	proof := protocol.HourlyCreditProof{Install: credit.install, AdmittedUploadBytes: candidate.admitted[0], AdmittedDownloadBytes: candidate.admitted[1], UnusedBytes: candidate.unused}
+	proof.Digest = protocol.HourlyProofDigest(proof)
+	if err := protocol.ValidateHourlyProof(proof); err != nil {
+		return 0, protocol.HourlyCreditProof{}, err
+	}
+	if previous := s.data.Records[i].Proof; previous != nil {
+		if previous.Digest != proof.Digest {
+			return 0, protocol.HourlyCreditProof{}, ErrCreditScope
+		}
+		return i, *previous, nil
+	}
+	return i, proof, nil
 }
 
 // Ack retires only an exact final proof, preserving bounded replay tombstones.

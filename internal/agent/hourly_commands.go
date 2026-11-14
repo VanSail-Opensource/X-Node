@@ -9,10 +9,14 @@ import (
 )
 
 func (a *Agent) hourlyCommand(ctx context.Context, name string, args []byte) (any, error) {
+	h := a.hourly
+	if h == nil || !h.beginOperation() {
+		return nil, refuseJob(hourly.ErrUnavailable)
+	}
+	defer h.operations.Done()
 	if !a.checkHourlyHealth() || !a.Client.Hourly() {
 		return nil, refuseJob(hourly.ErrUnavailable)
 	}
-	h := a.hourly
 	defer a.checkHourlyHealth()
 	switch name {
 	case protocol.HourlyCreditInstallCommand:

@@ -6,6 +6,18 @@ import (
 	"github.com/VanSail-Opensource/X-Node/internal/protocol"
 )
 
+// StopAdmission is a permanent process-shutdown fence. Taking the controller's
+// write lock joins every Begin that already crossed the admission boundary.
+// It neither invokes native interrupt hooks nor waits for network delivery;
+// FreezeCredit can now cancel unstarted permits and preserve exact totals.
+// Later session or authorization callbacks cannot reopen this controller.
+func (c *Controller) StopAdmission() {
+	c.mu.Lock()
+	c.stopped = true
+	c.session = ""
+	c.mu.Unlock()
+}
+
 // CreditIDs includes old sessions until a durable final proof owns their totals.
 func (c *Controller) CreditIDs() []string {
 	var ids []string

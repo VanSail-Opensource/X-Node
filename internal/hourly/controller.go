@@ -22,6 +22,7 @@ type Controller struct {
 	mu                               sync.RWMutex
 	options                          Options
 	session                          string
+	stopped                          bool
 	sequence, revision               uint64
 	authorizations                   map[BindingKey]Authorization
 	owners                           map[OwnerKey]*ownerState

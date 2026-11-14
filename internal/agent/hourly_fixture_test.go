@@ -48,6 +48,7 @@ type hourlyAgentFixture struct {
 	frames     chan hourlyTestFrame
 	audit      chan hourlyTestFrame
 	config     protocol.Config
+	cancel     context.CancelFunc
 	ackTraffic atomic.Bool
 	offline    atomic.Bool
 }
@@ -142,6 +143,7 @@ func prepareHourlyAgentFixture(t *testing.T, negotiate, corrupt bool, prepare fu
 	until := time.Now().UTC().Add(time.Hour)
 	f.config = protocol.Config{Xray: json.RawMessage(fmt.Sprintf(`{"log":{"loglevel":"none"},"inbounds":[{"tag":"paid","listen":"127.0.0.1","port":%d,"protocol":"vless","settings":{"decryption":"none"}}]}`, port)), Users: []protocol.User{{ID: 1, UUID: "550e8400-e29b-41d4-a716-446655440000", InboundTags: []string{"paid"}, AccountingPeriod: "hourly-period", ValidUntil: &until, Hourly: &protocol.HourlyUser{Owner: protocol.HourlyOwner{ID: "account", Generation: 7}, EnrollmentID: "enrollment"}}}}
 	ctx, cancel := context.WithCancel(context.Background())
+	f.cancel = cancel
 	done := make(chan error, 1)
 	go func() { done <- a.Run(ctx) }()
 	t.Cleanup(func() {

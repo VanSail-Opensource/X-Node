@@ -5,7 +5,7 @@ import "time"
 // Publication never calls a native hook while holding either controller lock.
 func (c *Controller) ApplyAuthorization(sequence, revision uint64, bindings []Authorization) bool {
 	c.mu.Lock()
-	if sequence <= c.sequence || revision < c.revision || len(bindings) > c.options.MaxFlows {
+	if c.stopped || sequence <= c.sequence || revision < c.revision || len(bindings) > c.options.MaxFlows {
 		c.mu.Unlock()
 		return false
 	}
@@ -76,7 +76,7 @@ func (c *Controller) ApplyAuthorization(sequence, revision uint64, bindings []Au
 // An empty/changed session discards all live grants, never durable obligations.
 func (c *Controller) SetSession(session string) *Drain {
 	c.mu.Lock()
-	if c.session == session {
+	if c.stopped || c.session == session {
 		c.mu.Unlock()
 		return completedDrain()
 	}
@@ -110,5 +110,5 @@ func (c *Controller) SetSession(session string) *Drain {
 
 func (c *Controller) authorized(key BindingKey, now time.Time) bool {
 	a, ok := c.authorizations[key]
-	return ok && a.PaidThrough.After(now)
+	return !c.stopped && ok && a.PaidThrough.After(now)
 }

@@ -2,6 +2,10 @@ module github.com/VanSail-Opensource/X-Node
 
 go 1.27.4
 
+// Preserve the pinned upstream module with the high-descriptor readiness fix.
+// See third_party/nftables/UPSTREAM.md for provenance and removal criteria.
+replace github.com/google/nftables => ./third_party/nftables
+
 require (
 	aead.dev/minisign v0.3.0
 	github.com/caddyserver/certmagic v0.25.6

@@ -178,6 +178,20 @@ Historical mixed traffic reports use the independently negotiated hourly
 accounting receipt header, allowing ordinary accounting to drain after hourly
 storage failure while live hourly admission remains disabled.
 
+`hourly_shutdown.go` permanently fences new hourly admission and durable command
+entry, joins accepted install/seal/ACK operations and both hourly workers,
+then freezes and seals every remaining controller credit in one atomic journal
+write before `CreditStore.Close`. `loop.go` runs this phase before native runtime
+teardown. The cleanup uses a fresh five-second context after process cancellation;
+it does not depend on delivery completion or a master connection. The explicit
+transport disable follows durable cleanup. A stalled worker or filesystem barrier
+can exceed the background phase's deadline, but the caller returns the timeout
+without claiming a successful seal. The fence stays closed; remaining unsealed
+records retain the existing conservative crash recovery. No historical proof or
+settlement is changed. Hosted regressions cover in-flight installs, retirement
+joining, admission races, deadline fallback, batch durability failures and a real
+hourly Xray stream through process cancellation and journal reopen.
+
 `BinaryCapabilities` reports compiled format support for `--version` and the
 updater's recovery checks. It includes hourly support independently of live
 journal health; `runtimeCapabilities` still omits hourly admission whenever its

@@ -4,6 +4,8 @@ import (
 	"context"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
+	"time"
 
 	"github.com/VanSail-Opensource/X-Node/internal/hourly"
 	"github.com/VanSail-Opensource/X-Node/internal/nlog"
@@ -18,12 +20,15 @@ type hourlyGrantReceipt struct {
 // Durable credit work never runs on the state actor or socket writer. Only the
 // synchronous, memory-only session fence runs in the transport callback.
 type hourlyRuntime struct {
-	controller *hourly.Controller
-	store      *hourly.CreditStore
-	creditMu   sync.Mutex
-	installed  map[string]protocol.HourlyCreditInstall
-	ackMu      sync.Mutex
-	acks       map[protocol.HourlyOwner]hourlyGrantReceipt
+	controller  *hourly.Controller
+	store       *hourly.CreditStore
+	creditMu    sync.Mutex
+	installed   map[string]protocol.HourlyCreditInstall
+	ackMu       sync.Mutex
+	acks        map[protocol.HourlyOwner]hourlyGrantReceipt
+	operationMu sync.Mutex
+	operations  sync.WaitGroup
+	stopping    atomic.Bool
 }
 
 func (a *Agent) initializeHourly() {
@@ -60,15 +65,27 @@ func (a *Agent) runHourly(ctx context.Context) func() {
 	var workers sync.WaitGroup
 	workers.Go(func() { a.publishHourly(child) })
 	workers.Go(func() { a.retireHourlyCredits(child) })
+	var stop sync.Once
 	return func() {
-		cancel()
-		a.Client.SetHourlyEnabled(false)
-		workers.Wait()
-		_ = a.hourly.store.Close()
+		stop.Do(func() {
+			cancel()
+			// The process signal has already cancelled ctx. Financial cleanup
+			// gets its own bounded opportunity to persist before runtime teardown.
+			cleanup, finish := context.WithTimeout(context.Background(), 5*time.Second)
+			defer finish()
+			if err := a.shutdownHourly(cleanup, &workers); err != nil {
+				nlog.Core().Warn("hourly shutdown did not finish; unsealed credit remains recoverable", "error", err)
+			}
+		})
 	}
 }
 
 func (a *Agent) checkHourlyHealth() bool {
+	if a.hourly != nil && a.hourly.stopping.Load() {
+		// Session clearing can invoke native interrupt hooks. It must not hold
+		// an accepted durable command open while shutdown is joining it.
+		return false
+	}
 	healthy := a.hourlyAvailable()
 	if !healthy {
 		a.Client.SetHourlyEnabled(false)
@@ -77,5 +94,5 @@ func (a *Agent) checkHourlyHealth() bool {
 }
 
 func (a *Agent) hourlyAvailable() bool {
-	return a.hourly != nil && a.hourly.store.Healthy() && a.hourly.store.MatchesAgent(a.Store.Metadata().AgentID)
+	return a.hourly != nil && !a.hourly.stopping.Load() && a.hourly.store.Healthy() && a.hourly.store.MatchesAgent(a.Store.Metadata().AgentID)
 }

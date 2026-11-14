@@ -1,3 +1,35 @@
+# X-Node v2.0.30
+
+Fixes a Linux firewall inspection panic when a busy proxy process assigns its
+netlink socket a file descriptor beyond the fixed `select` descriptor-set range.
+The nftables readiness check now uses zero-timeout `poll`, retries interrupted
+calls, and preserves socket error and hangup handling without indexing a fixed
+descriptor bitmap. Firewall policy and synchronization contracts are unchanged.
+
+Preserves exact hourly byte-credit proofs during successful graceful shutdown.
+Shutdown permanently fences new hourly admission, joins accepted durable credit
+commands and retirement work, then freezes the remaining credits and persists
+their admitted/unused partitions in one atomic journal write before closing the
+credit store. Original reservation, owner, day, agent, boot and session scope
+remain intact. Already admitted bytes stay charged regardless of later native
+delivery, and sealing needs neither a master connection nor delivery completion.
+See the [hourly controller notes](../internal/hourly/README.md).
+
+Cleanup has a fresh bounded deadline after process cancellation. A timeout,
+failed durability barrier, forced termination or hard crash does not establish
+unused credit: any surviving exact durable proof is retained, while unsealed
+obligations keep the existing conservative unknown-recovery behavior. Historical
+proofs, acknowledgments and settlements are not rewritten or cleared. Ordinary
+unacknowledged traffic remains subject to its existing volatile recovery limits.
+The new cleanup applies once this version is running; the stop used to upgrade
+an older agent still follows that older binary's shutdown behavior.
+
+Hosted regressions cover high-descriptor netlink readiness, concurrent admission
+fencing, in-flight credit work, bounded cleanup, atomic batch durability and a
+real hourly Xray stream through shutdown and journal reopen. Publication remains
+subject to the protected-main Quality gate, Debian host checks, both architecture
+builds and the existing signed-manifest workflow.
+
 # X-Node v2.0.29
 
 Keeps unrelated work available under failed jobs, queue pressure and master

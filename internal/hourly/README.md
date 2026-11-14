@@ -49,6 +49,16 @@ first/last admission timestamps. Call `PruneSamples` with the original snapshot
 only after its immutable copy entered the existing traffic journal; active
 current-day counters and changed/recreated generations are retained.
 
+`StopAdmission` permanently fences a process that is shutting down. Its controller
+lock joins any `Begin` already at the admission boundary; later session and
+authorization callbacks cannot reopen it. It performs no native interrupt or
+delivery wait. The agent then joins durable install/retirement work, freezes all
+remaining credits, and calls `CreditStore.SealBatch` to persist their exact
+original-scope admitted/unused partitions in one atomic journal write before
+closing the store. Batch validation is all-or-nothing and identical final proofs
+are only replayed. This avoids one filesystem barrier per credit during a planned
+restart, while retaining the existing bounded journal and replay limits.
+
 Owner, flow, permit, credit and sample retention are bounded. Capacity failures
 reject hourly work without erasing financial evidence or changing legacy traffic.
 The focused `controller_*_test.go` cases cover shared quota, writer failure,
@@ -81,6 +91,10 @@ persists the exact frozen admitted/unused partition before emitting it;
 `SealUnclaimed` atomically excludes controller admission before returning wholly
 unused credit. Restart converts unsealed reservations into durable unknown
 proofs without usable markers. It never invents usage or unused balances.
+A shutdown deadline or failed durability barrier never reports a successful
+seal. If an interrupted atomic write survived, restart retains that exact normal
+proof; otherwise the unsealed obligation follows the same conservative recovery
+path. Abrupt termination remains different from a completed graceful seal.
 Acknowledgments retire only the matching final digest. Corruption, capacity and
 I/O failures preserve the original evidence and disable hourly access alone.
 

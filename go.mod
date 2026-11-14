@@ -7,7 +7,7 @@ require (
 	github.com/caddyserver/certmagic v0.25.6
 	github.com/google/nftables v0.3.1-0.20260430172505-f9b52ed2ba65
 	github.com/gorilla/websocket v1.5.3
-	github.com/klauspost/compress v1.20.3
+	github.com/klauspost/compress v1.20.4
 	github.com/libdns/alidns v1.0.7
 	github.com/libdns/azure v0.5.0
 	github.com/libdns/bunny v1.6.1
@@ -38,7 +38,7 @@ require (
 	go4.org/netipx v0.0.0-20260823151212-3075585bcbeb
 	golang.org/x/crypto v0.58.0
 	golang.org/x/mod v0.42.0
-	golang.org/x/sys v0.49.0
+	golang.org/x/sys v0.50.0
 	golang.org/x/time v0.16.0
 	google.golang.org/protobuf v1.36.12
 )

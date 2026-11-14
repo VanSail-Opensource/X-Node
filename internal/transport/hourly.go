@@ -29,6 +29,16 @@ func (c *Client) HourlySession() string {
 	if !c.Hourly() {
 		return ""
 	}
+	return c.HourlyAuthoritySession()
+}
+
+// HourlyAuthoritySession identifies already accepted local grants and reserved
+// credit. A transport outage cannot revoke those bounded authorizations. It is
+// not permission to accept or send new control frames on a disconnected socket.
+func (c *Client) HourlyAuthoritySession() string {
+	if !c.hourlyEnabled.Load() {
+		return ""
+	}
 	if session := c.hourlySession.Load(); session != nil {
 		return session.(string)
 	}
@@ -55,6 +65,13 @@ func (c *Client) clearHourlySessionLocked() {
 	c.setHourlySession("")
 }
 
+func (c *Client) suspendHourlySession() {
+	c.hourlyMu.Lock()
+	defer c.hourlyMu.Unlock()
+	c.hourlyAccounting.Store(false)
+	c.hourlyNegotiated.Store(false)
+}
+
 func (c *Client) offerHourly(headers http.Header) string {
 	if !c.hourlyEnabled.Load() {
 		return ""
@@ -73,6 +90,9 @@ func (c *Client) acceptHourly(response *http.Response, offered string) {
 	c.hourlyMu.Lock()
 	defer c.hourlyMu.Unlock()
 	if offered == "" || !c.hourlyEnabled.Load() || response == nil || response.Header.Get(protocol.HourlyHeader) != protocol.HourlyFormat || response.Header.Get(protocol.HourlySessionHeader) != offered {
+		// A successful connection to an incompatible master is an explicit
+		// authority change, unlike a failed dial or a dropped transport.
+		c.clearHourlySessionLocked()
 		return
 	}
 	c.hourlyNegotiated.Store(true)

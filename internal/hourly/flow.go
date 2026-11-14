@@ -71,26 +71,43 @@ func (f *Flow) TryAcquire(direction Direction, want, minAtomic int) (*Permit, Wa
 	b := o.currentBucket(now)
 	f.recent, f.pending[direction], f.atomic[direction] = now, min(want, 16384), minAtomic
 	wait := Wait{Changed: o.changed}
-	if c.session == "" || b.grant == nil || !b.grant.deadline.After(now) {
+	if c.session == "" {
 		c.notify()
 		return nil, wait, nil
 	}
-	b.refill(now)
+	grant := b.grant
+	var tokens uint64
+	if grant != nil && grant.deadline.After(now) {
+		b.refill(now)
+		tokens = b.tokens
+	} else {
+		// Already reserved full-speed bytes remain spendable without a live
+		// reduced-rate grant. Never refill or extend expired rate authority.
+		grant = nil
+	}
+	if want == 0 && grant == nil {
+		c.notify()
+		return nil, wait, nil
+	}
 	n := min(want, 16384)
 	if minAtomic > 1 {
 		n = minAtomic
 	} // Never split a datagram to fit a token remainder.
 	allocations, free := o.creditAllocations(b, uint64(n), c.session)
 	reduced := uint64(n) - free
-	if reduced > b.tokens {
+	if reduced > tokens {
 		if minAtomic > 1 {
-			wait.After = b.delay(reduced - b.tokens)
+			if grant != nil {
+				wait.After = b.delay(reduced - tokens)
+			}
 			c.notify()
 			return nil, wait, nil
 		}
-		n = int(free + b.tokens)
+		n = int(free + tokens)
 		if n == 0 && want != 0 {
-			wait.After = b.delay(1)
+			if grant != nil {
+				wait.After = b.delay(1)
+			}
 			c.notify()
 			return nil, wait, nil
 		}
@@ -100,7 +117,10 @@ func (f *Flow) TryAcquire(direction Direction, want, minAtomic int) (*Permit, Wa
 	if !reserveCount(&c.permits, c.options.MaxPermits) {
 		return nil, Wait{}, ErrCapacity
 	}
-	p := &Permit{flow: f, bucket: b, grant: b.grant, direction: direction, bytes: n, reduced: reduced, credits: allocations}
+	if reduced == 0 && n > 0 {
+		grant = nil // Fully reserved bytes do not borrow a reduced-rate lease.
+	}
+	p := &Permit{flow: f, bucket: b, grant: grant, session: c.session, direction: direction, bytes: n, reduced: reduced, credits: allocations}
 	for _, a := range allocations {
 		a.credit.held += a.bytes
 	}

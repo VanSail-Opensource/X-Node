@@ -55,19 +55,19 @@ func listenerIdentity(value any) (any, error) {
 	return value, nil
 }
 
-func unsafeOutbound(raw any) bool {
-	out, _ := raw.(map[string]any)
-	if out["proxySettings"] != nil || out["mux"] != nil {
+func unsafeOutbound(raw any, dependencies []string) bool {
+	var out struct {
+		Protocol string           `json:"protocol"`
+		Proxy    *json.RawMessage `json:"proxySettings"`
+		Mux      *json.RawMessage `json:"mux"`
+		Settings json.RawMessage  `json:"settings"`
+	}
+	value, err := json.Marshal(raw)
+	if err != nil || json.Unmarshal(value, &out) != nil {
 		return true
 	}
-	stream, _ := out["streamSettings"].(map[string]any)
-	socket, _ := stream["sockopt"].(map[string]any)
-	if socket["dialerProxy"] != nil {
+	if out.Proxy != nil || out.Mux != nil || len(dependencies) > 0 {
 		return true
 	}
-	settings, _ := out["settings"].(map[string]any)
-	text := stringJSON(settings)
-	return out["protocol"] == "loopback" || strings.Contains(text, `"reverse"`)
+	return strings.EqualFold(out.Protocol, "loopback") || strings.Contains(strings.ToLower(string(out.Settings)), `"reverse"`)
 }
-
-func stringJSON(v any) string { b, _ := json.Marshal(v); return string(b) }

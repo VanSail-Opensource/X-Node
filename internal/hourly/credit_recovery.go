@@ -31,14 +31,11 @@ func OpenCreditStore(path string) (*CreditStore, error) {
 	if err != nil {
 		return s, err
 	}
-	var journal creditJournal
-	if json.Unmarshal(raw, &journal, json.RejectUnknownMembers(true)) != nil || validateCreditJournal(journal) != nil {
-		return s, ErrCreditCorrupt
+	journal, err := decodeCreditJournal(raw)
+	if err != nil {
+		return s, err
 	}
 	checksummed := journal.Digest != ""
-	if checksummed && (!validCreditDigest(journal.Digest) || journal.Digest != creditJournalDigest(journal)) {
-		return s, ErrCreditCorrupt
-	}
 	// Earlier private journals lacked either ACK compaction or whole-document
 	// integrity. Their sequence gaps cannot authorize unused-credit proofs.
 	var metadata struct {
@@ -72,6 +69,35 @@ func OpenCreditStore(path string) (*CreditStore, error) {
 	s.publishIdentity(s.data)
 	s.healthy.Store(true)
 	return s, nil
+}
+
+func decodeCreditJournal(raw []byte) (creditJournal, error) {
+	var journal creditJournal
+	if json.Unmarshal(raw, &journal, json.RejectUnknownMembers(true)) != nil || validateCreditJournal(journal) != nil {
+		return creditJournal{}, ErrCreditCorrupt
+	}
+	if journal.Digest != "" && (!validCreditDigest(journal.Digest) || journal.Digest != creditJournalDigest(journal)) {
+		return creditJournal{}, ErrCreditCorrupt
+	}
+	return journal, nil
+}
+
+// RequiresCompatibleBinary inspects retained financial evidence without opening
+// a live store, recovering active obligations or modifying journal bytes. A
+// newly created pristine journal alone must not prevent first-upgrade rollback.
+func RequiresCompatibleBinary(path string) (bool, error) {
+	raw, err := readCreditFile(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	journal, err := decodeCreditJournal(raw)
+	if err != nil {
+		return false, err
+	}
+	return journal.HighWater != 0, nil
 }
 
 // Recovery returns only durable final proofs, still bound to their original

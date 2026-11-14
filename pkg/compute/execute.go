@@ -99,14 +99,15 @@ func EmpiricalForecast(samples []float64) Quantiles {
 	for _, v := range samples {
 		if v >= 0 && valid(v) {
 			values = append(values, v)
-			mean += v
+			// All values are finite and nonnegative. Updating the mean avoids
+			// overflowing their sum while the true mean is still representable.
+			mean += (v - mean) / float64(len(values))
 		}
 	}
 	if len(values) == 0 {
 		return Quantiles{}
 	}
 	slices.Sort(values)
-	mean /= float64(len(values))
 	q := func(p float64) float64 {
 		x := p * float64(len(values)-1)
 		i := int(x)

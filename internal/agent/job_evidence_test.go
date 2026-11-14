@@ -32,7 +32,7 @@ func TestFailedCompactionPreservesPrimaryAndReusesPrivateEvidence(t *testing.T) 
 	if err != nil || jobs.recovery != "" {
 		t.Fatal("private evidence could not be reused after a failed compaction")
 	}
-	if err := jobs.Start(context.Background(), "old-mutation", "runtime.reload", func(context.Context, func(any)) (any, error) { t.Error("recovered mutation repeated"); return nil, nil }); err != nil {
+	if err := jobs.Start(context.Background(), "old-mutation", "update.rollback", func(context.Context, func(any)) (any, error) { t.Error("recovered mutation repeated"); return nil, nil }); err != nil {
 		t.Fatal(err)
 	}
 	if result := journalResult(t, results); result.Status != "uncertain" {
@@ -52,7 +52,7 @@ func TestMutationErrorsAfterSideEffectsRemainProtected(t *testing.T) {
 		calls++
 		return nil, errors.New("provider succeeded but durable result failed")
 	}
-	if err := jobs.Start(context.Background(), "partial", "ddns.run", mutate); err != nil {
+	if err := jobs.Start(context.Background(), "partial", "firewall.apply", mutate); err != nil {
 		t.Fatal(err)
 	}
 	if result := journalResult(t, results); result.Status != "uncertain" {
@@ -62,7 +62,7 @@ func TestMutationErrorsAfterSideEffectsRemainProtected(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := restarted.Start(context.Background(), "partial", "ddns.run", mutate); err != nil {
+	if err := restarted.Start(context.Background(), "partial", "firewall.apply", mutate); err != nil {
 		t.Fatal(err)
 	}
 	if result := journalResult(t, results); result.Status != "uncertain" || calls != 1 {
@@ -73,7 +73,7 @@ func TestMutationErrorsAfterSideEffectsRemainProtected(t *testing.T) {
 func TestLegacyFailedMutationIsNotTreatedAsProofOfNoSideEffects(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "jobs.json")
-	raw := []byte(`[{"id":"legacy-failure","command":"ddns.run","status":"failed","error":"provider journal failed"}]`)
+	raw := []byte(`[{"id":"legacy-failure","command":"firewall.apply","status":"failed","error":"provider journal failed"}]`)
 	if err := os.WriteFile(path, raw, 0600); err != nil {
 		t.Fatal(err)
 	}

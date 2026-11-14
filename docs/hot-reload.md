@@ -1,6 +1,6 @@
 # Incremental Xray configuration
 
-The agent uses the merged Xray v26.10.29 dependency. Compilation means native
+The agent uses the merged Xray v26.10.31 dependency. Compilation means native
 configuration/matcher construction; no configuration action compiles a binary.
 Signed binaries are built only in release delivery.
 
@@ -63,6 +63,9 @@ Only a strict suffix append with unchanged balancers/strategy/script reuses the
 previous matchers. Outbound changes involving affected mux/reverse/dialer chains,
 default changes or configured observers use reconstruction. Replacement/removal
 on nodes with untracked utility flows also reconstructs; additions remain live.
+The dependency graph includes XHTTP's independent download transport after
+native alias, `extra` and socket-penetration selection. Case-insensitive native
+field names cannot bypass cycle checks or chain/mux reconstruction.
 
 Native protobufs are immutable snapshots; core construction receives a clone.
 Each runtime/validator keeps only active/latest candidates. Cached client

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
+	"path/filepath"
 	"sync/atomic"
 	"testing"
 
@@ -20,7 +21,7 @@ func TestIntentWriteFailurePreventsExecution(t *testing.T) {
 	}
 	mutate := func(context.Context, func(any)) (any, error) { calls.Add(1); return nil, nil }
 	for range 2 {
-		if err := jobs.Start(context.Background(), "not-executed", "runtime.reload", mutate); err != nil {
+		if err := jobs.Start(context.Background(), "not-executed", "update.rollback", mutate); err != nil {
 			t.Fatal(err)
 		}
 		if result := executionResult(t, results); result.Status != "failed" {
@@ -51,7 +52,7 @@ func TestCompletionWriteFailureRetainsUncertainIntentAcrossRestart(t *testing.T)
 		calls.Add(1)
 		return map[string]bool{"applied": true}, nil
 	}
-	if err := jobs.Start(context.Background(), "mutated", "runtime.reload", mutate); err != nil {
+	if err := jobs.Start(context.Background(), "mutated", "update.rollback", mutate); err != nil {
 		t.Fatal(err)
 	}
 	if result := executionResult(t, results); result.Status != "uncertain" || writes != 2 || calls.Load() != 1 {
@@ -62,12 +63,12 @@ func TestCompletionWriteFailureRetainsUncertainIntentAcrossRestart(t *testing.T)
 		t.Fatal(err)
 	}
 	var persisted []JobResult
-	if err := json.Unmarshal(raw, &persisted); err != nil || len(persisted) != 1 || persisted[0].ID != "mutated" || persisted[0].Command != "runtime.reload" || persisted[0].Status != "uncertain" {
+	if err := json.Unmarshal(raw, &persisted); err != nil || len(persisted) != 1 || persisted[0].ID != "mutated" || persisted[0].Command != "update.rollback" || persisted[0].Status != "uncertain" {
 		t.Fatalf("pre-execution intent did not survive failed completion: %v", err)
 	}
 	restarted, replay := executionJobs(t, dir)
 	for range 2 {
-		if err := restarted.Start(context.Background(), "mutated", "runtime.reload", mutate); err != nil {
+		if err := restarted.Start(context.Background(), "mutated", "update.rollback", mutate); err != nil {
 			t.Fatal(err)
 		}
 		if result := executionResult(t, replay); result.Status != "uncertain" || result.ID != "mutated" {
@@ -107,7 +108,7 @@ func TestCancellationBeforeMutationPreventsExecution(t *testing.T) {
 			if !blockedIntent {
 				cancel()
 			}
-			if err := jobs.Start(ctx, "cancelled-before-effect", "runtime.reload", func(context.Context, func(any)) (any, error) { calls.Add(1); return nil, nil }); err != nil {
+			if err := jobs.Start(ctx, "cancelled-before-effect", "update.rollback", func(context.Context, func(any)) (any, error) { calls.Add(1); return nil, nil }); err != nil {
 				t.Fatal(err)
 			}
 			if blockedIntent {
@@ -122,6 +123,15 @@ func TestCancellationBeforeMutationPreventsExecution(t *testing.T) {
 			if !blockedIntent && writes != 0 {
 				t.Fatal("already-cancelled admission wrote a mutation intent")
 			}
+			if blockedIntent {
+				restarted, err := NewJobs(filepath.Dir(jobs.path), jobs.send)
+				if err != nil || restarted.recovery != "" {
+					t.Fatal("cancelled intent did not restart safely", err)
+				}
+				if receipts := restarted.Snapshot(); len(receipts) != 1 || receipts[0].Status != "failed" || !receipts[0].terminalFailure {
+					t.Fatal("cancellation before execution became an uncertain mutation", receipts)
+				}
+			}
 		})
 	}
 }
@@ -134,7 +144,7 @@ func TestInterruptedMutationIntentReplaysWithoutExecuting(t *testing.T) {
 	defer func() { cancel(); unblock() }()
 	entered := make(chan struct{})
 	var calls atomic.Int32
-	if err := jobs.Start(ctx, "interrupted", "runtime.reload", func(context.Context, func(any)) (any, error) {
+	if err := jobs.Start(ctx, "interrupted", "update.rollback", func(context.Context, func(any)) (any, error) {
 		calls.Add(1)
 		close(entered)
 		<-gate
@@ -144,7 +154,7 @@ func TestInterruptedMutationIntentReplaysWithoutExecuting(t *testing.T) {
 	}
 	executionAwait(t, entered, "mutation after persisted intent")
 	restarted, replay := executionJobs(t, dir)
-	if err := restarted.Start(context.Background(), "interrupted", "runtime.reload", func(context.Context, func(any)) (any, error) { calls.Add(100); return nil, nil }); err != nil {
+	if err := restarted.Start(context.Background(), "interrupted", "update.rollback", func(context.Context, func(any)) (any, error) { calls.Add(100); return nil, nil }); err != nil {
 		t.Fatal(err)
 	}
 	if result := executionResult(t, replay); result.Status != "uncertain" || result.ID != "interrupted" || calls.Load() != 1 {

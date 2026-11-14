@@ -31,7 +31,7 @@ func TestNativePreparationResolvesGeositeBeforeValidation(t *testing.T) {
 	a := &Agent{Dir: dir, Certificates: cert.NewPool(filepath.Join(dir, "certs"))}
 	defer a.Certificates.Stop()
 	c := protocol.Config{Xray: json.RawMessage(`{"inbounds":[],"outbounds":[{"tag":"direct","protocol":"freedom"}],"routing":{"rules":[{"type":"field","domain":["geosite:google"],"outboundTag":"direct"}]}}`)}
-	if _, _, err = a.prepareNative(context.Background(), context.Background(), c, geodata.Policy{}); err != nil {
+	if _, _, err = a.prepareCertificateNative(context.Background(), context.Background(), c, geodata.Policy{}, false, nil); err != nil {
 		t.Fatal(err)
 	}
 }

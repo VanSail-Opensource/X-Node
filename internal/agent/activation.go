@@ -16,7 +16,9 @@ import (
 // activate owns preparation, native commit and auxiliary reconciliation. It
 // runs outside the actor, so disk/network work never holds traffic ACK handling.
 func (a *Agent) activate(lifetime context.Context, job applyJob) error {
-	a.nativeMu.Lock()
+	if err := a.nativeMu.LockContext(job.Context); err != nil {
+		return err
+	}
 	defer a.nativeMu.Unlock()
 	if err := job.Context.Err(); err != nil {
 		return err

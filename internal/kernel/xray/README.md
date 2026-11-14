@@ -36,6 +36,10 @@ blocked delivery and strict idle paid-boundary closure.
 direct, `extra` and nested-download HTTP/2 settings. Forced invalid reloads must
 preserve the serving listener, existing streams, new admission and accounted
 traffic. Early checks are shared with public validation through the protocol.
+Outbound-only probe/download clients run the same early native policy checks,
+including on prepared-cache hits, before opening TLS files or constructing Xray.
+`outbound_dependencies_test.go` covers malformed client HTTP/2 and download
+settings without creating a runtime.
 
 `connection_limits_test.go` exercises real TCP and mux streams: an idle first
 flow still denies a second, existing traffic survives, and closing allows a new
@@ -83,12 +87,12 @@ resolver access. No DNS listener is opened and no host packet is redirected.
 `dns_test.go` exercises real VLESS TCP/UDP queries against a controlled resolver,
 including one-query loop prevention. These regressions run in hosted Quality.
 
-Resolver mode is retired. `PrepareCached` first applies the protocol's
-`Config.NormalizeDNS` compatibility migration; legacy loopback behavior becomes
-an explicit native server before rendering. `dns.go` requires native servers
-when interception is enabled and contains no mode-dependent fallback. The
-deprecated upstream list remains inert. `dns_migration_test.go` covers this
-boundary without starting host services.
+Resolver mode and the inert upstream list are removed from the live protocol.
+`dns.go` requires explicit native servers when interception is enabled and has
+no mode-dependent fallback. Historical accepted state is normalized only by the
+bounded private snapshot reader before offline bootstrap. `dns_migration_test.go`
+checks that native preparation preserves explicit resolvers and requires a
+configured resolver, without starting host services.
 
 `inbound_config.go` and `inbound_observer.go` wrap public native proxy interfaces,
 retaining public user-management methods and existing listener update behavior.
@@ -115,6 +119,10 @@ uses native rule replacement or a safe suffix append. Unsupported immutable,
 default-outbound, mux/chain and observer changes reconstruct after preparation.
 `statistics.go` exposes memory-only build/rebuild counters for hosted regressions.
 `client_prepared.go` caches one immutable client configuration, never a live core.
+Dependency validation and reload classification include effective XHTTP download
+dialers, native case aliases, `extra` replacement and socket penetration. Missing
+peers and cycles fail preparation; changing either side of a chain reconstructs
+the runtime. Mux case aliases also retain this reconstruction boundary.
 
 `live_stream_test.go`, `outbound_stream_test.go` and `sections_test.go` cover real
 TCP/mux/UDP continuity, scoped outbound replacement and section/matcher work.

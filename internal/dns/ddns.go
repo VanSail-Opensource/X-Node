@@ -37,6 +37,9 @@ func Provider(p protocol.Provider) (any, error) {
 }
 func DDNS(ctx context.Context, j protocol.DDNSJob, p any, client *http.Client) (Result, error) {
 	result := Result{ID: j.ID}
+	if err := j.Validate(); err != nil {
+		return result, err
+	}
 	var setter Setter
 	if j.Provider != protocol.BuiltinDDNSProvider {
 		var ok bool
@@ -59,14 +62,9 @@ func DDNS(ctx context.Context, j protocol.DDNSJob, p any, client *http.Client) (
 	if j.Provider == protocol.BuiltinDDNSProvider {
 		return Result{ID: j.ID, IPv4: v4, IPv6: v6, Updated: time.Now().UTC()}, nil
 	}
-	zone := strings.TrimSuffix(strings.ToLower(j.Zone), ".") + "."
-	absolute := strings.TrimSuffix(strings.ToLower(j.Name), ".")
-	zoneName := strings.TrimSuffix(zone, ".")
-	if absolute == "@" {
-		absolute = zoneName
-	}
-	if absolute != zoneName && !strings.HasSuffix(absolute, "."+zoneName) {
-		return result, errors.New("DDNS name is outside its zone")
+	zone, absolute, err := protocol.DDNSRecordNames(j.Zone, j.Name)
+	if err != nil {
+		return result, err
 	}
 	name := libdns.RelativeName(absolute+".", zone)
 	if name == "" {
@@ -100,7 +98,7 @@ func address(ctx context.Context, value, iface, lookup string, v4 bool, client *
 	}
 	if value != "auto" {
 		a, e := netip.ParseAddr(value)
-		if e != nil || a.Unmap().Is4() != v4 || !a.IsGlobalUnicast() {
+		if e != nil || a.Zone() != "" || a.Unmap().Is4() != v4 || !a.IsGlobalUnicast() {
 			return "", errors.New("invalid DDNS address")
 		}
 		return a.Unmap().String(), nil
@@ -148,7 +146,7 @@ func address(ctx context.Context, value, iface, lookup string, v4 bool, client *
 		return "", errors.New("invalid DDNS lookup response")
 	}
 	a, e := netip.ParseAddr(strings.TrimSpace(string(b)))
-	if e != nil || a.Unmap().Is4() != v4 || !a.IsGlobalUnicast() {
+	if e != nil || a.Zone() != "" || a.Unmap().Is4() != v4 || !a.IsGlobalUnicast() {
 		return "", errors.New("lookup returned the wrong address family")
 	}
 	return a.Unmap().String(), nil

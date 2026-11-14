@@ -5,18 +5,15 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
-	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
-	"encoding/hex"
 	"encoding/pem"
 	"fmt"
 	"math/big"
 	"net"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -57,12 +54,11 @@ type Manager struct {
 	// Atomic so the ACME renewal goroutine can swap without racing readers.
 	mat atomic.Pointer[certMaterial]
 
-	magic           *certmagic.Config
-	cache           *certmagic.Cache
-	renewed         atomic.Bool
-	acmeStarted     bool
-	acmeFingerprint string
-	acmeCancel      context.CancelFunc
+	magic       *certmagic.Config
+	cache       *certmagic.Cache
+	renewed     atomic.Bool
+	acmeStarted bool
+	acmeCancel  context.CancelFunc
 }
 
 // certMaterial is an immutable snapshot of PEM-encoded cert + key.
@@ -140,34 +136,6 @@ func (m *Manager) loadPersistedPEM() bool {
 	return true
 }
 
-// Reconfigure applies a new cert configuration at runtime (e.g. from panel push).
-// Returns true when the PEM material changed (caller should restart kernel).
-func (m *Manager) Reconfigure(ctx context.Context, newCfg config.CertConfig) (bool, error) {
-	if newCfg.CertDir == "" {
-		newCfg.CertDir = m.cfg.CertDir
-	}
-
-	// If ACME is running and the new config materially differs (or switches
-	// away from ACME), tear down the old certmagic instance first.
-	if m.acmeStarted {
-		newFp := acmeFingerprint(newCfg)
-		newMode := resolveModeFor(newCfg)
-		if newMode != "http" && newMode != "dns" || newFp != m.acmeFingerprint {
-			m.tearDownACME()
-		}
-	}
-
-	oldTLS := m.TLSCert()
-	m.cfg = newCfg
-
-	if err := m.Start(ctx); err != nil {
-		return false, fmt.Errorf("cert reconfigure: %w", err)
-	}
-
-	newTLS := m.TLSCert()
-	return !pemEqual(oldTLS, newTLS), nil
-}
-
 // tearDownACME cancels the running certmagic background goroutines and clears
 // related state so a fresh ACME init can run.
 func (m *Manager) tearDownACME() {
@@ -177,54 +145,7 @@ func (m *Manager) tearDownACME() {
 	}
 	m.magic = nil
 	m.acmeStarted = false
-	m.acmeFingerprint = ""
 	m.mat.Store(nil)
-}
-
-// acmeFingerprint produces a stable string capturing every config field that
-// requires re-running ACME when changed.
-func acmeFingerprint(cfg config.CertConfig) string {
-	keys := make([]string, 0, len(cfg.DNSEnv))
-	for k := range cfg.DNSEnv {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	var b strings.Builder
-	b.WriteString(strings.ToLower(strings.TrimSpace(cfg.CertMode)))
-	b.WriteByte('|')
-	b.WriteString(strings.TrimSpace(cfg.Domain))
-	b.WriteByte('|')
-	b.WriteString(strings.TrimSpace(cfg.Email))
-	b.WriteByte('|')
-	b.WriteString(strings.TrimSpace(cfg.DNSProvider))
-	b.WriteByte('|')
-	for _, k := range keys {
-		b.WriteString(k)
-		b.WriteByte('=')
-		b.WriteString(cfg.DNSEnv[k])
-		b.WriteByte(';')
-	}
-	sum := sha256.Sum256([]byte(b.String()))
-	return hex.EncodeToString(sum[:])
-}
-
-// resolveModeFor mirrors (*Manager).resolveMode() for an arbitrary cfg, used
-// by Reconfigure to decide tear-down without mutating manager state.
-func resolveModeFor(cfg config.CertConfig) string {
-	mode := strings.ToLower(strings.TrimSpace(cfg.CertMode))
-	if mode != "" {
-		return mode
-	}
-	if cfg.AutoTLS {
-		return "http"
-	}
-	if cfg.CertContent != "" && cfg.KeyContent != "" {
-		return "content"
-	}
-	if cfg.CertFile != "" && cfg.KeyFile != "" {
-		return "file"
-	}
-	return "none"
 }
 
 // resolveMode returns the effective cert mode, handling backward compat for auto_tls.
@@ -263,16 +184,6 @@ func (m *Manager) TLSCert() kernel.TLSCert {
 	return kernel.TLSCert{CertPEM: append([]byte(nil), mat.certPEM...), KeyPEM: append([]byte(nil), mat.keyPEM...)}
 }
 
-// pemEqual reports whether two TLSCert values carry identical PEM content.
-func pemEqual(a, b kernel.TLSCert) bool {
-	return string(a.CertPEM) == string(b.CertPEM) && string(a.KeyPEM) == string(b.KeyPEM)
-}
-
-// Start initializes the cert manager based on the resolved mode.
-func (m *Manager) Start(ctx context.Context) error {
-	return m.StartContext(ctx, ctx)
-}
-
 // StartContext separates a bounded preparation attempt from renewal lifetime.
 func (m *Manager) StartContext(ctx, lifetime context.Context) error {
 	mode := m.resolveMode()
@@ -299,8 +210,7 @@ func (m *Manager) StartContext(ctx, lifetime context.Context) error {
 	}
 }
 
-// Stop is a no-op: certmagic's background goroutine is cancelled via the
-// context passed to ManageAsync.
+// Stop cancels managed renewal and waits for the owned certificate cache to stop.
 func (m *Manager) Stop() {
 	m.tearDownACME()
 	if m.cache != nil {
@@ -406,10 +316,6 @@ func (m *Manager) startContent() error {
 }
 
 // ─── Mode: http / dns (ACME) ──────────────────────────────────────────────
-
-func (m *Manager) startACME(ctx context.Context, solver *certmagic.DNS01Solver) error {
-	return m.acquireACME(ctx, ctx, solver, false)
-}
 
 func validateKeyPair(certPEM, keyPEM []byte) error {
 	if _, err := tls.X509KeyPair(certPEM, keyPEM); err != nil {

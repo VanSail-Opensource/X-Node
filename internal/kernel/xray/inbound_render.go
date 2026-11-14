@@ -46,10 +46,7 @@ func renderInbounds(c protocol.Config, root map[string]any, auxiliary map[string
 				return nil, nil, errors.New("inbound account lists belong in managed users")
 			}
 		}
-		if proto == "shadowsocks" {
-			if _, exists := settings["password"]; exists { /* SS2022 server keys are native settings, never user identities. */
-			}
-		}
+		// SS2022 server keys stay in native settings, separate from user accounts.
 		stream, _ := in["streamSettings"].(map[string]any)
 		if stream == nil {
 			stream = map[string]any{}

@@ -5,6 +5,21 @@ revisions, bans and IP blocks. `desired.go` stages validated activation targets;
 acceptance clears them. `connection_controls.go` excludes connection-derived
 admission decisions from durable snapshots. `configuration.go` provides bounded
 configuration copies and metadata without copying traffic or credentials.
+Recovery checks the state file's type and 64 MiB size limit before opening it,
+uses a nonblocking no-follow open, verifies the opened file identity, and caps
+the read to reject concurrent growth. Invalid files, FIFOs and symlinks
+are rejected without changing their evidence. Atomic writes acknowledge success only after the containing
+directory sync and close succeed; a rename with an uncertain durability barrier
+does not publish a fresh in-memory authorization view.
+`SyncDirectory` shares that barrier with append journals that create new filenames.
+`AtomicWritePublished` separately reports successful rename visibility when the
+following directory barrier fails. Snapshot/journal callers retain the published
+epoch and require a later directory sync before acknowledging dependent records;
+this does not relax the authorization store's success-only publication rule.
+`atomic_publication_test.go` covers failures before rename and after rename but
+before directory durability.
+`recovery_file.go` exposes the same bounded read-only regular-file boundary to
+upgrade and firewall recovery, with each caller selecting its document limit.
 
 `dns_migration.go` normalizes both accepted and staged legacy resolver settings
 in memory during `Open`, before bootstrap or configuration readers see them.

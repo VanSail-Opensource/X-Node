@@ -3,6 +3,7 @@ package firewall
 import (
 	"context"
 	"encoding/json"
+	jsonv2 "encoding/json/v2"
 	"errors"
 	"os"
 	"path/filepath"
@@ -103,7 +104,7 @@ func (g *Guard) SyncGeoIP(ctx context.Context, chunk protocol.GeoIPChunk) (bool,
 	return true, g.cleanupSourceFiles()
 }
 
-func (g *Guard) retainCountryFiles(keep map[string]bool) {
+func (g *Guard) retainCountryFiles(keep map[string]bool) error {
 	if p := g.policy.Load(); p != nil && p.SourceGeoIP != nil {
 		keep[filepath.Base(sourcePath(g.dir, "country", p.SourceGeoIP.Generation))] = true
 	}
@@ -111,13 +112,29 @@ func (g *Guard) retainCountryFiles(keep map[string]bool) {
 		var pointer struct {
 			Generation string `json:"generation"`
 		}
-		if raw, err := os.ReadFile(g.file(name)); err == nil && json.Unmarshal(raw, &pointer) == nil && protocol.ValidName(pointer.Generation) {
-			keep[filepath.Base(sourcePath(g.dir, "country", pointer.Generation))] = true
+		raw, err := state.ReadRecoveryFile(g.file(name), 16<<10)
+		if os.IsNotExist(err) {
+			continue
 		}
+		if err != nil {
+			return err
+		}
+		if jsonv2.Unmarshal(raw, &pointer, jsonv2.RejectUnknownMembers(true)) != nil || !protocol.ValidName(pointer.Generation) {
+			return errors.New("invalid country retention metadata")
+		}
+		keep[filepath.Base(sourcePath(g.dir, "country", pointer.Generation))] = true
 	}
 	for _, name := range []string{"policy.json", "pending.json", "previous-policy.json"} {
-		if record, err := readRecord(g.file(name)); err == nil && record.Policy.SourceGeoIP != nil {
+		record, err := readRecord(g.file(name))
+		if os.IsNotExist(err) {
+			continue
+		}
+		if err != nil {
+			return err
+		}
+		if record.Policy.SourceGeoIP != nil {
 			keep[filepath.Base(sourcePath(g.dir, "country", record.Policy.SourceGeoIP.Generation))] = true
 		}
 	}
+	return nil
 }

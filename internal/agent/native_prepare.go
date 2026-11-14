@@ -19,13 +19,7 @@ func assetKey(c protocol.Config, p geodata.Policy) string {
 	return string(raw)
 }
 
-// prepareNative is shared by activation and read-only command validation.
 // The caller owns nativeMu; managed paths do not rely on ambient asset settings.
-func (a *Agent) prepareNative(ctx, lifetime context.Context, c protocol.Config, p geodata.Policy, recheck ...bool) (*xray.Prepared, string, error) {
-	verify := len(recheck) > 0 && recheck[0]
-	return a.prepareCertificateNative(ctx, lifetime, c, p, verify, nil)
-}
-
 func (a *Agent) prepareCertificateNative(ctx, lifetime context.Context, c protocol.Config, p geodata.Policy, verify bool, target *cert.Candidate) (*xray.Prepared, string, error) {
 	return a.prepareResolved(ctx, c, p, true, verify, func(c protocol.Config) (protocol.Config, error) {
 		return a.Certificates.PrepareContext(ctx, lifetime, c, target)

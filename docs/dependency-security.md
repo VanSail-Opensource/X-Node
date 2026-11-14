@@ -1,5 +1,16 @@
 # Dependency security evidence
 
+## Current Go security floor
+
+The module and Linux validation bootstrap require Go 1.27.4. Go 1.27.3
+contained reachable `GO-2026-6859` / `CVE-2026-97054` in the standard library;
+the [Go 1.27.4 release](https://go.dev/doc/devel/release#go1.27.4) fixes that
+boundary. The Linux amd64 bootstrap uses the
+[official download](https://go.dev/dl/#go1.27.4) SHA-256
+`7226736c2339719cda28fbf3a54d71aa63bcefe376e98cef00034268dab24840`.
+The exact-commit hosted vulnerability gate still determines whether the selected
+dependency graph has reachable advisories; a toolchain edit alone is not scan evidence.
+
 ## v2.0.20 dependency refresh
 
 The selected Xray security release is
@@ -24,7 +35,8 @@ reported by the Go module proxy on 2026-11-08. `go4.org/netipx` advances from
 The resolved module versions are
 `github.com/xtls/xray-core v1.260327.1-0.20261031132019-a4a3dff5b20c` and
 `go4.org/netipx v0.0.0-20260823151212-3075585bcbeb`.
-The Go toolchain remains pinned to 1.27.3. The manifest and checksums record the
+That refresh retained Go 1.27.3; the current security floor is recorded above.
+The manifest and checksums record the
 resolved module versions; a newer repository commit is not treated as a stable
 release unless that dependency's release policy calls for an explicit pin.
 

@@ -35,7 +35,7 @@ func (r *Registry) AcquireTracked(ctx context.Context, id int, identity, tag, ip
 }
 
 func (r *Registry) initializeAccounting(lease *Lease, tracked bool) {
-	lease.accountingPeriod = lease.user.policy.AccountingPeriod
+	lease.accountingKey = accountingKey{lease.Info.UserID, lease.user.policy.AccountingPeriod}
 	lease.tracked, lease.finished = tracked, make(chan struct{})
 	if r.inflight == nil {
 		r.inflight = map[string]*Lease{}
@@ -50,7 +50,7 @@ func (r *Registry) initializeAccounting(lease *Lease, tracked bool) {
 	if r.accounting == nil {
 		r.accounting = map[accountingKey]*accountingCounters{}
 	}
-	key := accountingKey{lease.Info.UserID, lease.user.policy.AccountingPeriod}
+	key := lease.accountingKey
 	counter := r.accounting[key]
 	if counter == nil {
 		counter = &accountingCounters{generation: r.sequence}
@@ -164,7 +164,7 @@ func (r *Registry) Quiesce(ctx context.Context, id int) (func(), error) {
 	r.fences[id]++
 	var tracked []*Lease
 	for _, lease := range r.inflight {
-		if id == 0 || lease.Info.UserID == id {
+		if id == 0 || lease.Info.UserID == id || lease.accountingKey.user == id {
 			tracked = append(tracked, lease)
 		}
 	}
@@ -181,6 +181,12 @@ func (r *Registry) Quiesce(ctx context.Context, id int) (func(), error) {
 		r.CloseAll()
 	} else {
 		r.CloseUser(id, "")
+	}
+	// Identity replacement can move the live principal while a handler still
+	// contributes to the original accounting key. Close every captured handler
+	// before waiting, including those no longer selected by CloseUser.
+	for _, lease := range tracked {
+		lease.Close()
 	}
 	for _, lease := range tracked {
 		select {

@@ -4,13 +4,13 @@
       "key": "overview",
       "title": "API overview",
       "description": "Build a master for one Debian agent, one Xray runtime and one control connection.",
-      "body": "## One connection. Every control.\nX-Node is a Debian 13 binary agent with one embedded Xray runtime and multiple tagged inbounds. The production master is a separate application. This reference describes the contract that master implements.\n\nControl messages, user synchronization, telemetry and utility commands share one authenticated WebSocket. Certificate providers, artifact downloads and test transfers use their respective network protocols.\n\n## Integration path\n1. Accept an authenticated WSS connection using the `x-node.v1` subprotocol.\n2. Read `agent.hello`, then respond to `state.request` with an authoritative `state.sync`.\n3. Persist monotonic revisions and distinguish `state.accepted` from `state.applied`.\n4. Deduplicate `traffic.report` batch IDs before billing and acknowledge durable receipt.\n5. Replace online telemetry snapshots, issue user controls and request IP details only when needed.\n\n## At a glance\n| Property | Contract |\n| --- | --- |\n| Wire format | UTF-8 JSON, protocol version `1` |\n| Control transport | WSS with Bearer authentication |\n| Socket subprotocol | `x-node.v1` |\n| State authority | Master snapshots and revisioned deltas |\n| Machine metrics | One-second sample / five-second report defaults |\n| Active user IPs | Omitted by default; explicitly requested |\n| Traffic accounting | Durable acknowledged batches |\n| Local configuration | Connection URL and token only |\n\n## Explore the contract\n[Connect an agent](#/connection) · [State synchronization](#/synchronization) · [Command lifecycle](#/command-lifecycle) · [Remote configuration](#/configuration) · [Schemas & downloads](#/schemas)\n\nUse the left navigation to open a message or command. Each entry includes its direction, behavior and example JSON. The downloadable schema is the machine-readable source for payload shape."
+      "body": "## One connection. Every control.\nX-Node is a Debian 13 binary agent with one embedded Xray runtime and multiple tagged inbounds. The production master is a separate application. This reference describes the contract that master implements.\n\nControl messages, user synchronization, telemetry and utility commands share one authenticated WebSocket. Certificate providers, artifact downloads and test transfers use their respective network protocols.\n\n## Integration path\n1. Accept an authenticated WSS connection using the `x-node.v1` subprotocol.\n2. Read `agent.hello`, then respond to `state.request` with an authoritative `state.sync`.\n3. Persist monotonic revisions and distinguish `state.accepted` from `state.applied`.\n4. Deduplicate `traffic.report` batch IDs before billing and acknowledge durable receipt.\n5. Replace online telemetry snapshots, issue user controls and request IP details only when needed.\n\n## At a glance\n| Property | Contract |\n| --- | --- |\n| Wire format | UTF-8 JSON, protocol version `1` |\n| Control transport | WSS with Bearer authentication |\n| Socket subprotocol | `x-node.v1` |\n| State authority | Master snapshots and revisioned deltas |\n| Machine metrics | One-second sample / two-second report defaults |\n| Active user IPs | Omitted by default; explicitly requested |\n| Traffic accounting | Bounded boot streams; durable master receipts |\n| Local configuration | Connection URL and token only |\n\n## Explore the contract\n[Connect an agent](#/connection) · [State synchronization](#/synchronization) · [Command lifecycle](#/command-lifecycle) · [Remote configuration](#/configuration) · [Schemas & downloads](#/schemas)\n\nUse the left navigation to open a message or command. Each entry includes its direction, behavior and example JSON. The downloadable schema is the machine-readable source for payload shape."
     },
     {
       "key": "connection",
       "title": "Connection & authentication",
       "description": "WSS upgrade, credentials, agent identity and reconnect behavior.",
-      "body": "## WebSocket upgrade\nThe agent initiates a WebSocket connection to the bootstrap URL supplied by the operator. `/v1/agents/connect` is the documented master endpoint. Agent connections require WSS, including local fixtures.\n\n```http\nGET /v1/agents/connect HTTP/1.1\nHost: master.example.com\nUpgrade: websocket\nConnection: Upgrade\nAuthorization: Bearer <agent-token>\nSec-WebSocket-Protocol: x-node.v1\n```\n\n| Response | Meaning |\n| --- | --- |\n| `101` | Upgrade accepted; begin the message exchange |\n| `401` | Missing or invalid Bearer credential |\n| `426` | A WebSocket upgrade is required |\n\nThe master validates enrollment and authorization. Keep credentials out of query strings, redirect URLs, traces and diagnostics. The agent redacts tokens, passwords and private keys before logging.\n\n## Envelope\n```json\n{\n  \"v\": 1,\n  \"type\": \"users.delta\",\n  \"id\": \"users-42\",\n  \"revision\": 42,\n  \"base_revision\": 41,\n  \"data\": {\"upsert\": [], \"remove\": [7]}\n}\n```\n\n| Field | Meaning |\n| --- | --- |\n| `v` | Required protocol version: `1` |\n| `type` | Required message name; maximum 64 characters |\n| `id` | Correlation or command ID; maximum 128 characters |\n| `revision` | Monotonic state revision for state mutations |\n| `base_revision` | Current authorization revision expected by an incremental mutation |\n| `data` | Message-specific typed JSON payload |\n\nThe maximum accepted frame is 16 MiB. Unknown envelope fields and malformed payloads are rejected. Send JSON arrays explicitly: missing or null `users` never means an empty authoritative set.\n\n## Identity and liveness\nThe first application frame on a new connection is `agent.hello`. It carries a durable agent ID and a fresh process boot ID. Preserve the state directory across upgrades so that identity and unacknowledged traffic remain stable.\n\nWebSocket Ping/Pong frames monitor transport liveness. Runtime readiness and synchronization are separate application status fields. A connected agent can still be applying configuration.\n\n## Reconnects\nReconnect uses bounded exponential backoff. The agent requests a full snapshot after reconnect, a revision gap or receive-buffer overflow. During a master outage it uses the last accepted private state, including admission blocks. A first boot without accepted state waits for an authoritative snapshot."
+      "body": "## WebSocket upgrade\nThe agent initiates a WebSocket connection to the bootstrap URL supplied by the operator. `/v1/agents/connect` is the documented master endpoint. Agent connections require WSS, including local fixtures.\n\n```http\nGET /v1/agents/connect HTTP/1.1\nHost: master.example.com\nUpgrade: websocket\nConnection: Upgrade\nAuthorization: Bearer <agent-token>\nSec-WebSocket-Protocol: x-node.v1\n```\n\n| Response | Meaning |\n| --- | --- |\n| `101` | Upgrade accepted; begin the message exchange |\n| `401` | Missing or invalid Bearer credential |\n| `426` | A WebSocket upgrade is required |\n\nThe master validates enrollment and authorization. Keep credentials out of query strings, redirect URLs, traces and diagnostics. The agent redacts tokens, passwords and private keys before logging.\n\n## Envelope\n```json\n{\n  \"v\": 1,\n  \"type\": \"users.delta\",\n  \"id\": \"users-42\",\n  \"revision\": 42,\n  \"base_revision\": 41,\n  \"data\": {\"upsert\": [], \"remove\": [7]}\n}\n```\n\n| Field | Meaning |\n| --- | --- |\n| `v` | Required protocol version: `1` |\n| `type` | Required message name; maximum 64 characters |\n| `id` | Correlation or command ID; maximum 128 characters |\n| `revision` | Monotonic state revision for state mutations |\n| `base_revision` | Current authorization revision expected by an incremental mutation |\n| `data` | Message-specific typed JSON payload |\n\nThe maximum accepted frame is 16 MiB. Unknown envelope fields and malformed payloads are rejected. Send JSON arrays explicitly: missing or null `users` never means an empty authoritative set.\n\n## Identity and liveness\nThe first application frame on a new connection is `agent.hello`. It carries a durable agent ID and a fresh process boot ID. Preserve the state directory across upgrades so that identity, authorization, financial credit evidence and legacy journal batches remain stable. New traffic streams live only in process memory; a restart loses usage not yet committed by the master.\n\nWebSocket Ping/Pong frames monitor transport liveness. Runtime readiness and synchronization are separate application status fields. A connected agent can still be applying configuration.\n\n## Reconnects\nReconnect uses bounded exponential backoff. The agent requests a full snapshot after reconnect, a revision gap or receive-buffer overflow. During a master outage it uses the last accepted private state, including admission blocks. A first boot without accepted state waits for an authoritative snapshot."
     },
     {
       "key": "synchronization",
@@ -22,19 +22,19 @@
       "key": "command-lifecycle",
       "title": "Command lifecycle",
       "description": "Accepted jobs, progress, results, cancellation and deduplication.",
-      "body": "## Submit a typed command\n```json\n{\"v\":1,\"type\":\"command\",\"id\":\"list-001\",\"data\":{\"name\":\"connections.list\",\"args\":{\"limit\":100}}}\n```\n\nThe agent emits `command.accepted`, optional `command.progress`, then `command.result`. Match the operation using the request ID. Progress data is command-specific. Results contain `id`, `command`, `status`, completion time and optional `data` or `error`.\n\n## Concurrency and retries\nTwo utility workers execute jobs concurrently. The agent retains the last 128 completed results across restarts for request-ID deduplication. Use unique IDs beyond that bounded retention window; retry an uncertain operation using the same ID while it remains retained.\n\n`jobs.list` returns the current retained job view. A result indicating that runtime reconstruction was queued is not proof that the new runtime is ready; also observe telemetry and state activation.\n\n## Cancellation\n```json\n{\"v\":1,\"type\":\"command.cancel\",\"data\":{\"id\":\"list-001\"}}\n```\n\nCancellation propagates through the command context. It cannot reverse a DNS-provider mutation that has already succeeded, a committed firewall transaction or an installed release. Query retained results before deciding whether to retry.\n\n## Host safety\nPrivileged actions use typed argument structures. Firewall changes include an independent rollback watchdog and require confirmation from the master after connectivity testing. Update installation requires authenticated release artifacts. Speedtests use an isolated Xray client with bounded transfers and cancellation.\n\n## Acceptance and recovery\nBound acceptance to 30 seconds independently of protocol-defined execution deadlines. Distinguish undelivered, rejected, failed and uncertain results. Reload completion follows activation on activation_commands_v1 agents. Use update.status after reconnect; retained transaction plus current revision readiness confirms upgrade completion."
+      "body": "## Submit a typed command\n```json\n{\"v\":1,\"type\":\"command\",\"id\":\"list-001\",\"data\":{\"name\":\"connections.list\",\"args\":{\"limit\":100}}}\n```\n\nThe agent emits `command.accepted`, optional `command.progress`, then `command.result`. Match the operation using the request ID. Progress data is command-specific. Results contain `id`, `command`, `status`, completion time and optional `data` or `error`.\n\n## Concurrency and retries\nTwo bulk utility workers and separate control, hourly-credit and inspection slots execute bounded jobs. Up to 128 durable mutation receipts survive restart; up to 128 observation or repeatable/native-owned command results remain in memory only. Each retained history is bounded below 2 MiB, with at most 64 KiB per retained result. Uncertain mutation IDs remain protected from eviction. Live IDs bind canonical argument digests, reject changed arguments and preserve exact integers. Repeatable DDNS/reload/versioned sync and hourly native-journal work do not write duplicate generic receipts. Use unique IDs beyond the completed-receipt window or for deliberate retries of terminal failures; reconcile uncertain mutations using their original retained IDs.\n\n`jobs.list` returns the current retained job view. On activation_commands_v1 agents, runtime.reload and geodata.refresh complete after activation. Continue to observe telemetry and state activation for ongoing readiness.\n\n## Cancellation\n```json\n{\"v\":1,\"type\":\"command.cancel\",\"data\":{\"id\":\"list-001\"}}\n```\n\nCancellation propagates through the command context. It cannot reverse a DNS-provider mutation that has already succeeded, a committed firewall transaction or an installed release. Query retained results before deciding whether to retry.\n\n## Host safety\nPrivileged actions use typed argument structures. Firewall changes include an independent rollback watchdog and require confirmation from the master after connectivity testing. Update installation requires authenticated release artifacts. Speedtests use an isolated Xray client with bounded transfers and cancellation.\n\n## Acceptance and recovery\nBound acceptance to 30 seconds independently of protocol-defined execution deadlines. Distinguish undelivered, rejected, failed and uncertain results. Reload completion follows activation on activation_commands_v1 agents. Use update.status after reconnect; retained transaction plus current revision readiness confirms upgrade completion."
     },
     {
       "key": "users-and-ips",
       "title": "Users, IPs & admission",
       "description": "Privacy-aware active-IP reporting and precise user/IP controls.",
-      "body": "## User identity and limits\nEach user has a positive numeric `id`, credentials, eligible `inbound_tags` and optional per-agent quotas. `active_ip_limit` counts distinct current source IPs; `connection_limit` counts authenticated logical TCP streams and UDP associations across every eligible inbound. Zero quotas are unlimited.\n\n`speed_limit_mbps` is the normal rate and `burst_speed_limit_mbps` is the always enforced ceiling. After `speed_limit_after_seconds` consecutive seconds above normal (default 10), the normal cap applies. Traffic below 90% of normal for `speed_limit_reset_seconds` (default 1) restores bursts. Upload/download and all inbounds share this policy. `users.speed` reports its active rate. `block_new` prevents new admission while preserving established eligible streams. Master decisions implement approximate global totals; the agent does not request a master reservation for every stream.\n\n## Active IPs are requested data\nBy default, routine user telemetry omits source IP addresses. Set `telemetry.include_active_ips: true` in accepted configuration to request active IPs in recurring reports, or issue `users.active_ips` for a one-time query. Every reported IP is associated with its `user_id`; an IP without an active stream is not an online observation.\n\nSession details returned by an explicit `connections.list` query include their source IP and user identity. Turning recurring reporting off does not prevent the master from making an explicit detail request.\n\n## Drop or temporarily block an IP\nUse `ips.control` with a literal `source_ip`, optional `user_id`, `drop` and/or `block_seconds`. Omit `user_id` for an agent-wide IP action; supply it for that user's sessions. `drop: true` closes matching current sessions. A temporary block of 1?604800 seconds rejects future admission until its durable deadline; combining both closes current sessions and prevents immediate reconnection.\n\n`unblock: true` removes the matching temporary IP restriction. It cannot be combined with `block_seconds`; it may accompany a drop. User/IP blocks match the canonical address, including IPv4-mapped IPv6 normalization. They are admission controls rather than a new host firewall ruleset.\n\n## Explain blocked admission\n`telemetry.report` includes a per-user admission status in `users.status[userID]` with an explicit `limited` boolean, a reason when restricted, and a `scope` of `new_connection` or `new_ip`. Reaching an active-IP quota restricts additional source IPs; already active source addresses remain eligible when other quotas permit. `admission.rejected` reports an attempted rejection with `user_id`, `limited: true` and a machine-readable `reason`. Its source IP is included only when recurring IP reporting has been requested.\n\nRejection reasons are `block_new`, `ip_temp_block`, `torrent_ban`, `active_ip_limit`, `connection_limit`, `blocked_port`, `ineligible` and `storage_backpressure`. A user-wide status describes restrictions known from the current snapshot; an IP-specific decision also depends on the attempted source IP.\n\n## Revocation and cleanup\nCredential rotation removes old authorization before new credentials are installed. Removing a user or inbound eligibility closes existing affected sessions. Reservations are released exactly once on failure, closure or UDP expiry. Session lists are snapshots: a returned session may close before a later control request."
+      "body": "## User identity and limits\nEach user has a positive numeric `id`, credentials, eligible `inbound_tags` and optional per-agent quotas. `active_ip_limit` counts distinct current source IPs; `connection_limit` counts authenticated logical TCP streams and UDP associations across every eligible inbound. Zero quotas are unlimited.\n\n`speed_limit_mbps` is the normal rate and `burst_speed_limit_mbps` is the always enforced ceiling. After `speed_limit_after_seconds` consecutive seconds above normal (default 10), the normal cap applies. Traffic below 90% of normal for `speed_limit_reset_seconds` (default 1) restores bursts. Upload/download and all inbounds share this policy. `users.speed` reports its active rate. `block_new` prevents new admission while preserving established eligible streams. Master decisions implement approximate global totals; the agent does not request a master reservation for every stream.\n\n## Active IP observations\nRecurring active-user telemetry includes sampled source IP addresses. Issue `users.active_ips` for an immediate query. Every reported IP is associated with its `user_id`; an IP without an active stream is not an online observation. The retired `telemetry.include_active_ips` field is rejected by current configuration.\n\nSession details returned by an explicit `connections.list` query include their source IP and user identity. These details remain memory-only on the agent.\n\n## Drop or temporarily block an IP\nUse `ips.control` with a literal `source_ip`, optional `user_id`, `drop` and/or `block_seconds`. Omit `user_id` for an agent-wide IP action; supply it for that user's sessions. `drop: true` closes matching current sessions. A temporary block of 1–604800 seconds rejects future admission until its durable deadline; combining both closes current sessions and prevents immediate reconnection.\n\n`unblock: true` removes the matching temporary IP restriction. It cannot be combined with `block_seconds`; it may accompany a drop. User/IP blocks match the canonical address, including IPv4-mapped IPv6 normalization. They are admission controls rather than a new host firewall ruleset.\n\n## Explain blocked admission\n`telemetry.report` includes a per-user admission status in `users.status[userID]` with an explicit `limited` boolean, a reason when restricted, and a `scope` of `new_connection` or `new_ip`. Reaching an active-IP quota restricts additional source IPs; already active source addresses remain eligible when other quotas permit. `admission.rejected` reports an attempted rejection with `user_id`, `limited: true` and a machine-readable `reason`. Its canonical source IP accompanies the attempted admission when available.\n\nRejection reasons are `block_new`, `ip_temp_block`, `torrent_ban`, `active_ip_limit`, `connection_limit`, `blocked_port`, `ineligible` and `storage_backpressure`. A user-wide status describes restrictions known from the current snapshot; an IP-specific decision also depends on the attempted source IP.\n\n## Revocation and cleanup\nCredential rotation removes old authorization before new credentials are installed. Removing a user or inbound eligibility closes existing affected sessions. Reservations are released exactly once on failure, closure or UDP expiry. Session lists are snapshots: a returned session may close before a later control request."
     },
     {
       "key": "reliable-traffic",
       "title": "Traffic & telemetry",
       "description": "Idempotent billing, online snapshots and bounded observability.",
-      "body": "## Durable billing batches\n`traffic.report` contains a stable batch `id` and a `traffic` map. Each key is a user ID and its value is `[upload_bytes, download_bytes]`, measured in bytes. Journal persistence happens before transmission. A restart or reconnect may replay the same batch.\n\nPersist the deduplication ID and bill the batch atomically in the master, then send `traffic.ack` with the batch ID in `data.id`. Never acknowledge before durable acceptance. Duplicate reports must be acknowledged again without charging twice. Only the matching pending batch is retired by the agent.\n\n## Backpressure\nThe journal has a storage bound and explicit backpressure. Storage exhaustion cannot silently discard traffic. Observe readiness and rejection reasons; address storage or acknowledgement failures before asking the agent to resume normal work.\n\n## Current online state\n`telemetry.report` is an authoritative current snapshot. Replace the master's current online set instead of merging indefinitely. A user missing from active connection counts has zero active sessions. IP details are omitted unless requested. A fresh `boot_id` distinguishes counter generations after restart.\n\nTrack `connected`, `liveness`, `ready`, `synchronized`, envelope `revision` and `config_revision` separately. Machine metrics and certificate status are snapshots; they do not require a traffic acknowledgement.\n\n## Logs and measurements\nOne shared sampler produces immutable machine metrics. The default sample interval is one second and reporting interval is five seconds. Throughput uses actual elapsed time. CPU, memory, swap, disks, interfaces, process/connection counts, uptime, virtualization and available GPU collectors are included. Unavailable collectors report status.\n\n`logs.report` carries bounded redacted entries and the number dropped from the log queue. Rejection and transport-drop counters help distinguish an idle user from a restricted or overloaded agent."
+      "body": "## Boot-scoped billing batches\nNew traffic requires `traffic_stream_v1` and an exact `X-XNode-Traffic: stream-v1` upgrade echo. `traffic.report` carries an immutable `id`, a `stream_id` matching the authenticated 32-character boot ID, and a `traffic` map whose user values are `[upload_bytes, download_bytes]`. IDs are `agent_id:boot_id:sequence`. Reconnects in the same process replay unacknowledged reports; a process restart loses new uncommitted usage. Historical persisted `agent_id:sequence` journals drain first under their original identities.\n\nPersist the report digest, stream cursor, usage and financial effects atomically in the master, then send `traffic.ack` with the exact ID in `data.id`. Acknowledge duplicates without charging twice. Close replaced boot streams durably; a closed stream cannot reopen. A report never committed by the master must never advance its cursor.\n\n## Bounded memory and recovery\nNew accumulation and pending reports never spill to disk. They retain at most 8192 accumulation entries, 64 sealed reports and a conservative 32 MiB queued allocation allowance. Overflow may lose uncommitted samples; `dropped_samples` records loss observations without inventing byte quantities. Queue pressure makes flush retryable and does not pause admission. Settle surviving committed usage after restart, accepting underbilling or larger refunds. Durable hourly credit obligations and their financial proofs remain separate from this presentation history.\n\n## Current online state\n`telemetry.report` is an authoritative current snapshot. Replace the master's current online set instead of merging indefinitely. Missing users have zero observations. `users.connections` counts live flows with increasing sampled payload; `users.total_connections` on open_connections_v1 agents counts all open client flows, including idle flows. Admission reserves open non-transit flows independently of telemetry. Source-IP details are omitted unless requested. A fresh `boot_id` distinguishes process generations.\n\nTrack `connected`, `liveness`, `ready`, `synchronized`, envelope `revision` and `config_revision` separately. Machine metrics and certificate status are snapshots and require no traffic acknowledgement.\n\n## Logs and measurements\nOne shared sampler produces immutable machine metrics. The default sample interval is one second and reporting interval is two seconds; saved overrides remain effective. Throughput uses actual elapsed time. CPU, memory, swap, disks, interfaces, process/connection counts, uptime, virtualization and available GPU collectors are included. Unavailable collectors report status.\n\n`logs.report` carries bounded redacted entries and the number dropped from its queue. Rejection and transport-drop counters distinguish inactivity from restrictions or overload. See [the complete traffic contract](protocol.md)."
     }
   ],
   "configuration_intro": "## Configuration authority\nOperational settings arrive inside `state.sync` or `config.apply`; the local bootstrap contains only the master connection URL and token. `xray` and `users` are required, including `users: []` when every account should be removed.\n\nThe tables below are generated directly from the tracked JSON Schema. Runtime validation also checks native Xray configuration, unique IDs/tags, provider references, port ranges and other semantic constraints. [Download configuration schema](downloads/schemas/config.schema.json).\n\n## Top-level fields",
@@ -46,7 +46,7 @@
     "certificates": "Named certificate profiles shared by inbounds. Reusing a profile shares its certificate manager.",
     "inbound_certificates": "Map of inbound tag to named certificate profile.",
     "ddns": "Managed A/AAAA jobs. Only each job's configured records are modified.",
-    "dns": "Resolver mode and optional guarded port-53 redirection. Xray DNS is the default.",
+    "dns": "Managed-user DNS interception inside Xray; host resolver and firewall DNS NAT management are retired.",
     "firewall": "Complete host nftables policy with protected SSH access and independent rollback confirmation.",
     "blocked_ports": "Outbound destination-port ranges enforced before dispatch; matching established flows close after policy changes.",
     "asset_hashes": "Map of managed Geodata filename to expected SHA-256 digest. Verified files are staged atomically.",
@@ -62,15 +62,12 @@
     "users.speed_limit_mbps": "Normal aggregate upload plus download rate in Mbps. Zero with no burst ceiling disables throttling.",
     "users.block_new": "Reject newly admitted streams while retaining eligible established streams.",
     "telemetry.sample_seconds": "Sample interval, default 1 second. Zero selects the default.",
-    "telemetry.report_seconds": "Report interval, default 5 seconds. Zero selects the default.",
-    "telemetry.include_active_ips": "Explicit request to include user-associated active IPs in recurring reports; default false.",
+    "telemetry.report_seconds": "Report interval, default 2 seconds. Zero selects the default.",
     "torrent.enabled": "Enable classified BitTorrent detection, flow blocking and temporary user bans.",
     "torrent.ban_seconds": "Ban duration, default 600 seconds (10 minutes). Zero selects the default.",
     "updates.enabled": "Permit policy-driven automatic stable release installation. Default false.",
     "updates.version": "Optional selected stable release version.",
-    "dns.mode": "xray (default) or optional smartdns.",
-    "dns.redirect": "Redirect port 53 only after the selected loopback resolver is ready for TCP and UDP.",
-    "dns.upstreams": "SmartDNS DNS-over-TLS endpoints using tls://host[:port]; required for SmartDNS mode.",
+    "dns.redirect": "Intercept managed authenticated user DNS through native Xray DNS; internal resolver queries bypass interception. Configure native dns.servers.",
     "providers.type": "Supported DNS-provider implementation name.",
     "providers.credentials": "Provider-specific credential map delivered securely over WSS.",
     "certificates.provider": "Named provider for certificate DNS challenge operations.",
@@ -97,8 +94,8 @@
     "ddns.interface": "Interface used for local address discovery.",
     "ddns.ipv4_url": "HTTPS address-discovery endpoint for IPv4.",
     "ddns.ipv6_url": "HTTPS address-discovery endpoint for IPv6.",
-    "ddns.ttl_seconds": "Provider record TTL in seconds.",
-    "ddns.interval_seconds": "Refresh interval, default 300 seconds (5 minutes).",
+    "ddns.ttl_seconds": "Provider record TTL in seconds, 0 through 2147483647; zero selects the 300-second default.",
+    "ddns.interval_seconds": "Refresh interval from 0 through 86400 seconds; zero selects 300 seconds (5 minutes).",
     "firewall.enabled": "Enable agent ownership of the host ruleset.",
     "firewall.protect": "Enable probe protection and temporary source-prefix bans.",
     "firewall.tcp_ports": "Allowed TCP listener ports.",
@@ -201,8 +198,7 @@
           "users": [],
           "telemetry": {
             "sample_seconds": 1,
-            "report_seconds": 5,
-            "include_active_ips": false
+            "report_seconds": 5
           }
         }
       }
@@ -295,13 +291,13 @@
       "name": "telemetry.report",
       "direction": "Agent → master",
       "description": "Report runtime state, user admission status and immutable host metrics.",
-      "body": "## Current snapshot\nThe payload includes `agent_id`, `boot_id`, `time`, `connected`, `liveness`, `ready`, `synchronized`, `config_revision`, `users`, `machine`, `certificates` and transport-drop information. Envelope `revision` tracks accepted authorization.\n\n## Users and privacy\nReplace the master's current online connection set. Missing active users mean zero sessions. `users.status[userID]` supplies `user_id`, `limited: true/false`, a reason when blocked and `scope` (`new_connection` or `new_ip`). `users.connections` contains current counts and `users.active_ips` is present only when requested. IP/destination-specific restrictions are reported for attempted admissions; they do not claim that every new user stream is blocked. Source IPs are omitted by default. `telemetry.include_active_ips: true` explicitly requests user-associated active IPs in recurring snapshots. An explicit `users.active_ips` query obtains one-time details.\n\n## Delivery\nThe default report interval is five seconds. This is a disposable snapshot and needs no acknowledgement. Durable billing uses traffic.report instead.\n\n## Measured speed\nusers.rates reports upload_bytes_per_second, download_bytes_per_second and sample_seconds. These measured byte rates are independent of users.speed decimal Mbps limits."
+      "body": "## Current snapshot\nThe payload includes `agent_id`, `boot_id`, `time`, `connected`, `liveness`, `ready`, `synchronized`, `config_revision`, `users`, `machine`, `certificates` and transport-drop information. Envelope `revision` tracks accepted authorization.\n\n## Users and privacy\nReplace the master's current online connection set. Missing user entries mean zero observations. `users.status[userID]` supplies `user_id`, `limited: true/false`, a reason when blocked and `scope` (`new_connection` or `new_ip`). `users.connections` contains sampled traffic-active counts; `users.total_connections` on open_connections_v1 agents also includes idle open client flows and `users.active_ips` contains the sampled active source set. IP/destination-specific restrictions are reported for attempted admissions; they do not claim that every new user stream is blocked. Source IP observations accompany recurring snapshots. An explicit `users.active_ips` query obtains immediate details; there is no reporting opt-out field.\n\n## Delivery\nThe default report interval is two seconds. This is a disposable snapshot and needs no acknowledgement. Billing uses acknowledged traffic.report streams with durable master receipts.\n\n## Measured speed\nusers.rates reports upload_bytes_per_second, download_bytes_per_second and sample_seconds. These measured byte rates are independent of users.speed decimal Mbps limits."
     },
     {
       "name": "telemetry.compact",
       "direction": "Agent → master",
       "description": "Negotiated authoritative telemetry with consolidated user rows and default omission.",
-      "body": "## Negotiate before sending\nOffer `X-XNode-Telemetry: compact-v1` during the WebSocket upgrade and announce `compact_telemetry_v1` in agent.hello capabilities. Send this format only when the master echoes the header. Otherwise use telemetry.report.\n\n## Snapshot fields\nRoot fields are `a` agent ID, `b` boot ID, `t` timestamp, `c` connected, `l` liveness, `r` ready, `s` synchronized, `v` config revision, `u` users, `x` rejections, `m` machine, `k` certificates and `d` dropped frames. The explicit `u` array replaces all previous observations; an empty array clears them. Omitted optional values mean zero or the default, never retention.\n\nEach user row has positive `i` user ID, `c` connection count, optional opted-in `p` source IPs, `l` limited, `r` reason, `s` scope, `x` speed limits and `b` measured byte rates. Speed fields are `n` normal Mbps, `b` burst Mbps, `l` limited and `a` active Mbps. Rate fields are `u` upload bytes/second, `d` download bytes/second and positive `s` sample seconds. Omitted scope means new_connection. Inactive default users are omitted. See the [compact schema](schemas/telemetry-compact.schema.json).\n\n## Compression and accounting\nWhen per-message deflate is negotiated, report bodies of at least 1 KiB use fast compression. Expanded frames are bounded before JSON decoding. Durable traffic.report retains its exact integer payload and acknowledgement contract; it is not compact telemetry.",
+      "body": "## Negotiate before sending\nOffer `X-XNode-Telemetry: compact-v1` during the WebSocket upgrade and announce `compact_telemetry_v1` in agent.hello capabilities. Send this format only when the master echoes the header. Otherwise use telemetry.report.\n\n## Snapshot fields\nRoot fields are `a` agent ID, `b` boot ID, `t` timestamp, `c` connected, `l` liveness, `r` ready, `s` synchronized, `v` config revision, `u` users, `x` rejections, `m` machine, `k` certificates and `d` dropped frames. The explicit `u` array replaces all previous observations; an empty array clears them. Omitted optional values mean zero or the default, never retention.\n\nEach user row has positive `i` user ID, `c` sampled traffic-active connection count, negotiated `o` total open client count, optional opted-in `p` source IPs, `l` limited, `r` reason, `s` scope, `x` speed limits and `b` measured byte rates. Speed fields are `n` normal Mbps, `b` burst Mbps, `l` limited and `a` active Mbps. Rate fields are `u` upload bytes/second, `d` download bytes/second and positive `s` sample seconds. Omitted scope means new_connection. Inactive default users are omitted. See the [compact schema](schemas/telemetry-compact.schema.json).\n\n## Compression and accounting\nWhen per-message deflate is negotiated, report bodies of at least 1 KiB use fast compression. Expanded frames are bounded before JSON decoding. traffic.report retains exact integer payloads and its master-commit acknowledgement contract. New traffic is memory-only until committed by the master; it is independent of compact telemetry. Negotiated report_zstd_l6_v1 framing uses bounded Zstandard level 6 instead of per-message deflate.",
       "example": {
         "v": 1,
         "type": "telemetry.compact",
@@ -343,19 +339,20 @@
       "name": "traffic.report",
       "direction": "Agent → master",
       "description": "Replay-safe upload/download byte batches for durable billing.",
-      "body": "## Bill exactly once\nThe payload contains a stable `id` and `traffic`, a map of user IDs to `[upload_bytes, download_bytes]`. The journal is written before transmission. A replay after retry or restart uses the same ID.\n\nAtomically deduplicate and bill in the master, then send `traffic.ack`. Duplicate receipt should also be acknowledged, without billing again. Only the matching pending batch is retired.\n\n## Period accounting\nWith traffic_periods_v1, samples contain user_id, accounting_period, from/through timestamps and exact upload_bytes/download_bytes. Bill samples rather than adding legacy traffic again. Sealed batches and old accounting periods survive replay and restart.",
+      "body": "## Commit each immutable report once\nNew reports require traffic_stream_v1 and an exact X-XNode-Traffic: stream-v1 echo. The payload contains `id`, `stream_id` and `traffic`, a map of user IDs to `[upload_bytes, download_bytes]`. The stream matches the authenticated process boot ID and IDs are `agent_id:boot_id:sequence`. Retries and same-process reconnects keep the original immutable payload. New reports remain bounded memory; restart or overflow can lose uncommitted usage. Legacy persisted `agent_id:sequence` batches drain first without relabeling.\n\nAtomically commit usage, financial effects, stream sequence and digest before `traffic.ack`. Acknowledge duplicate receipts without billing twice. Record gaps and dropped_samples without estimating missing bytes; closed old boot streams cannot reopen. A different ID cannot retire the pending head.\n\n## Period and hourly accounting\nWith traffic_periods_v1, samples contain user_id, accounting_period, from/through timestamps and exact upload_bytes/download_bytes. Bill period samples without adding the legacy traffic map again. Samples retain their original period during retries and identity replacements, but new memory-only samples do not survive restart. Negotiated hourly_samples report raw member ingress independently of native multipliers and durable financial credit proofs. Settle only surviving committed usage; an absent history sample never proves unused credit.",
       "example": {
         "v": 1,
         "type": "traffic.report",
-        "id": "agent-id:17",
+        "id": "agent-id:22222222222222222222222222222222:17",
         "data": {
-          "id": "agent-id:17",
+          "id": "agent-id:22222222222222222222222222222222:17",
           "traffic": {
             "7": [
               1024,
               4096
             ]
-          }
+          },
+          "stream_id": "22222222222222222222222222222222"
         }
       }
     },
@@ -371,7 +368,7 @@
         "v": 1,
         "type": "traffic.ack",
         "data": {
-          "id": "agent-id:17"
+          "id": "agent-id:22222222222222222222222222222222:17"
         }
       }
     },
@@ -385,7 +382,7 @@
       "name": "admission.rejected",
       "direction": "Agent → master",
       "description": "Explain why an attempted new user connection was denied.",
-      "body": "## Rejection event\nReports the `user_id`, `limited: true` and a machine-readable `reason` when a new authenticated stream is denied. The source IP is included only when recurring IP reporting has been requested.\n\nReasons identify the actual restriction, such as a master block, temporary ban, active-IP/connection quota, blocked destination or accounting backpressure. Rejection counters also appear in telemetry; an event stream is bounded and should not be used as billing data.\n\n## Fields\n| Field | Meaning |\n| --- | --- |\n| `user_id` | Numeric authenticated user identity |\n| `limited` | Always `true` for a rejected admission |\n| `reason` | `storage_backpressure`, `ineligible`, `block_new`, `torrent_ban`, `ip_temp_block`, `blocked_port`, `connection_limit` or `active_ip_limit` |\n| `scope` | `new_ip` for an active-IP quota, otherwise `new_connection` |\n| `source_ip` | Included only when recurring IP reporting is requested |",
+      "body": "## Rejection event\nReports the `user_id`, `limited: true` and a machine-readable `reason` when a new authenticated stream is denied. The canonical source IP accompanies the attempted admission when available.\n\nReasons identify the actual restriction, such as a master block, temporary ban, active-IP/connection quota, blocked destination or accounting backpressure. Rejection counters also appear in telemetry; an event stream is bounded and should not be used as billing data.\n\n## Fields\n| Field | Meaning |\n| --- | --- |\n| `user_id` | Numeric authenticated user identity |\n| `limited` | Always `true` for a rejected admission |\n| `reason` | `storage_backpressure`, `ineligible`, `block_new`, `torrent_ban`, `ip_temp_block`, `blocked_port`, `connection_limit` or `active_ip_limit` |\n| `scope` | `new_ip` for an active-IP quota, otherwise `new_connection` |\n| `source_ip` | Included only when recurring IP reporting is requested |",
       "example": {
         "v": 1,
         "type": "admission.rejected",
@@ -422,7 +419,7 @@
       "name": "command.accepted",
       "direction": "Agent → master",
       "description": "Confirm that a command entered the bounded utility job queue.",
-      "body": "## Job acceptance\nCorrelate the request ID with the submitted command. Acceptance indicates queued work, not successful completion. Two workers execute utility jobs. Retried retained IDs return the existing retained result rather than repeating the operation."
+      "body": "## Job acceptance\nCorrelate the request ID with the submitted command. Acceptance indicates queued work, not successful completion. Two bulk utility workers and separate control, hourly-credit and inspection slots execute bounded jobs. Retried retained IDs return the existing retained result rather than repeating the operation."
     },
     {
       "name": "command.progress",
@@ -434,7 +431,7 @@
       "name": "command.result",
       "direction": "Agent → master",
       "description": "Return completion status, data or an error for a utility command.",
-      "body": "## Final result\nResults contain operation `id`, `command`, `status`, completion time and optional `data` or `error`. The last 128 completed results persist across restart. `jobs.list` exposes retained operations.\n\nSome commands, including runtime reconstruction, report queueing or preparation success. Observe runtime state and readiness for actual activation. Mutation results remain authoritative when a subsequent cancellation arrives."
+      "body": "## Final result\nResults contain operation id, command, status, completion time and optional data or error. Up to 128 durable mutation receipts survive restart; up to 128 volatile observation or repeatable/native-owned results remain memory-only, with byte bounds on both histories and retained entries. jobs.list exposes the retained view. Uncertain mutation receipts remain protected and must be reconciled using their original IDs.\n\nOn activation_commands_v1 agents, runtime.reload and geodata.refresh complete after activation and readiness. Acquired or queued work alone does not prove serving success. A late cancellation cannot reverse a committed mutation. See [command journal recovery](job-journal.md)."
     },
     {
       "name": "command.cancel",
@@ -535,19 +532,38 @@
     {
       "name": "hourly.credit.install",
       "description": "Durably install one centrally reserved full-speed byte-credit obligation.",
-      "args": {"reservation_id": "reservation-example", "issue_sequence": "1", "owner": {"id": "account-example", "generation": "0"}, "day_utc": "2026-11-09", "agent_id": "11111111111111111111111111111111", "boot_id": "22222222222222222222222222222222", "session_id": "33333333333333333333333333333333", "byte_ceiling": "1000000000", "kind": "free"},
+      "args": {
+        "reservation_id": "reservation-example",
+        "issue_sequence": "1",
+        "owner": {
+          "id": "account-example",
+          "generation": "0"
+        },
+        "day_utc": "2026-11-09",
+        "agent_id": "11111111111111111111111111111111",
+        "boot_id": "22222222222222222222222222222222",
+        "session_id": "33333333333333333333333333333333",
+        "byte_ceiling": "1000000000",
+        "kind": "free"
+      },
       "body": "Requires negotiated hourly_account_limits_v1. Arguments identify reservation_id, decimal globally monotonic issue_sequence, owner generation, day_utc, exact agent_id/boot_id/session_id, positive decimal byte_ceiling and kind free or extra. Persist before credit becomes usable; replay cannot mint a second obligation. Uses the existing utility executor with a 30-second execution timeout. Reserve centrally before sending. See [the hourly contract](hourly-account-limits.md)."
     },
     {
       "name": "hourly.credit.seal",
       "description": "Freeze credit admission and seal its exact final financial partition.",
-      "args": {"reservation_id": "reservation-example"},
+      "args": {
+        "reservation_id": "reservation-example"
+      },
       "body": "Arguments contain reservation_id and optional expected original installation. Uses the utility executor with a two-minute execution bound, leaving traffic/control work available. The financial admission barrier cancels unstarted reservations and preserves every byte already admitted by Begin. Native writer completion cannot refund those bytes. An exact never-issued installation can be proved wholly unused only through retained, checksummed sequence evidence. Timeout, disconnect or missing evidence never authorizes reclaiming a reservation."
     },
     {
       "name": "hourly.credit.ack",
       "description": "Retire the exact immutable proof already settled by the master.",
-      "args": {"reservation_id": "reservation-example", "issue_sequence": "1", "digest": "1111111111111111111111111111111111111111111111111111111111111111"},
+      "args": {
+        "reservation_id": "reservation-example",
+        "issue_sequence": "1",
+        "digest": "1111111111111111111111111111111111111111111111111111111111111111"
+      },
       "body": "Arguments contain reservation_id, decimal issue_sequence and exact digest. Settle the final proof durably and idempotently before acknowledging it. A mismatched acknowledgment cannot erase an obligation or proof. Uses the utility executor with a 30-second execution timeout; replay retains tombstone protection."
     },
     {
@@ -603,7 +619,7 @@
     {
       "name": "users.active_ips",
       "description": "Request current active source IPs associated with user IDs.",
-      "body": "## Explicit IP request\nReturns active user/IP observations on demand. Source IPs are associated with positive user IDs and reflect established logical sessions. A user with no active sessions has no active source addresses.\n\nSupply `user_id` to narrow the query, or omit it to inspect all current users. This command does not turn on recurring IP reporting. Configure `telemetry.include_active_ips` separately if recurring observations are required.\n\n## Result data\nThe result is an array of `{user_id, source_ip, connections}` observations, sorted by user ID and source address. `connections` counts active logical sessions from that address. An empty array means no matching active source IPs.\n\n```json\n[{\"user_id\":7,\"source_ip\":\"203.0.113.25\",\"connections\":2}]\n```",
+      "body": "## Explicit IP request\nReturns active user/IP observations on demand. Source IPs are associated with positive user IDs and reflect established logical sessions. A user with no active sessions has no active source addresses.\n\nSupply `user_id` to narrow the query, or omit it to inspect all current users. This immediate query is independent of the configured recurring sample/report intervals.\n\n## Result data\nThe result is an array of `{user_id, source_ip, connections}` observations, sorted by user ID and source address. `connections` counts active logical sessions from that address. An empty array means no matching active source IPs.\n\n```json\n[{\"user_id\":7,\"source_ip\":\"203.0.113.25\",\"connections\":2}]\n```",
       "fields": [
         [
           "user_id",
@@ -643,7 +659,7 @@
           "block_seconds",
           "integer",
           "Optional action",
-          "Temporary admission-block duration: 1?604800 seconds."
+          "Temporary admission-block duration: 1–604800 seconds."
         ],
         [
           "unblock",
@@ -674,9 +690,24 @@
       "description": "Issue or renew one desired ACME profile and activate its fenced certificate material.",
       "body": "## Revision-bound ACME operation\nRequires certificate_lifecycle_v1. profile_id selects an ACME HTTP/DNS profile from the latest desired configuration, including a profile awaiting activation after a configuration failure. expected_revision must match that desired revision. issue reuses existing valid material; renew explicitly requests renewal outside the normal renewal window. File/content and self-signed profiles use normal configuration validation and activation.\n\n## Progress and result\nExecution is bounded to five minutes. Typed progress reports profile_id, action and phase. Acquisition and activation recheck desired profile identity/revision; the runtime verifies the acquired fingerprint before activation. A successful result contains profile_id, action, fingerprint, expires, applied and ready. Acquired material alone does not establish serving readiness.\n\n## Retry and uncertainty\nPersist the original command ID and agent identity. Same-ID retries return retained receipts before current eligibility checks. Never automatically issue a new command after an uncertain result or restart; reconcile retained results and public serving/acquired status first. Status, progress and durable results contain no PEM, private keys, credentials, raw provider errors or material paths. See [certificate lifecycle](certificates.md).",
       "fields": [
-        ["profile_id", "string", "Required", "Desired ACME certificate profile ID."],
-        ["action", "string", "Required", "issue or renew."],
-        ["expected_revision", "integer", "Required", "Positive expected desired configuration revision."]
+        [
+          "profile_id",
+          "string",
+          "Required",
+          "Desired ACME certificate profile ID."
+        ],
+        [
+          "action",
+          "string",
+          "Required",
+          "issue or renew."
+        ],
+        [
+          "expected_revision",
+          "integer",
+          "Required",
+          "Positive expected desired configuration revision."
+        ]
       ],
       "args": {
         "profile_id": "public-tls",
@@ -687,7 +718,7 @@
     {
       "name": "jobs.list",
       "description": "Inspect current and retained utility job results.",
-      "body": "## Retained operations\nReturns the agent's bounded job view, including statuses and retained completion results. The last 128 completed operations persist across restart. Use the original request ID to correlate commands and assess uncertain outcomes before retrying.\n\n## Arguments\nUse an empty object."
+      "body": "## Retained operations\nReturns the agent's bounded job view, including statuses and retained completion results. Up to 128 durable mutation receipts survive restart; up to 128 observation results are memory-only. Both histories have byte limits, and uncertain mutation receipts are protected from eviction. Use the original request ID to correlate commands and assess uncertain outcomes before retrying.\n\n## Arguments\nUse an empty object."
     },
     {
       "name": "runtime.reload",
@@ -723,8 +754,8 @@
     },
     {
       "name": "geodata.refresh",
-      "description": "Refresh verified assets and queue a new runtime generation.",
-      "body": "## Verified generations\nUses native Geodata asset/cron/outbound settings and remotely supplied hashes. Filenames stay in the managed directory. Files are staged, verified and replaced atomically as a generation. Required failure retains the previous valid files.\n\nSuccessful refresh queues incremental application; immutable core changes reconstruct only when required. Observe readiness for activation. The core's duplicate downloader is suppressed.\n\n## Arguments\nUse an empty object."
+      "description": "Refresh verified assets and activate the fenced runtime generation.",
+      "body": "## Verified generations\nUses native Geodata asset/cron/outbound settings and remotely supplied hashes. Filenames stay in the managed directory. Files are staged, verified and replaced atomically as a generation. Required failure retains the previous valid files.\n\nOn activation_commands_v1 agents, successful completion follows fenced activation and readiness. The candidate applies incrementally; immutable core changes reconstruct only when required. The core's duplicate downloader is suppressed.\n\n## Arguments\nUse an empty object."
     },
     {
       "name": "firewall.status",
@@ -734,7 +765,7 @@
     {
       "name": "firewall.apply",
       "description": "Atomically install a validated host ruleset with rollback protection.",
-      "body": "## Complete host policy\n`policy` supplies the typed remote firewall structure. Allowed services, SSH ports, IP prefixes, protection and TCP/UDP forwarding are rendered into one validated candidate. There is no conntrack connection quota.\n\nOptional DNS redirection is accepted only after loopback resolver readiness. A pending transaction is guarded by an independent systemd watchdog. Test master connectivity, then confirm its transaction ID before the default 45-second deadline. Missing confirmation restores live rules and persisted policy.",
+      "body": "## Complete host policy\n`policy` supplies the typed remote firewall structure. Allowed services, SSH ports, IP prefixes, protection and TCP/UDP forwarding are rendered into one validated candidate. There is no conntrack connection quota.\n\nThe deprecated dns_redirect argument remains readable for compatibility and never installs host DNS NAT. Configure managed-user DNS interception in the remote dns policy instead. A pending transaction is guarded by an independent systemd watchdog. Test master connectivity, then confirm its transaction ID before the default 45-second deadline. Missing confirmation restores live rules and persisted policy.",
       "fields": [
         [
           "policy",
@@ -746,7 +777,7 @@
           "dns_redirect",
           "boolean",
           "Optional",
-          "Guarded port-53 redirection after resolver readiness."
+          "Deprecated compatibility input; does not install host DNS NAT."
         ]
       ],
       "args": {
@@ -854,7 +885,7 @@
     {
       "name": "update.install",
       "description": "Install a signed stable binary with rollback-aware lifecycle handling.",
-      "body": "## Verified installation\nOptional `version` selects a stable release. The agent verifies the manifest signature and binary hash before execution. Protected signing secrets belong to release infrastructure. Test signing keys never enter production trust roots.\n\nObserve progress/result and process reconnect/readiness. Retain the generated identity and pending traffic state through replacement.",
+      "body": "## Verified installation\nOptional `version` selects a stable release. The agent verifies the manifest signature and binary hash before execution. Protected signing secrets belong to release infrastructure. Test signing keys never enter production trust roots.\n\nObserve progress/result and process reconnect/readiness. Retain private state, generated identity, legacy traffic journals and durable hourly credit evidence through replacement. New uncommitted traffic is memory-only and is lost on process restart.",
       "fields": [
         [
           "version",
@@ -870,12 +901,12 @@
     {
       "name": "update.rollback",
       "description": "Restore the retained prior binary without deleting durable state.",
-      "body": "## Prior release\nRestores the retained previous binary when rollback is available. Reconnect and readiness confirm the restarted agent's behavior. Preserve the state directory, identity, accepted restrictions and pending traffic.\n\n## Arguments\nUse an empty object."
+      "body": "## Prior release\nRestores the retained previous binary when rollback is available. Reconnect and readiness confirm the restarted agent's behavior. Preserve the state directory, identity, accepted restrictions, legacy traffic journals and durable hourly credit evidence. New uncommitted traffic does not survive the process restart.\n\n## Arguments\nUse an empty object."
     },
     {
       "name": "traffic.flush",
-      "description": "Seal captured traffic and obtain a durable accounting cutoff.",
-      "body": "## Accounting barrier\nThe optional user_id selects the user to quiesce; omission selects all users. Set quiesce only after new admission has been blocked. The agent waits for native handlers and their final payload bytes, then seals traffic without replacing an outstanding batch.\n\nThe result contains agent_id, sequence, through and quiesced. Commit all reports through that sequence before resetting or settling the old accounting period. A command result by itself does not prove the master has ingested the reports.\n\n## Renewal continuity\nSpecify accounting_period to wait only for a revoked old period. The current new period remains admitted. The barrier echoes the requested accounting period.",
+      "description": "Seal captured traffic and identify a master-commit accounting cutoff.",
+      "body": "## Accounting barrier\nThe optional user_id selects the user to quiesce; omission selects all users. Set quiesce only after new admission has been blocked. The agent waits for native handlers and their final payload bytes, then seals traffic without replacing an outstanding batch.\n\nThe result contains agent_id, stream_id, sequence, through and quiesced, plus legacy_sequence when historical journal coverage remains. Commit the identified stream and legacy reports through those cutoffs before resetting or settling the old accounting period. New sealed traffic remains memory-only; restart or overflow may lose uncommitted usage. A command result by itself does not prove the master has ingested the reports.\n\n## Renewal continuity\nSpecify accounting_period to wait only for a revoked old period. The current new period remains admitted. The barrier echoes the requested accounting period and quiesces its original counter owner across verified identity replacement. A full memory queue makes the flush retryable; it does not authorize settling uncommitted reports.",
       "fields": [
         [
           "user_id",

@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"io"
 	"net/netip"
-	"net/url"
 	"strings"
 	"time"
 
@@ -156,11 +155,7 @@ type DDNSJob struct {
 	IntervalSeconds int    `json:"interval_seconds,omitempty"`
 }
 type DNSPolicy struct {
-	// Deprecated: resolver selection is normalized to Xray at input/bootstrap.
-	Mode     string `json:"mode,omitempty"`
-	Redirect bool   `json:"redirect,omitempty"`
-	// Deprecated: native Xray dns.servers alone determines upstream resolvers.
-	Upstreams []string `json:"upstreams,omitempty"`
+	Redirect bool `json:"redirect,omitempty"`
 }
 type PortRange struct {
 	From    int    `json:"from"`
@@ -197,10 +192,8 @@ type UpdatePolicy struct {
 	Version string `json:"version,omitempty"`
 }
 type TelemetryPolicy struct {
-	// Deprecated: active IPs are always sampled and reported. Retained for wire compatibility.
-	IncludeActiveIPs bool `json:"include_active_ips,omitempty"`
-	SampleSeconds    int  `json:"sample_seconds,omitempty"`
-	ReportSeconds    int  `json:"report_seconds,omitempty"`
+	SampleSeconds int `json:"sample_seconds,omitempty"`
+	ReportSeconds int `json:"report_seconds,omitempty"`
 }
 type IPControl struct {
 	SourceIP     string `json:"source_ip"`
@@ -250,14 +243,10 @@ func ParseConfig(b []byte) (Config, error) {
 	if err := Decode(b, &c); err != nil {
 		return c, err
 	}
-	var err error
-	c, err = c.NormalizeDNS()
-	if err != nil {
-		return c, err
-	}
 	if err := c.Validate(); err != nil {
 		return c, err
 	}
+	var err error
 	c.Firewall, err = c.Firewall.NormalizePortRanges()
 	if err != nil {
 		return c, err
@@ -354,11 +343,6 @@ func (c Config) Validate() error {
 	if len(c.Certificates) > MaxCertificateProfiles {
 		return errors.New("too many certificate profiles")
 	}
-	var err error
-	c, err = c.NormalizeDNS()
-	if err != nil {
-		return err
-	}
 	if _, err := c.Firewall.NormalizePortRanges(); err != nil {
 		return err
 	}
@@ -368,13 +352,10 @@ func (c Config) Validate() error {
 	if err := c.Firewall.ValidateDetection(); err != nil {
 		return err
 	}
-	if err := validateAuxiliaryUsers(c); err != nil {
+	if err := c.ValidateUsers(); err != nil {
 		return err
 	}
 	if err := ValidateMemberOutbounds(c.Xray, c.MemberOutbounds); err != nil {
-		return err
-	}
-	if err := ValidateUsers(c.Users); err != nil {
 		return err
 	}
 	var native map[string]json.RawMessage
@@ -448,8 +429,11 @@ func (c Config) Validate() error {
 	}
 	jobs := map[string]bool{}
 	for _, j := range c.DDNS {
-		if !ValidName(j.ID) || jobs[j.ID] || j.IntervalSeconds < 0 || j.IntervalSeconds > 86400 || j.TTLSeconds < 0 || j.Generation != "" && !ValidName(j.Generation) {
+		if jobs[j.ID] {
 			return errors.New("invalid DDNS job")
+		}
+		if err := j.Validate(); err != nil {
+			return err
 		}
 		jobs[j.ID] = true
 		if j.Provider == BuiltinDDNSProvider {
@@ -461,23 +445,8 @@ func (c Config) Validate() error {
 				return errors.New("unknown DDNS provider or missing record identity")
 			}
 		}
-		for _, s := range []string{j.IPv4URL, j.IPv6URL} {
-			if s != "" {
-				u, e := url.Parse(s)
-				if e != nil || u.Scheme != "https" || u.Host == "" || u.User != nil {
-					return errors.New("DDNS lookup requires HTTPS")
-				}
-			}
-		}
 	}
 	return nil
-}
-
-func uHost(u *url.URL) string {
-	if u == nil {
-		return ""
-	}
-	return u.Hostname()
 }
 
 func Clone[T any](value T) T {

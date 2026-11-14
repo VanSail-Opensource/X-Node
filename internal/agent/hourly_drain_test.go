@@ -13,24 +13,40 @@ func TestAgentShrinkAcknowledgmentAndOtherCreditWorkRespectNativeDrain(t *testin
 	f := newHourlyAgentFixture(t, true, false)
 	peer := f.peer(t)
 	f.apply(t, peer)
-	if r := f.command(t, peer, "install-held", protocol.HourlyCreditInstallCommand, f.install(peer, "held-credit", 1)); r.Status != "completed" {
+	install := f.install(peer, "held-credit", 1)
+	// Keep one byte of the handoff rate-bound: fully prepaid handoffs retain
+	// their independent authority when a reduced-rate grant shrinks.
+	install.ByteCeiling = 6
+	if r := f.command(t, peer, "install-held", protocol.HourlyCreditInstallCommand, install); r.Status != "completed" {
 		t.Fatal(r.Status, r.Error)
 	}
 	interrupted := make(chan struct{})
 	flow, grant := f.grantedFlow(t, peer, func() { close(interrupted) })
-	p, _, err := flow.TryAcquire(hourly.Download, len([]byte("pending")), 1)
-	if err != nil || p == nil {
-		t.Fatal(err)
-	}
-	if err = p.Begin(); err != nil {
+	var p *hourly.Permit
+	// The newly installed rate grant starts empty. Wait until the one reduced
+	// byte is available, without admitting a shorter, fully prepaid handoff.
+	await(t, func() bool {
+		var err error
+		p, _, err = flow.TryAcquire(hourly.Download, 7, 7)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return p != nil
+	})
+	if err := p.Begin(); err != nil {
 		t.Fatal(err)
 	}
 	defer p.Complete(hourly.Uncertain)
 	// Force a fresh demand while the first native handoff remains unfinished.
-	probe, _, err := flow.TryAcquire(hourly.Upload, 1, 1)
-	if err != nil || probe == nil {
-		t.Fatal(err)
-	}
+	var probe *hourly.Permit
+	await(t, func() bool {
+		var err error
+		probe, _, err = flow.TryAcquire(hourly.Upload, 1, 1)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return probe != nil
+	})
 	probe.Complete(hourly.NotHandedOff)
 	grant.Nonce = f.demand(t, peer, grant.Nonce).Nonce
 	grant.Sequence = 2
@@ -47,7 +63,7 @@ func TestAgentShrinkAcknowledgmentAndOtherCreditWorkRespectNativeDrain(t *testin
 	heldResult := f.command(t, peer, "seal-held", protocol.HourlyCreditSealCommand, protocol.HourlyCreditSeal{ReservationID: "held-credit"})
 	heldRaw, err := json.Marshal(heldResult.Data)
 	var heldProof protocol.HourlyCreditProof
-	if err != nil || heldResult.Status != "completed" || protocol.Decode(heldRaw, &heldProof) != nil || heldProof.AdmittedDownloadBytes != 7 || heldProof.UnusedBytes != 993 {
+	if err != nil || heldResult.Status != "completed" || protocol.Decode(heldRaw, &heldProof) != nil || heldProof.AdmittedDownloadBytes != 6 || heldProof.UnusedBytes != 0 {
 		t.Fatal("financial seal waited for or miscounted an admitted handoff", heldResult.Status, err)
 	}
 	// Another reservation can install, seal and acknowledge while the first

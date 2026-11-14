@@ -56,7 +56,7 @@ func Open(dir string) (*Store, error) {
 		return nil, err
 	}
 	s := &Store{path: filepath.Join(dir, "state.json")}
-	b, err := os.ReadFile(s.path)
+	b, err := ReadRecoveryFile(s.path, MaxStoreBytes)
 	if err == nil {
 		if len(b) > MaxStoreBytes || json.Unmarshal(b, &s.data) != nil || s.data.AgentID == "" {
 			return nil, errors.New("invalid persisted state")
@@ -64,7 +64,7 @@ func Open(dir string) (*Store, error) {
 	} else if !os.IsNotExist(err) {
 		return nil, err
 	}
-	if err := normalizeCachedDNS(&s.data); err != nil {
+	if err := normalizeCachedDNS(b, &s.data); err != nil {
 		return nil, err
 	}
 	if clean, changed := withoutConnectionControls(s.data); changed {
@@ -91,6 +91,7 @@ func Open(dir string) (*Store, error) {
 	s.authorizationSequence = 1
 	return s, nil
 }
+
 func (s *Store) Snapshot() Data { s.mu.Lock(); defer s.mu.Unlock(); return protocol.Clone(s.data) }
 func (s *Store) change(fn func(*Data) error) error {
 	s.mu.Lock()
@@ -142,12 +143,24 @@ func (s *Store) Ban(id int, until time.Time) error {
 	})
 }
 func AtomicWrite(path string, b []byte, mode os.FileMode) error {
+	_, err := AtomicWritePublished(path, b, mode)
+	return err
+}
+
+// AtomicWritePublished reports whether Rename published the new file, even when
+// its following directory sync fails. A true result with an error is not a
+// durability guarantee: dependent receipts must sync the directory before ACK.
+func AtomicWritePublished(path string, b []byte, mode os.FileMode) (bool, error) {
+	return atomicWriteWithDirectorySync(path, b, mode, SyncDirectory)
+}
+
+func atomicWriteWithDirectorySync(path string, b []byte, mode os.FileMode, syncDirectory func(string) error) (bool, error) {
 	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
-		return err
+		return false, err
 	}
 	f, err := os.CreateTemp(filepath.Dir(path), ".xnode-*")
 	if err != nil {
-		return err
+		return false, err
 	}
 	tmp := f.Name()
 	defer os.Remove(tmp)
@@ -162,14 +175,25 @@ func AtomicWrite(path string, b []byte, mode os.FileMode) error {
 		err = closeErr
 	}
 	if err != nil {
-		return err
+		return false, err
 	}
 	if err = os.Rename(tmp, path); err != nil {
+		return false, err
+	}
+	return true, syncDirectory(filepath.Dir(path))
+}
+
+// SyncDirectory makes new/replaced filenames durable before their state is
+// published to callers. File.Sync alone does not persist directory entries.
+func SyncDirectory(path string) error {
+	d, err := os.Open(path)
+	if err != nil {
 		return err
 	}
-	if d, e := os.Open(filepath.Dir(path)); e == nil {
-		_ = d.Sync()
-		_ = d.Close()
+	err = d.Sync()
+	closeErr := d.Close()
+	if err != nil {
+		return err
 	}
-	return nil
+	return closeErr
 }

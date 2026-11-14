@@ -25,9 +25,13 @@ The invocation must run as `workflow_dispatch` on `refs/heads/main` in
 The tag must exist as a commit or at most five content-addressed annotated tags.
 Its reference is reread after collecting metadata; retargeting rejects the
 snapshot. The commit must be an ancestor of the current protected `main` snapshot.
-The branch summary must contain all six required Quality check contexts bound
+The branch summary must contain exactly the six required Quality check contexts bound
 to GitHub Actions application `15368`, with checks enforced for non-admins or all
 actors. Missing app-bound check metadata rejects the release.
+
+The administrator helper preserves additional required branch checks. Adding
+one therefore blocks release publication until this gate is deliberately
+extended to verify its evidence; additional checks must not be silently ignored.
 
 Quality must be active workflow ID `383872953`, named `Quality`, at exactly
 `.github/workflows/ci.yml`. The explicitly selected run must be a successful,

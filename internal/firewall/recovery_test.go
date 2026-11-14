@@ -2,11 +2,14 @@ package firewall
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/VanSail-Opensource/X-Node/internal/update"
 )
 
 func TestExpiryAndWatchdogIdentity(t *testing.T) {
@@ -120,7 +123,12 @@ func TestUpgradeDefersMigration(t *testing.T) {
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "transaction.json"), []byte(`{"status":"pending"}`), 0600); err != nil {
+	tx := update.Transaction{ID: "upgrade", Version: "v2.0.11", Status: "pending", Deadline: time.Now().Add(time.Minute), NodePath: "/usr/local/bin/x-node", CLIPath: "/usr/local/bin/xnodectl"}
+	raw, err := json.Marshal(tx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "transaction.json"), raw, 0600); err != nil {
 		t.Fatal(err)
 	}
 	if err := m.Confirm(context.Background(), p.ID); err == nil {
@@ -129,7 +137,12 @@ func TestUpgradeDefersMigration(t *testing.T) {
 	if _, err := os.Stat(m.ConfigPath); !os.IsNotExist(err) {
 		t.Fatal("boot config changed before binary confirmation")
 	}
-	if err := os.WriteFile(filepath.Join(dir, "transaction.json"), []byte(`{"status":"confirmed"}`), 0600); err != nil {
+	tx.Status = "confirmed"
+	raw, err = json.Marshal(tx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "transaction.json"), raw, 0600); err != nil {
 		t.Fatal(err)
 	}
 	if err := m.Confirm(context.Background(), p.ID); err != nil {

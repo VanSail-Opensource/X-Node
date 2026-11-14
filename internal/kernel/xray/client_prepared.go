@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"sync"
 
+	"github.com/VanSail-Opensource/X-Node/internal/protocol"
 	"github.com/xtls/xray-core/core"
 	"github.com/xtls/xray-core/infra/conf"
 	"google.golang.org/protobuf/proto"
@@ -18,6 +19,13 @@ var clientPrepared struct {
 }
 
 func prepareClient(root map[string]any) (*core.Config, error) {
+	raw, err := json.Marshal(root)
+	if err != nil {
+		return nil, err
+	}
+	if err := protocol.ValidateNativePolicies(protocol.Config{Xray: raw}); err != nil {
+		return nil, err
+	}
 	material, err := listenerIdentity(root)
 	if err != nil {
 		return nil, err
@@ -26,10 +34,6 @@ func prepareClient(root map[string]any) (*core.Config, error) {
 	clientPrepared.Lock()
 	defer clientPrepared.Unlock()
 	if clientPrepared.config == nil || clientPrepared.key != key {
-		raw, err := json.Marshal(root)
-		if err != nil {
-			return nil, err
-		}
 		var c conf.Config
 		if err = json.Unmarshal(raw, &c); err != nil {
 			return nil, err

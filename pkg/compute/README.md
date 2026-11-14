@@ -12,5 +12,9 @@ policy checks, publication, billing and idempotent commits. Validation recompute
 empirical quantiles, checks candidate revenue against net coupon prices, and
 verifies holdout diagnostics in a linear pass without repeating model fitting.
 Nodes cannot assert calibration or invent revenue through result metadata.
+Original batches must pass the supported-version/input contract again at result
+validation. Expected arithmetic must remain finite: infinity never counts as a
+successful relative-tolerance comparison. Forecast means use an incremental
+update so finite nonnegative samples do not overflow an intermediate sum.
 New kernels require
 a new explicit kind and compatible protocol/schema release.

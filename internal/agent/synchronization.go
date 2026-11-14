@@ -18,16 +18,22 @@ func (a *Agent) failStorage(err error) {
 }
 func (a *Agent) registerSecrets(c protocol.Config) {
 	values := []string{a.Client.Token}
+	credential := func(raw json.RawMessage) {
+		var fields map[string]any
+		_ = json.Unmarshal(raw, &fields)
+		for _, value := range fields {
+			if secret, ok := value.(string); ok {
+				values = append(values, secret)
+			}
+		}
+	}
 	for _, u := range c.Users {
 		values = append(values, u.UUID)
 		for _, raw := range u.Credentials {
-			var m map[string]any
-			_ = json.Unmarshal(raw, &m)
-			for _, v := range m {
-				if secret, ok := v.(string); ok {
-					values = append(values, secret)
-				}
-			}
+			credential(raw)
+		}
+		for _, binding := range u.TransitCredentials {
+			credential(binding.Credential)
 		}
 	}
 	for _, p := range c.Providers {

@@ -123,17 +123,17 @@ The agent's single writer uses fast compression only for report bodies at least
 16 MiB before JSON decoding; compressed frame size alone is not sufficient.
 Traffic journal bodies and acknowledgement ordering remain unchanged.
 
-User source IPs are omitted by default. Request a one-time report with `users.active_ips`, or opt into periodic IP sets with `telemetry.include_active_ips: true`. Each requested record carries `user_id`, canonical `source_ip`, and its current connection count.
+User source IPs are sampled and reported with the recurring active-user snapshot. Request a one-time report with `users.active_ips`. Each record carries `user_id`, canonical `source_ip`, and its current connection count. The retired `telemetry.include_active_ips` field is rejected by the live protocol.
 
 Per-user `users.status[userID]` reports `limited: true/false`, `reason`, and `scope`. A full active-IP quota has scope `new_ip`: existing IPs can still create streams when the connection quota allows it. `block_new` and connection quotas have scope `new_connection`. Each rejected admission also emits `admission.rejected` with `user_id`, `limited: true`, `reason` and `scope`; `source_ip` appears only when periodic IP reporting is enabled. Reasons include `ineligible`, `block_new`, `torrent_ban`, `ip_temp_block`, `blocked_port`, `connection_limit`, `active_ip_limit`, and `storage_backpressure`.
 
-`traffic.report` contains `{id, traffic}`, with `traffic[userID] = [upload_bytes, download_bytes]`. The batch ID is stable across retries and process restarts. Deduplicate it before billing, then send:
+`traffic.report` contains `{id, traffic}`, with `traffic[userID] = [upload_bytes, download_bytes]`. New reports also carry the authenticated boot `stream_id` and use `agent_id:boot_id:sequence` IDs. They remain stable across retries and same-process reconnects, but new uncommitted usage is memory-only and does not survive process restart. Historical persisted `agent_id:sequence` batches drain first under their original identities. Commit usage, financial effects, sequence and digest together before acknowledging the exact received ID:
 
 ```json
-{"v":1,"type":"traffic.ack","data":{"id":"agent-id:sequence"}}
+{"v":1,"type":"traffic.ack","data":{"id":"agent-id:22222222222222222222222222222222:17"}}
 ```
 
-Only the matching pending batch is retired. Status and logs are disposable snapshots; traffic is acknowledged durable data. `logs.report` supplies timestamped entries and a dropped-entry count. Secrets are redacted before console, file forwarding and remote report serialization.
+Only the matching pending batch is retired. Traffic becomes durable when the master commits it; restart or bounded-memory overflow can lose uncommitted usage. See **Volatile boot traffic streams** below for negotiation, loss observations and settlement rules. Status and logs are disposable snapshots. `logs.report` supplies timestamped entries and a dropped-entry count. Secrets are redacted before console, file forwarding and remote report serialization.
 
 ## Commands
 
@@ -143,16 +143,23 @@ Only the matching pending batch is retired. Status and logs are disposable snaps
 
 Commands emit `command.accepted`, optional `command.progress`, and `command.result`.
 Results contain `id`, `command`, `status`, optional `data/error`, and completion
-time. Two utility workers plus the existing reserved control slot execute work.
-Durable mutations persist an uncertain intent before execution. Up to 128
-durable receipts survive restart; up to 128 volatile observations remain only in
-memory. Each history is below 2 MiB and retained results are at most 64 KiB.
-Uncertain mutation IDs cannot be evicted to admit more work. IDs remain unique
-beyond the completed-receipt window. Large read results can use the transport
-frame limit but are disposable. Unverifiable journals fence durable utilities
-while recovery reads and ordinary agent startup remain available; see
-`job-journal.md`. Never treat `uncertain` as proof of failure or replay a mutation
-to obtain a cleaner result.
+time. Two bulk/utility workers plus separate control, hourly-credit and
+inspection slots keep unrelated commands available under pressure. Unsupported
+commands are rejected before admission. Live request IDs bind the command and
+normalized arguments; equivalent replays return retained results, while changed
+arguments reject. Argument objects reject duplicate keys and excessive nesting.
+
+Certificate/update/firewall-apply mutations and exact traffic flushes retain the
+generic uncertain-intent barrier. Repeatable DDNS/reload/asset/versioned-sync
+work uses current native state; hourly credits retain their dedicated durable
+reservation and proof journal. Up to 128 generic durable receipts survive restart
+and up to 128 volatile receipts remain in memory, each history below 2 MiB with
+64 KiB per retained result. Protected uncertain mutation IDs cannot be evicted.
+Use new command IDs beyond the replay window, and for deliberate retries of
+terminal failed repeatable work. Unverifiable generic journals fence only their
+own durable mutations; native credit operations, reconciliation, recovery reads
+and ordinary startup remain available. Never treat `uncertain` as proof of
+failure; see `job-journal.md` for the exact persistence and recovery boundaries.
 
 | Command | Arguments |
 | --- | --- |
@@ -208,15 +215,15 @@ Speedtests use a separate outbound-only Xray client and transfer HTTPS payloads 
 
 The configuration schema describes provider credentials, certificate profiles, inbound certificate references, DDNS jobs, resolver policy, firewall policy, outbound port ranges, asset hashes, telemetry, torrent policy and update policy. Operational defaults are one-second sampling, two-second reporting, five-minute DDNS refresh, ten-minute torrent bans and disabled automatic binary installation.
 
-Resolver selection is deprecated: native Xray DNS always handles managed
-interception. `dns.mode` accepts empty, `xray` and legacy `smartdns` inputs and
-normalizes to `xray`; unsupported values remain invalid. `Config.NormalizeDNS`
-preserves the former legacy fallback by inserting explicit native
-`dns.servers: ["127.0.0.1"]` only for legacy SmartDNS interception without native
-servers. Explicit native resolver servers always win. `ParseConfig`, cached
-state bootstrap and native preparation apply this idempotent transformation to
-detached node configuration. `dns.upstreams` remains ignored compatibility data.
-No system DNS service, firewall redirect or shared configuration is modified.
+Native Xray DNS handles managed interception. The `dns` policy contains only
+`redirect`; configure resolver servers through native `xray.dns.servers`.
+Retired `dns.mode` and `dns.upstreams` inputs are rejected by the live protocol.
+For offline upgrades, the private state reader alone preserves effective DNS
+from previously accepted and staged snapshots: historical SmartDNS interception
+without explicit native servers retains `dns.servers: ["127.0.0.1"]`. Explicit
+native servers keep precedence. This bounded recovery does not require a state
+write; the next ordinary durable change removes the retired fields. No system
+DNS service, firewall redirect or shared configuration is modified.
 
 Firewall range support requires `native_firewall_port_ranges_v1`. The additive
 `tcp_port_ranges`, `udp_port_ranges` and `ssh_port_ranges` arrays contain inclusive
@@ -243,7 +250,14 @@ publishing DNS records or requiring provider credentials, zone or record name.
 The master retains host bindings and supplies opaque per-job `generation` values;
 host IDs never enter agent configuration. `builtin_ddns_v1` gates this job type.
 Legacy named providers keep their existing record behavior. Failed discovery
-does not replace a previously successful address.
+does not replace a previously successful address. Every job requires at least
+one enabled address source. Fixed values must match their IPv4/IPv6 field;
+`auto` requires an interface or HTTPS lookup for that family. TTL seconds range
+from 0 through 2147483647 (zero selects 300); refresh intervals range from 0
+through 86400 (zero selects 300). External records use `@` for the zone apex or
+a fully qualified name inside the selected zone. IDNA names, case, one trailing
+dot, leading wildcards and underscore owner labels are supported. Invalid zone
+ownership, address families, lookups or TTLs reject before provider/discovery I/O.
 
 For `ddns_changes_v1`, upgrade negotiation uses
 `X-XNode-DDNS-Changes: acknowledged-v1`. The master echoes that value only when it
@@ -330,7 +344,7 @@ bypass. Protected-address commands and live IP projections are private and do
 not enter durable command history. Whitelist/firewall changes update registry
 and nftables state without reconstructing native Xray.
 
-Sampling and reporting use independent master-configured tickers. Activity IPs, connection counts and payload rates follow the sample interval; periodic frames follow the report interval. A bounded coalescing worker encodes reports independently of command receipt and sampling. The deprecated include_active_ips switch is ignored; sampled IPs are always reported. Matching traffic acknowledgements immediately release the next sealed journal batch; new batches and lost-ACK retransmissions follow the configured reporting interval. Socket/process/GPU scans refresh at most once per ten seconds.
+Sampling and reporting use independent master-configured tickers. Activity IPs, connection counts and payload rates follow the sample interval; periodic frames follow the report interval. A bounded coalescing worker encodes reports independently of command receipt and sampling. Sampled IPs are always reported; no configurable opt-out field is accepted. Matching traffic acknowledgements immediately release the next sealed journal batch; new batches and lost-ACK retransmissions follow the configured reporting interval. Socket/process/GPU scans refresh at most once per ten seconds.
 
 ## Negotiated compressed reports
 

@@ -6,6 +6,8 @@ import (
 	"errors"
 	"github.com/VanSail-Opensource/X-Node/internal/geodata"
 	"github.com/VanSail-Opensource/X-Node/internal/protocol"
+	"os"
+	"path/filepath"
 	"time"
 )
 
@@ -64,12 +66,34 @@ func (a *Agent) refreshGeodata(ctx context.Context, config protocol.Config, poli
 	}
 	a.geoNext.Store(0)
 	a.geoMu.Unlock()
-	a.nativeMu.Lock()
-	defer a.nativeMu.Unlock()
-	target, err := a.ensureAssets(ctx, config, policy, true)
-	if err == nil {
-		a.geoCandidate, a.geoCandidateKey = target, assetKey(config, policy)
-	}
+	// Use a separate owned stage so download/cleanup cannot touch a serving or
+	// pending native generation. Only publication takes the activation lock.
+	err := a.stageGeodataRefresh(ctx, config, policy)
 	a.finishGeodata(policy, err)
+	return err
+}
+
+func (a *Agent) stageGeodataRefresh(ctx context.Context, config protocol.Config, policy geodata.Policy) error {
+	if len(policy.Assets) == 0 {
+		return nil
+	}
+	dir := filepath.Join(a.Dir, "geodata")
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		return err
+	}
+	stage, err := os.MkdirTemp(dir, ".assets-refresh-")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(stage)
+	target, err := prepareAssets(ctx, stage, config, policy, true)
+	if err == nil {
+		if err = a.nativeMu.LockContext(ctx); err == nil {
+			if target, err = geodata.AdoptPrepared(dir, target); err == nil {
+				a.geoCandidate, a.geoCandidateKey = target, assetKey(config, policy)
+			}
+			a.nativeMu.Unlock()
+		}
+	}
 	return err
 }

@@ -9,8 +9,19 @@ keep hourly sales unavailable until every participating agent supports it.
 The operational agent advertises `hourly_account_limits_v1` in `agent.hello` and
 offers `X-XNode-Hourly: v1` with a fresh 32-character lowercase hexadecimal
 `X-XNode-Hourly-Session`. A supporting master echoes both values exactly. Missing,
-partial or conflicting echoes grant no hourly authority. Disconnect or disabling
-the capability clears authority synchronously; reconnection uses a fresh session.
+partial or conflicting echoes grant no hourly authority. Disconnect clears live
+wire negotiation immediately, while retaining already accepted local authority.
+Failed dials cannot extend an existing rate grant or byte ceiling. A successful
+new handshake fences the previous session even if the master no longer supports
+hourly admission; disabling the capability or stopping the client revokes it.
+
+`--version` also reports compiled hourly format support for signed upgrade and
+rollback checks. This static declaration does not assert operational readiness.
+Replacement binaries must retain this capability while any authorized, accepted
+or staged hourly user or issued credit sequence remains on disk. Credit evidence
+is inspected without recovering or modifying it; corruption blocks replacement.
+The empty journal created before the first hourly issuance does not prevent
+rollback of an initial upgrade.
 
 An hourly native user supplies `hourly.owner.{id,generation}`,
 `hourly.enrollment_id`, `accounting_period` and paid `valid_until`. Owner,
@@ -49,9 +60,16 @@ seconds. Shrink existing allocations and wait for their acknowledgment before
 increasing others. Disconnected allocations remain reserved until their original
 deadline or a confirmed revocation. Aggregate burst allowance is at most 16 KiB;
 a single node may receive the whole allocation. Rate allocations remain in memory.
-No valid grant means hourly payload pauses. Grant expiry, session change and
-shrink cancel unstarted tickets and drain started handoffs. Authorized idle or
-waiting connections survive and need fresh authority before another admission.
+No valid grant means reduced-rate payload pauses. Grant expiry and shrink cancel
+unstarted rate-dependent tickets and drain their started handoffs. Flows whose
+handoffs use only centrally reserved full-speed byte credit remain available;
+an affected rate-dependent handoff still interrupts the shared bidirectional
+native flow, including any simultaneous credit-backed handoff.
+An unreachable master does not prematurely discard either accepted authority.
+Reduced-rate leases still expire after at most ten seconds, and no offline path
+creates more tokens or credit. This preserves the shared multi-node rate ceiling.
+Authorized idle or waiting connections survive and need sufficient remaining
+credit or a fresh rate grant before another admission.
 Paid expiry and authorization revocation interrupt their native transports,
 including idle connections. New sessions start with empty rate buckets and
 cannot reuse old-session full-speed credit.
@@ -64,8 +82,10 @@ the samples and acknowledging the remainder would lose accounting evidence.
 
 ## Durable byte credit commands
 
-All three commands use the existing utility executor and durable command receipts,
-keeping disk writes and draining off the reserved traffic/control executor.
+All three commands use a dedicated bounded accounting worker and the durable
+credit journal, keeping disk writes off state synchronization and traffic handling.
+The credit journal owns exact replay and financial evidence; these commands do not
+also retain a second generic command receipt on disk.
 
 | Command | Arguments and result | Execution bound |
 | --- | --- | --- |
@@ -81,6 +101,13 @@ Normal proofs have no unknown residual. Crash recovery retains unknown residual
 and reports no newly inferred unused bytes. A disconnect alone never proves unused
 credit; reclaim only authenticated barrier/proof evidence. Acknowledge a proof
 only after durable, idempotent financial settlement.
+
+While the master is unreachable, installed credit remains spendable only in its
+original live process/session and UTC day, with current paid authorization and a
+healthy journal. Exhaustion pauses admission; no fallback bypasses payment or
+global accounting. Successful reconnection retires old-session credit and replays
+its exact proof before new credit is allocated. Agent process restart still turns
+unsealed reservations into unknown financial evidence, never reusable credit.
 
 Financial sealing cancels matching unstarted tickets under the admission lock.
 Started handoffs already consumed their bytes irrevocably at `Begin`, so their

@@ -104,7 +104,7 @@ drained:
 	record := journalRecord{}
 	keys := make([]string, 0)
 	for key, window := range g.windows {
-		if len(record.Events)+len(g.state.Events) >= 4096 {
+		if len(record.Events)+len(g.state.Events) >= maxPendingFirewallEvents {
 			break
 		}
 		if window.count == 0 {
@@ -129,7 +129,7 @@ drained:
 func (g *Guard) expire(now time.Time) error {
 	record := journalRecord{}
 	for prefix, ban := range g.state.Bans {
-		if len(record.Remove) >= 4096 {
+		if len(record.Events)+len(g.state.Events) >= maxPendingFirewallEvents {
 			break
 		}
 		if ban.Until.After(now) {
@@ -159,6 +159,9 @@ func (g *Guard) expire(now time.Time) error {
 			}
 		}
 		if retained {
+			continue
+		}
+		if len(record.Events)+len(g.state.Events) >= maxPendingFirewallEvents {
 			continue
 		}
 		record.ExpiredSources = append(record.ExpiredSources, id)

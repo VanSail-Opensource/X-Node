@@ -8,8 +8,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-
-	"github.com/VanSail-Opensource/X-Node/internal/state"
 )
 
 // The primary remains in place until its compact replacement is atomic. An
@@ -84,13 +82,4 @@ func syncJobDirectory(path string) error {
 		return errors.New("job evidence directory sync failed")
 	}
 	return nil
-}
-
-// AtomicWrite checks the file barrier but ignores directory sync failures.
-// Durable job admission requires that additional barrier before native work.
-func writeJobFile(path string, data []byte, mode os.FileMode) error {
-	if err := state.AtomicWrite(path, data, mode); err != nil {
-		return err
-	}
-	return syncJobDirectory(filepath.Dir(path))
 }

@@ -90,7 +90,7 @@ type Agent struct {
 	notify              chan reloadRequest
 	reloadDone          chan error
 	generation          uint64
-	nativeMu            sync.Mutex
+	nativeMu            utilityLock
 	nativePrepared      *xray.Prepared
 	validationKey       [32]byte
 	validationValid     bool
@@ -98,7 +98,7 @@ type Agent struct {
 	geoCandidate        string
 	geoCandidateKey     string
 	geoMu               sync.Mutex
-	dnsMu               sync.Mutex
+	dnsMu               utilityLock
 	utilityCancel       context.CancelFunc
 	utilityContext      context.Context
 	retryAt             time.Time

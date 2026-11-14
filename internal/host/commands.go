@@ -66,26 +66,3 @@ func CheckLinux() error {
 	}
 	return nil
 }
-
-// CheckDebian restricts the destructive host fixture to its Debian 13 VM.
-// Production agent, CLI and update paths use CheckLinux instead.
-func CheckDebian() error {
-	if err := CheckLinux(); err != nil {
-		return err
-	}
-	b, e := os.ReadFile("/etc/os-release")
-	if e != nil {
-		return e
-	}
-	fields := map[string]string{}
-	for _, line := range strings.Split(string(b), "\n") {
-		k, v, ok := strings.Cut(line, "=")
-		if ok {
-			fields[k] = strings.Trim(v, "\"'")
-		}
-	}
-	if fields["ID"] != "debian" || fields["VERSION_ID"] != "13" {
-		return errors.New("X-Node requires Debian 13")
-	}
-	return nil
-}

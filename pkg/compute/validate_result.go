@@ -8,6 +8,9 @@ import (
 // ValidateResult checks the exact task set, finite numeric output and ordering.
 // The master separately rechecks financial policy and all authoritative versions.
 func ValidateResult(b Batch, out Results) error {
+	if err := Validate(b); err != nil {
+		return err
+	}
 	_, hash, err := DigestBatch(b)
 	if err != nil || out.Version != Version || out.InputHash != hash || len(out.Items) != len(b.Tasks) {
 		return errors.New("calculation result does not match input")

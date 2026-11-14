@@ -11,7 +11,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/VanSail-Opensource/X-Node/internal/protocol"
 	"github.com/VanSail-Opensource/X-Node/internal/state"
 )
 
@@ -37,17 +36,10 @@ func (g *Guard) load() error {
 			_ = file.Close()
 			return e
 		}
-		decoder := json.NewDecoder(io.LimitReader(reader, maxBanStateBytes+1))
-		e = g.decodeBanState(decoder)
-		if e == nil {
-			_, e = io.Copy(io.Discard, reader)
-		}
+		e = g.decodeBanSnapshot(reader, maxBanStateBytes)
 		closeErr := errors.Join(reader.Close(), file.Close())
 		if e = errors.Join(e, closeErr); e != nil {
 			return e
-		}
-		if g.state.Bans == nil || g.state.Exemptions == nil || g.state.Sources == nil || g.state.Events == nil || !protocol.ValidName(g.state.EventNamespace) || !protocol.ValidName(g.state.JournalEpoch) {
-			return errors.New("invalid persisted firewall state")
 		}
 		g.haveSnapshot = true
 	} else if !os.IsNotExist(err) {
@@ -126,11 +118,19 @@ func (g *Guard) writeSnapshot(value banState) error {
 	if err := writer.Close(); err != nil {
 		return err
 	}
-	if err := state.AtomicWrite(g.file("bans.json.gz"), buffer.Bytes(), 0600); err != nil {
-		return err
+	write := g.writeCheckpoint
+	if write == nil {
+		write = state.AtomicWritePublished
 	}
-	g.haveSnapshot = true
-	return nil
+	published, err := write(g.file("bans.json.gz"), buffer.Bytes(), 0600)
+	if published {
+		// Rename is already visible even if its directory sync failed. Keep
+		// subsequent journal records on that epoch; appendPrepared syncs the
+		// journal and this directory before applying or acknowledging them.
+		g.haveSnapshot = true
+		g.state.JournalEpoch = value.JournalEpoch
+	}
+	return err
 }
 func (g *Guard) compact() error {
 	if err := g.flushPending(); err != nil {
@@ -154,7 +154,6 @@ func (g *Guard) compact() error {
 	if err = g.writeSnapshot(next); err != nil {
 		return err
 	}
-	g.state.JournalEpoch = next.JournalEpoch
 	if err = os.Remove(g.file("bans.journal.gz")); err != nil && !os.IsNotExist(err) {
 		return err
 	}

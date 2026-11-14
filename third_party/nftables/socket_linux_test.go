@@ -84,8 +84,10 @@ func TestSocketReadinessHighDescriptor(t *testing.T) {
 	if err := file.Close(); err != nil {
 		t.Fatal(err)
 	}
-	if ready, err := (&Conn{}).isReadReady(conn); ready || !errors.Is(err, os.ErrClosed) {
-		t.Fatalf("closed connection = %t, %v; want closed error", ready, err)
+	// RawConn.Control propagates its platform error; its identity need not be
+	// os.ErrClosed. A closed descriptor must still be unreadable with an error.
+	if ready, err := (&Conn{}).isReadReady(conn); ready || err == nil {
+		t.Fatalf("closed connection = %t, %v; want false and a non-nil error", ready, err)
 	}
 }
 

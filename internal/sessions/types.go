@@ -26,7 +26,7 @@ type userState struct {
 	count            int
 	clients          int
 	handlers         int
-	speed            *speedPolicy
+	speed            atomic.Pointer[speedPolicy]
 	upload, download atomic.Uint64
 }
 type Registry struct {

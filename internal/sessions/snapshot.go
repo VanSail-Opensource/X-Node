@@ -1,6 +1,7 @@
 package sessions
 
 import (
+	"maps"
 	"sort"
 	"time"
 
@@ -11,13 +12,22 @@ type Summary = protocol.UserMetrics
 
 func (r *Registry) Summary() Summary {
 	r.mu.RLock()
-	defer r.mu.RUnlock()
-	s := Summary{Connections: map[int]int{}, TotalConnections: r.totalConnections(), Rejections: protocol.Clone(r.rejects), Status: map[int]LimitStatus{}, Speed: map[int]SpeedStatus{}}
-	s.Rates = protocol.Clone(r.rates)
-	s.ActiveIPs = map[int][]string{}
+	now := time.Now()
+	s := Summary{
+		Connections:      map[int]int{},
+		TotalConnections: map[int]int{},
+		Rejections:       maps.Clone(r.rejects),
+		Status:           make(map[int]LimitStatus, len(r.users)),
+		Speed:            make(map[int]SpeedStatus, len(r.users)),
+		Rates:            maps.Clone(r.rates),
+		ActiveIPs:        map[int][]string{},
+	}
 	r.activityHistory.snapshot(&s)
 	for id, u := range r.users {
-		s.Speed[id] = u.speed.status()
+		s.Speed[id] = u.speed.Load().status()
+		if u.clients > 0 {
+			s.TotalConnections[id] = u.clients
+		}
 		status := LimitStatus{UserID: id}
 		switch {
 		case r.paused:
@@ -29,7 +39,7 @@ func (r *Registry) Summary() Summary {
 		case len(u.policy.InboundTags) == 0:
 			status.Limited = true
 			status.Reason = "ineligible"
-		case u.policy.ValidUntil != nil && !u.policy.ValidUntil.After(time.Now()):
+		case u.policy.ValidUntil != nil && !u.policy.ValidUntil.After(now):
 			status.Limited = true
 			status.Reason = "expired"
 		case r.fences[id] > 0 || r.fences[0] > 0 || r.periodFences[accountingKey{id, u.policy.AccountingPeriod}] > 0:
@@ -38,7 +48,7 @@ func (r *Registry) Summary() Summary {
 		case u.policy.BlockNew:
 			status.Limited = true
 			status.Reason = "block_new"
-		case r.bans[id].After(time.Now()):
+		case r.bans[id].After(now):
 			status.Limited = true
 			status.Reason = "torrent_ban"
 		case u.policy.ConnectionLimit > 0 && u.clients >= u.policy.ConnectionLimit:
@@ -55,12 +65,18 @@ func (r *Registry) Summary() Summary {
 		s.Status[id] = status
 		if count := r.activeCount(id); count > 0 {
 			s.Connections[id] = count
-			for ip := range r.activeIPs(id) {
-				s.ActiveIPs[id] = append(s.ActiveIPs[id], ip)
+			for ip, count := range r.activity.ips[id] {
+				if count > r.closedActivity[id][ip] {
+					s.ActiveIPs[id] = append(s.ActiveIPs[id], ip)
+				}
 			}
-			sort.Strings(s.ActiveIPs[id])
 		}
 	}
+	r.mu.RUnlock()
+	for _, ips := range s.ActiveIPs {
+		sort.Strings(ips)
+	}
+	sortActivityObservations(s.ActiveIPObservations)
 	return s
 }
 func (r *Registry) List(after string, limit int) []Connection {

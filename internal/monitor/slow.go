@@ -2,9 +2,9 @@ package monitor
 
 import (
 	"context"
-	gnet "github.com/shirou/gopsutil/v4/net"
-	"github.com/shirou/gopsutil/v4/process"
 	"time"
+
+	"github.com/shirou/gopsutil/v4/process"
 )
 
 // Socket/process/GPU scans have their own bounded cadence, independent of reports.
@@ -16,17 +16,11 @@ func (s *Sampler) collectSlow(ctx context.Context, now time.Time, out *Snapshot)
 		}
 		return
 	}
-	connections, e := gnet.ConnectionsWithContext(ctx, "all")
+	tcp, udp, e := socketCounts(ctx)
 	if e != nil {
 		out.Errors["connections"] = "unavailable"
 	} else {
-		for _, c := range connections {
-			if c.Type == 1 {
-				out.TCP++
-			} else if c.Type == 2 {
-				out.UDP++
-			}
-		}
+		out.TCP, out.UDP = tcp, udp
 	}
 	pids, e := process.PidsWithContext(ctx)
 	if e != nil {

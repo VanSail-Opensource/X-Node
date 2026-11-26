@@ -15,6 +15,13 @@ telemetry fields, reporting cadence, and signed update requirements are retained
 Updates Gorilla WebSocket to the upstream revision that fixes GO-2026-6278,
 as required by the existing release security scan.
 
+An explicit identity revocation now also interrupts the native authenticated
+transport, including native Vision flows where interrupting the logical stream
+alone may not close the peer. Same-credential renewals, source-only whitelist
+changes, and ordinary completion retain shared transports. Cancelled unlimited
+flows no longer admit another metered buffer, and hourly and registry
+revocation share a one-shot native fence per lease.
+
 # X-Node v2.0.30
 
 Fixes a Linux firewall inspection panic when a busy proxy process assigns its

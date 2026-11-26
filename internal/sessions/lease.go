@@ -2,6 +2,17 @@ package sessions
 
 import "context"
 
+// revokeTransport is called outside the registry lock. An authorization change
+// and the hourly controller may both revoke the same transport.
+func (l *Lease) revokeTransport() {
+	if l.nativeFence != nil {
+		defer l.Close()
+		l.nativeFenceOnce.Do(l.nativeFence)
+		return
+	}
+	l.Close()
+}
+
 func (l *Lease) Close() {
 	l.once.Do(func() {
 		r := l.registry

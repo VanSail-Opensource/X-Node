@@ -23,7 +23,8 @@ func TestWhitelistOnlyChecksMemberIngressAndKeepsTransit(t *testing.T) {
 	if _, err := acquire(r, user, "192.0.2.10", "tcp"); err == nil {
 		t.Fatal("node source address let ordinary member credentials bypass whitelist")
 	}
-	transit, err := r.AcquireTracked(context.Background(), user.ID, protocol.TransitEmail(user.ID, binding), "in", "192.0.2.10", "example.com:443", "tcp", 443, nil)
+	fenced := false
+	transit, err := r.AcquireTrackedWithTransportFence(context.Background(), user.ID, protocol.TransitEmail(user.ID, binding), "in", "192.0.2.10", "example.com:443", "tcp", 443, nil, func() { fenced = true })
 	if err != nil {
 		t.Fatal("forwarded hop incorrectly checked member IP list", err)
 	}
@@ -41,6 +42,9 @@ func TestWhitelistOnlyChecksMemberIngressAndKeepsTransit(t *testing.T) {
 	r.SetUsers([]protocol.User{user})
 	if !transit.closed {
 		t.Fatal("removed routing authorization retained transit session")
+	}
+	if fenced {
+		t.Fatal("transit credential revocation fenced a shared native transport")
 	}
 }
 

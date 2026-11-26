@@ -82,9 +82,11 @@ source isolation, immediate revocation and preserved non-Reality country checks.
 
 Active IPs are always present in sampled activity projections. Reporting never changes admission policy, and idle total-open counts remain independent of sampled byte activity.
 
-`AcquireTrackedWithHourlyFence` adds a native connection interruption used only
-by the controller's hourly flow fence, outside the registry lock. Ordinary lease
-completion retains shared mux transports; legacy/transit never attach this hook.
+`AcquireTrackedWithTransportFence` shares a one-shot native connection
+interruption per lease when the identity is explicitly revoked or the hourly
+controller fences the flow. It runs outside the registry lock. Source-only
+decisions and ordinary lease completion retain shared mux transports, and
+transit never attaches this hook.
 The original tracked accounting barrier and exact-once close semantics remain.
 `ExpireUsers` delegates hourly expiry to the controller's current authorization
 check, so maintenance cannot bypass the native transport fence or revoke a newer

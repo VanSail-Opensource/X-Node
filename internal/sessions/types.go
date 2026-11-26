@@ -66,6 +66,8 @@ type Lease struct {
 	registry                                 *Registry
 	user                                     *userState
 	cancel                                   func()
+	nativeFence                              func()
+	nativeFenceOnce                          sync.Once
 	accounting                               *accountingCounters
 	accountingKey                            accountingKey
 	tracked                                  bool

@@ -19,14 +19,15 @@ func (l *Lease) captureHourly(user protocol.User, controller *hourly.Controller,
 	}
 }
 
-// AcquireTrackedWithHourlyFence adds a native transport interruption used only
-// by controller fencing. Normal completion, legacy and transit never invoke it.
-func (r *Registry) AcquireTrackedWithHourlyFence(ctx context.Context, id int, identity, tag, ip, destination, network string, port int, cancel, fence func()) (*Lease, error) {
+// AcquireTrackedWithTransportFence supplies a native transport interruption for
+// explicit identity revocation and hourly controller fencing. Source-only
+// decisions, normal completion and transit never invoke it.
+func (r *Registry) AcquireTrackedWithTransportFence(ctx context.Context, id int, identity, tag, ip, destination, network string, port int, cancel, fence func()) (*Lease, error) {
 	return r.acquireHourly(ctx, id, identity, tag, ip, destination, network, port, cancel, true, fence)
 }
 
 func (r *Registry) acquireHourly(ctx context.Context, id int, identity, tag, ip, destination, network string, port int, cancel func(), tracked bool, fence func()) (*Lease, error) {
-	lease, err := r.acquire(ctx, id, identity, tag, ip, destination, network, port, cancel, tracked)
+	lease, err := r.acquire(ctx, id, identity, tag, ip, destination, network, port, cancel, fence, tracked)
 	if err != nil || lease.hourlyBinding == nil {
 		return lease, err
 	}
@@ -35,11 +36,7 @@ func (r *Registry) acquireHourly(ctx context.Context, id int, identity, tag, ip,
 			err = hourly.ErrUnavailable
 		} else {
 			var flow *hourly.Flow
-			interrupt := lease.Close
-			if fence != nil {
-				interrupt = func() { defer lease.Close(); fence() }
-			}
-			flow, err = lease.hourlyController.OpenFlow(*lease.hourlyBinding, interrupt)
+			flow, err = lease.hourlyController.OpenFlow(*lease.hourlyBinding, lease.revokeTransport)
 			if err == nil {
 				r.mu.RLock()
 				current := r.hourly == lease.hourlyController && r.hourlySequence == lease.hourlySequence && r.hourlyApplied == lease.hourlySequence

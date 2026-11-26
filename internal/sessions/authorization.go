@@ -106,11 +106,12 @@ func (r *Registry) setUsers(users []protocol.User, replacements map[int]int) []r
 			unchanged[l.Info.UserID] = same
 		}
 		_, valid := identities[l.Info.UserID].lookup(l.identity, l.Info.InboundTag)
-		if !ok || !same || !valid {
+		if !ok || !valid {
 			close = append(close, revokedLease{lease: l, invalidIdentity: true})
-		} else if !l.transit && !sourceAllowed(p, l.Info.SourceIP) {
-			// Mux streams with different source metadata can share the
-			// same transport. A source-only decision revokes only the flow.
+		} else if !same || !l.transit && !sourceAllowed(p, l.Info.SourceIP) {
+			// A new accounting period or a source-only decision can
+			// invalidate the flow without invalidating its native
+			// credential or shared mux transport.
 			close = append(close, revokedLease{lease: l})
 		}
 	}

@@ -17,10 +17,10 @@ as required by the existing release security scan.
 
 An explicit identity revocation now also interrupts the native authenticated
 transport, including native Vision flows where interrupting the logical stream
-alone may not close the peer. Source-only whitelist changes and ordinary
-completion retain shared transports. Cancelled unlimited flows no longer admit
-another metered buffer, and hourly and registry revocation share a one-shot
-native fence per lease.
+alone may not close the peer. Same-credential renewals, source-only whitelist
+changes, and ordinary completion retain shared transports. Cancelled unlimited
+flows no longer admit another metered buffer, and hourly and registry
+revocation share a one-shot native fence per lease.
 
 # X-Node v2.0.30
 

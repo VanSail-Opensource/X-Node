@@ -53,10 +53,18 @@ func TestExplicitIdentityRevocationFencesNativeTransport(t *testing.T) {
 				t.Fatal("source-only revocation or normal completion fenced a native transport")
 			}
 
+			user.AccountingPeriod = "renewed-period"
+			publish(user)
+			if !retained.closed || retainedFences != 0 {
+				t.Fatal("same-credential accounting renewal must close the old flow but retain the native transport")
+			}
+
+			var renewedFences int
+			renewed := acquire("192.0.2.1", &renewedFences)
 			publish()
 			publish()
-			if !retained.closed || retainedFences != 1 || removedFences != 0 || completedFences != 0 {
-				t.Fatalf("explicit revocation must fence only the active invalidated transport once: %d/%d/%d", retainedFences, removedFences, completedFences)
+			if !renewed.closed || renewedFences != 1 || retainedFences != 0 || removedFences != 0 || completedFences != 0 {
+				t.Fatalf("explicit revocation must fence only the active invalidated transport once: %d/%d/%d/%d", renewedFences, retainedFences, removedFences, completedFences)
 			}
 		})
 	}

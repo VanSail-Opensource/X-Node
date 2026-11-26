@@ -70,9 +70,10 @@ func (f *Flow) TryAcquire(direction Direction, want, minAtomic int) (*Permit, Wa
 	}
 	b := o.currentBucket(now)
 	f.recent, f.pending[direction], f.atomic[direction] = now, min(want, 16384), minAtomic
-	wait := Wait{Changed: o.changed}
+	var wait Wait
 	if c.session == "" {
 		c.notify()
+		wait.Changed = o.waitChange()
 		return nil, wait, nil
 	}
 	grant := b.grant
@@ -87,6 +88,7 @@ func (f *Flow) TryAcquire(direction Direction, want, minAtomic int) (*Permit, Wa
 	}
 	if want == 0 && grant == nil {
 		c.notify()
+		wait.Changed = o.waitChange()
 		return nil, wait, nil
 	}
 	n := min(want, 16384)
@@ -101,6 +103,7 @@ func (f *Flow) TryAcquire(direction Direction, want, minAtomic int) (*Permit, Wa
 				wait.After = b.delay(reduced - tokens)
 			}
 			c.notify()
+			wait.Changed = o.waitChange()
 			return nil, wait, nil
 		}
 		n = int(free + tokens)
@@ -109,6 +112,7 @@ func (f *Flow) TryAcquire(direction Direction, want, minAtomic int) (*Permit, Wa
 				wait.After = b.delay(1)
 			}
 			c.notify()
+			wait.Changed = o.waitChange()
 			return nil, wait, nil
 		}
 		allocations, free = o.creditAllocations(b, uint64(n), c.session)

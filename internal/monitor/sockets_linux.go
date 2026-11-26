@@ -2,6 +2,7 @@ package monitor
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -65,7 +66,7 @@ func countSocketRows(ctx context.Context, reader io.Reader, scratch []byte) (int
 				return 0, err
 			}
 		}
-		if len(scan.Bytes()) > 0 {
+		if len(bytes.Trim(scan.Bytes(), " \t\r")) > 0 {
 			count++
 		}
 	}

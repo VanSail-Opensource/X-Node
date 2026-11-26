@@ -9,5 +9,8 @@ and minimal child environment; see `docs/process-environment.md`.
 
 Linux TCP and UDP figures count IPv4 and IPv6 socket-table rows in the
 agent's network namespace, not Unix-domain sockets or process owners. The
-counter reads the tables without scanning process descriptors. Go heap and
-completed-GC statistics do not require an additional stop-the-world sample.
+counter includes listeners and TCP states such as TIME-WAIT, reads the tables
+without scanning process descriptors, and reports required table failures as
+unavailable. IPv6 tables are optional when disabled. Member connection counts
+are sampled separately. Go heap and completed-GC statistics do not require an
+additional stop-the-world sample.

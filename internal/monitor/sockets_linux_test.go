@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -32,7 +33,7 @@ func fixtureProc(tb testing.TB, tables map[string]string) context.Context {
 func TestSocketCounts(t *testing.T) {
 	row := "  0: 0100007F:01BB 00000000:0000 0A 00000000:00000000 00:00000000 00000000   0   0 1\n"
 	ctx := fixtureProc(t, map[string]string{
-		"tcp":  socketHeader + row + row,
+		"tcp":  socketHeader + row + " \t\r\n\n" + row,
 		"tcp6": socketHeader + row,
 		"udp":  socketHeader + row,
 		"unix": "Not an Internet socket table",
@@ -49,6 +50,10 @@ func TestSocketCounts(t *testing.T) {
 	missing := fixtureProc(t, map[string]string{"tcp": socketHeader + row})
 	if tcp, udp, err := socketCounts(missing); !errors.Is(err, os.ErrNotExist) || tcp != 0 || udp != 0 {
 		t.Fatalf("missing required table gave %d TCP, %d UDP, error %v", tcp, udp, err)
+	}
+	empty := fixtureProc(t, map[string]string{"tcp": socketHeader + row, "udp": ""})
+	if tcp, udp, err := socketCounts(empty); !errors.Is(err, io.ErrUnexpectedEOF) || tcp != 0 || udp != 0 {
+		t.Fatalf("missing socket header gave %d TCP, %d UDP, error %v", tcp, udp, err)
 	}
 }
 

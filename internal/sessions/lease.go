@@ -2,6 +2,17 @@ package sessions
 
 import "context"
 
+// revokeTransport is called outside the registry lock. An authorization change
+// and the hourly controller may both revoke the same transport.
+func (l *Lease) revokeTransport() {
+	if l.nativeFence != nil {
+		defer l.Close()
+		l.nativeFenceOnce.Do(l.nativeFence)
+		return
+	}
+	l.Close()
+}
+
 func (l *Lease) Close() {
 	l.once.Do(func() {
 		r := l.registry
@@ -44,10 +55,9 @@ func (l *Lease) Account(upload bool, n uint64) {
 	}
 }
 func (l *Lease) Wait(ctx context.Context, n int) error {
-	l.registry.mu.RLock()
-	policy := l.user.speed
-	l.registry.mu.RUnlock()
-	return policy.wait(ctx, n)
+	// Every payload buffer visits this path. A rate policy is replaced
+	// atomically, and its own state is synchronized independently.
+	return l.user.speed.Load().wait(ctx, n)
 }
 func (r *Registry) CloseUser(id int, tag string) {
 	r.mu.RLock()

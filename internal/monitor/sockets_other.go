@@ -9,7 +9,7 @@ import (
 )
 
 func socketCounts(ctx context.Context) (tcp, udp int, err error) {
-	connections, err := gnet.ConnectionsWithContext(ctx, "all")
+	connections, err := gnet.ConnectionsWithoutUidsWithContext(ctx, "inet")
 	if err != nil {
 		return 0, 0, err
 	}

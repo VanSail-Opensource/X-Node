@@ -44,18 +44,6 @@ func (r *Registry) activeCount(user int) int {
 	return max(0, count)
 }
 
-// totalConnections requires the registry lock and excludes internal transit hops.
-// Logical close removes a flow even if its native handler is still finishing.
-func (r *Registry) totalConnections() map[int]int {
-	counts := map[int]int{}
-	for id, user := range r.users {
-		if user.clients > 0 {
-			counts[id] = user.clients
-		}
-	}
-	return counts
-}
-
 func (r *Registry) activeIPs(user int) map[string]int {
 	ips := map[string]int{}
 	for ip, count := range r.activity.ips[user] {

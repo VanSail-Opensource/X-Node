@@ -26,7 +26,7 @@ type userState struct {
 	count            int
 	clients          int
 	handlers         int
-	speed            *speedPolicy
+	speed            atomic.Pointer[speedPolicy]
 	upload, download atomic.Uint64
 }
 type Registry struct {
@@ -66,6 +66,8 @@ type Lease struct {
 	registry                                 *Registry
 	user                                     *userState
 	cancel                                   func()
+	nativeFence                              func()
+	nativeFenceOnce                          sync.Once
 	accounting                               *accountingCounters
 	accountingKey                            accountingKey
 	tracked                                  bool

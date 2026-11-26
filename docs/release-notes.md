@@ -1,3 +1,27 @@
+# X-Node v2.0.31
+
+Reduces work in the proxy and telemetry paths without changing admission limits
+or accounting rules. Payload buffers now read the current speed policy without
+taking the registry lock, and a maintenance tick visits open flows at most once
+for expired ordinary authorizations. Activity history updates avoid per-sample
+copies, and telemetry builds detached snapshots without JSON round trips under
+the admission lock.
+
+Linux machine telemetry counts IPv4 and IPv6 socket-table rows directly rather
+than profiling per-process socket ownership and Unix-domain sockets. The Go
+runtime sampler no longer requests a stop-the-world memory snapshot. Existing
+telemetry fields, reporting cadence, and signed update requirements are retained.
+
+Updates Gorilla WebSocket to the upstream revision that fixes GO-2026-6278,
+as required by the existing release security scan.
+
+An explicit identity revocation now also interrupts the native authenticated
+transport, including native Vision flows where interrupting the logical stream
+alone may not close the peer. Same-credential renewals, source-only whitelist
+changes, and ordinary completion retain shared transports. Cancelled unlimited
+flows no longer admit another metered buffer, and hourly and registry
+revocation share a one-shot native fence per lease.
+
 # X-Node v2.0.30
 
 Fixes a Linux firewall inspection panic when a busy proxy process assigns its

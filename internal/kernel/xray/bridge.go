@@ -114,7 +114,7 @@ func (h *managedOutbound) Dispatch(ctx context.Context, link *transport.Link) {
 	copied.Conn = nil
 	child = session.ContextWithInbound(child, &copied)
 	connection := si.Conn
-	lease, err := h.bridge.Registry.AcquireTrackedWithHourlyFence(child, id, si.User.Email, si.Tag, si.Source.Address.IP().String(), dest.NetAddr(), strings.ToLower(dest.Network.String()), int(dest.Port), func() { cancel(); reject() }, func() {
+	lease, err := h.bridge.Registry.AcquireTrackedWithTransportFence(child, id, si.User.Email, si.Tag, si.Source.Address.IP().String(), dest.NetAddr(), strings.ToLower(dest.Network.String()), int(dest.Port), func() { cancel(); reject() }, func() {
 		if connection != nil {
 			_ = connection.Close()
 		}
@@ -158,11 +158,12 @@ type meterReader struct {
 func (r *meterReader) ReadMultiBuffer() (buf.MultiBuffer, error) {
 	mb, err := r.Reader.ReadMultiBuffer()
 	if len(mb) > 0 {
-		if e := r.lease.Wait(r.ctx, int(mb.Len())); e != nil {
+		n := mb.Len()
+		if e := r.lease.Wait(r.ctx, int(n)); e != nil {
 			buf.ReleaseMulti(mb)
 			return nil, e
 		}
-		r.lease.Account(true, uint64(mb.Len()))
+		r.lease.Account(true, uint64(n))
 	}
 	return mb, err
 }

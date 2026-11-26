@@ -7,8 +7,10 @@ and minimal child environment; see `docs/process-environment.md`.
 
 `cadence.go` changes sampling intervals through a coalesced wakeup and one ticker/collector. Collection time does not extend the interval; missed ticks coalesce, contexts bound collection, and reports reuse the immutable latest snapshot.
 
-On Linux the TCP and UDP totals use the sampler network namespace’s IPv4 and
-IPv6 socket tables directly. They count rows, including listening sockets and
-TCP states such as TIME-WAIT, and exclude UNIX-domain sockets. No process FD
-walk is needed. Disabled IPv6 tables are optional and other read failures are
-reported as unavailable. Member connection counts are sampled separately.
+Linux TCP and UDP figures count IPv4 and IPv6 socket-table rows in the
+agent's network namespace, not Unix-domain sockets or process owners. The
+counter includes listeners and TCP states such as TIME-WAIT, reads the tables
+without scanning process descriptors, and reports required table failures as
+unavailable. IPv6 tables are optional when disabled. Member connection counts
+are sampled separately. Go heap and completed-GC statistics do not require an
+additional stop-the-world sample.

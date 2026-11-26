@@ -83,7 +83,7 @@ func (p *speedPolicy) advance(now time.Time) {
 }
 func (p *speedPolicy) wait(ctx context.Context, n int) error {
 	if p == nil || p.hard == nil {
-		return nil
+		return ctx.Err()
 	}
 	for n > 0 {
 		chunk := min(n, p.hard.Burst())

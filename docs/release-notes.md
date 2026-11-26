@@ -12,8 +12,24 @@ than profiling per-process socket ownership and Unix-domain sockets. The Go
 runtime sampler no longer requests a stop-the-world memory snapshot. Existing
 telemetry fields, reporting cadence, and signed update requirements are retained.
 
+Hourly admission now creates an owner wake channel only when a flow has to
+wait. Stalled flows still share the same signal, and grant changes and flow
+closure still wake them without changing reservation, expiry, or byte accounting.
+
+Updates embedded Xray to v26.11.9 (`676eaf66f8f0`). Validate existing native
+configurations with the matching Carpool validator before rolling out. In
+Freedom outbound `finalRules`, delay and log level are valid only for `block`.
+Remove legacy `blockDelay` from `allow` rules before upgrading.
+
 Updates Gorilla WebSocket to the upstream revision that fixes GO-2026-6278,
 as required by the existing release security scan.
+
+An explicit identity revocation now also interrupts the native authenticated
+transport, including native Vision flows where interrupting the logical stream
+alone may not close the peer. Same-credential renewals, source-only whitelist
+changes, and ordinary completion retain shared transports. Cancelled unlimited
+flows no longer admit another metered buffer, and hourly and registry
+revocation share a one-shot native fence per lease.
 
 # X-Node v2.0.30
 

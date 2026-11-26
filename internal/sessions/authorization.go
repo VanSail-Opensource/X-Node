@@ -19,9 +19,7 @@ func (r *Registry) SetUsers(users []protocol.User) {
 	publication := r.hourlyPublication()
 	r.mu.Unlock()
 	publication.apply()
-	for _, lease := range close {
-		lease.Close()
-	}
+	closeRevokedLeases(close)
 }
 
 // ApplyAuthorization publishes one committed snapshot under the admission lock.
@@ -32,7 +30,7 @@ func (r *Registry) ApplyAuthorization(view state.AuthorizationView) bool {
 		r.mu.Unlock()
 		return false
 	}
-	var close []*Lease
+	var close []revokedLease
 	if r.authorizationSequence == 0 || view.Revision != r.authorizationRevision {
 		replacements, err := protocol.UserReplacementIDs(r.authorizedUsers(), view.Users)
 		if err != nil {
@@ -49,9 +47,7 @@ func (r *Registry) ApplyAuthorization(view state.AuthorizationView) bool {
 	publication := r.hourlyPublication()
 	r.mu.Unlock()
 	publication.apply()
-	for _, lease := range close {
-		lease.Close()
-	}
+	closeRevokedLeases(close)
 	return true
 }
 
@@ -66,8 +62,23 @@ func (r *Registry) authorizedUsers() []protocol.User {
 	return users
 }
 
+type revokedLease struct {
+	lease           *Lease
+	invalidIdentity bool
+}
+
+func closeRevokedLeases(leases []revokedLease) {
+	for _, entry := range leases {
+		if entry.invalidIdentity {
+			entry.lease.revokeTransport()
+		} else {
+			entry.lease.Close()
+		}
+	}
+}
+
 // setUsers requires the admission lock and returns leases to close outside it.
-func (r *Registry) setUsers(users []protocol.User, replacements map[int]int) []*Lease {
+func (r *Registry) setUsers(users []protocol.User, replacements map[int]int) []revokedLease {
 	r.rekeyUsers(replacements)
 	r.reconcileAliases(users, replacements)
 	next := map[int]*userState{}
@@ -86,7 +97,7 @@ func (r *Registry) setUsers(users []protocol.User, replacements map[int]int) []*
 		}
 		next[p.ID] = old
 	}
-	var close []*Lease
+	var close []revokedLease
 	for _, l := range r.connections {
 		p, ok := policies[l.Info.UserID]
 		same, checked := unchanged[l.Info.UserID]
@@ -95,8 +106,13 @@ func (r *Registry) setUsers(users []protocol.User, replacements map[int]int) []*
 			unchanged[l.Info.UserID] = same
 		}
 		_, valid := identities[l.Info.UserID].lookup(l.identity, l.Info.InboundTag)
-		if !ok || !same || !valid || !l.transit && !sourceAllowed(p, l.Info.SourceIP) {
-			close = append(close, l)
+		if !ok || !valid {
+			close = append(close, revokedLease{lease: l, invalidIdentity: true})
+		} else if !same || !l.transit && !sourceAllowed(p, l.Info.SourceIP) {
+			// A new accounting period or a source-only decision can
+			// invalidate the flow without invalidating its native
+			// credential or shared mux transport.
+			close = append(close, revokedLease{lease: l})
 		}
 	}
 	for _, p := range users {

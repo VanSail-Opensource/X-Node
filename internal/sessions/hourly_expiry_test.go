@@ -30,7 +30,7 @@ func TestHourlyMaintenanceExpiryAndLateTimerRespectRenewal(t *testing.T) {
 			r.SetHourlyController(controller)
 			r.SetUsers([]protocol.User{user})
 			fenced := 0
-			lease, err := r.AcquireTrackedWithHourlyFence(context.Background(), user.ID, protocol.UserEmail(user, "in"), "in", "192.0.2.1", "example.com:443", "tcp", 443, nil, func() { _ = r.Summary(); fenced++ })
+			lease, err := r.AcquireTrackedWithTransportFence(context.Background(), user.ID, protocol.UserEmail(user, "in"), "in", "192.0.2.1", "example.com:443", "tcp", 443, nil, func() { _ = r.Summary(); fenced++ })
 			if err != nil {
 				t.Fatal(err)
 			}

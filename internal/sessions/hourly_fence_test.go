@@ -17,7 +17,7 @@ func TestHourlyTransportFenceRunsOnlyForControllerRevocation(t *testing.T) {
 	fenced := 0
 	open := func() *Lease {
 		t.Helper()
-		lease, err := r.AcquireTrackedWithHourlyFence(context.Background(), user.ID, protocol.UserEmail(user, "in"), "in", "192.0.2.1", "example.com:443", "tcp", 443, nil, func() {
+		lease, err := r.AcquireTrackedWithTransportFence(context.Background(), user.ID, protocol.UserEmail(user, "in"), "in", "192.0.2.1", "example.com:443", "tcp", 443, nil, func() {
 			_ = r.Summary() // The callback must run outside Registry.mu.
 			fenced++
 		})
@@ -43,17 +43,36 @@ func TestHourlyTransportFenceRunsOnlyForControllerRevocation(t *testing.T) {
 	}
 }
 
-func TestLegacyTrackedLeaseNeverUsesHourlyTransportFence(t *testing.T) {
+func TestOrdinaryTrackedLeaseDoesNotFenceOnNormalClose(t *testing.T) {
 	r, user := New(), testUser()
 	r.SetUsers([]protocol.User{user})
 	fenced := false
-	lease, err := r.AcquireTrackedWithHourlyFence(context.Background(), user.ID, protocol.UserEmail(user, "in"), "in", "192.0.2.1", "example.com:443", "tcp", 443, nil, func() { fenced = true })
+	lease, err := r.AcquireTrackedWithTransportFence(context.Background(), user.ID, protocol.UserEmail(user, "in"), "in", "192.0.2.1", "example.com:443", "tcp", 443, nil, func() { fenced = true })
 	if err != nil {
 		t.Fatal(err)
 	}
 	lease.Close()
 	lease.Finish()
 	if fenced {
-		t.Fatal("ordinary traffic used an hourly-only physical interruption")
+		t.Fatal("ordinary completion interrupted its native transport")
+	}
+}
+
+func TestHourlyAndRegistryRevocationShareNativeFence(t *testing.T) {
+	r, user := New(), sessionHourlyUser()
+	controller := hourly.NewController(hourly.Options{})
+	controller.SetSession("11111111111111111111111111111111")
+	r.SetHourlyController(controller)
+	r.SetUsers([]protocol.User{user})
+	fenced := 0
+	lease, err := r.AcquireTrackedWithTransportFence(context.Background(), user.ID, protocol.UserEmail(user, "in"), "in", "192.0.2.1", "example.com:443", "tcp", 443, nil, func() { fenced++ })
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer lease.Finish()
+	defer lease.Close()
+	r.SetUsers(nil)
+	if fenced != 1 || !lease.closed {
+		t.Fatalf("combined authorization revocation fenced the native transport %d times", fenced)
 	}
 }

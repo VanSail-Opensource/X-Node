@@ -12,6 +12,9 @@ than profiling per-process socket ownership and Unix-domain sockets. The Go
 runtime sampler no longer requests a stop-the-world memory snapshot. Existing
 telemetry fields, reporting cadence, and signed update requirements are retained.
 
+Updates Gorilla WebSocket to the upstream revision that fixes GO-2026-6278,
+as required by the existing release security scan.
+
 # X-Node v2.0.30
 
 Fixes a Linux firewall inspection panic when a busy proxy process assigns its

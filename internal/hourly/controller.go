@@ -106,11 +106,26 @@ func (c *Controller) notify() {
 	default:
 	}
 }
-func (o *ownerState) changedOnly() { close(o.changed); o.changed = make(chan struct{}) }
-func (o *ownerState) signal()      { o.changedOnly(); o.controller.notify() }
+
+// Call under the owner lock. Admit and complete are hot-path signals, so
+// allocate a channel only on the first stalled acquisition in each generation.
+func (o *ownerState) waitChange() <-chan struct{} {
+	if o.changed == nil {
+		o.changed = make(chan struct{})
+	}
+	return o.changed
+}
+
+func (o *ownerState) changedOnly() {
+	if o.changed != nil {
+		close(o.changed)
+		o.changed = nil
+	}
+}
+func (o *ownerState) signal() { o.changedOnly(); o.controller.notify() }
 
 func (c *Controller) newOwner(key OwnerKey) *ownerState {
-	return &ownerState{key: key, controller: c, flows: map[*Flow]struct{}{}, permits: map[*Permit]struct{}{}, credits: map[string]*creditState{}, samples: map[sampleKey]*sampleCounter{}, changed: make(chan struct{})}
+	return &ownerState{key: key, controller: c, flows: map[*Flow]struct{}{}, permits: map[*Permit]struct{}{}, credits: map[string]*creditState{}, samples: map[sampleKey]*sampleCounter{}}
 }
 
 // Only the controller's clock supplies this day; a received grant cannot move it.

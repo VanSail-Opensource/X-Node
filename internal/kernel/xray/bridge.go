@@ -158,11 +158,12 @@ type meterReader struct {
 func (r *meterReader) ReadMultiBuffer() (buf.MultiBuffer, error) {
 	mb, err := r.Reader.ReadMultiBuffer()
 	if len(mb) > 0 {
-		if e := r.lease.Wait(r.ctx, int(mb.Len())); e != nil {
+		n := mb.Len()
+		if e := r.lease.Wait(r.ctx, int(n)); e != nil {
 			buf.ReleaseMulti(mb)
 			return nil, e
 		}
-		r.lease.Account(true, uint64(mb.Len()))
+		r.lease.Account(true, uint64(n))
 	}
 	return mb, err
 }

@@ -130,19 +130,30 @@ func (r *Registry) SetRates(delta protocol.Traffic, elapsed float64) {
 func (r *Registry) ExpireUsers(now time.Time) {
 	r.mu.RLock()
 	controller := r.hourly
-	var expired []int
-	for id, user := range r.users {
-		if user.policy.Hourly == nil && user.policy.ValidUntil != nil && !user.policy.ValidUntil.After(now) {
-			expired = append(expired, id)
+	var expired []*Lease
+	for _, user := range r.users {
+		if user.count != 0 && expiredOrdinaryUser(user, now) {
+			// Capture matching leases in one pass, under the same policy
+			// snapshot. Idle expired users must not trigger any flow scan.
+			for _, lease := range r.connections {
+				if expiredOrdinaryUser(r.users[lease.Info.UserID], now) {
+					expired = append(expired, lease)
+				}
+			}
+			break
 		}
 	}
 	r.mu.RUnlock()
 	if controller != nil {
 		controller.ExpirePaid(now)
 	}
-	for _, id := range expired {
-		r.CloseUser(id, "")
+	for _, lease := range expired {
+		lease.Close()
 	}
+}
+
+func expiredOrdinaryUser(user *userState, now time.Time) bool {
+	return user != nil && user.policy.Hourly == nil && user.policy.ValidUntil != nil && !user.policy.ValidUntil.After(now)
 }
 
 // Quiesce requires an admission fence, closes streams, and waits for their native handlers.

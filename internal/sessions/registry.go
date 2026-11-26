@@ -184,7 +184,7 @@ func (r *Registry) ExpireBans(now time.Time) []int {
 func (r *Registry) Counters() state.Traffic {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	out := state.Traffic{}
+	out := make(state.Traffic, len(r.users))
 	for id, u := range r.users {
 		out[id] = [2]uint64{u.upload.Load(), u.download.Load()}
 	}

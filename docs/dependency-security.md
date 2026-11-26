@@ -11,6 +11,14 @@ boundary. The Linux amd64 bootstrap uses the
 The exact-commit hosted vulnerability gate still determines whether the selected
 dependency graph has reachable advisories; a toolchain edit alone is not scan evidence.
 
+## v2.0.31 WebSocket dependency
+
+The hosted vulnerability scan reported reachable
+[`GO-2026-6278`](https://pkg.go.dev/vuln/GO-2026-6278) in
+`github.com/gorilla/websocket v1.5.3`. The module now selects the
+upstream fixed revision `v1.5.4-0.20240701034025-d67f41855da4`.
+This pin keeps the existing module path and does not change the release gate.
+
 ## v2.0.20 dependency refresh
 
 The selected Xray security release is

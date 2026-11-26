@@ -81,8 +81,8 @@ func (r *Registry) setUsers(users []protocol.User, replacements map[int]int) []*
 		if old == nil {
 			old = &userState{ips: map[string]int{}}
 		}
-		if old.speed == nil || !sameSpeed(old.policy, p) {
-			old.speed = newSpeedPolicy(p)
+		if old.speed.Load() == nil || !sameSpeed(old.policy, p) {
+			old.speed.Store(newSpeedPolicy(p))
 		}
 		next[p.ID] = old
 	}

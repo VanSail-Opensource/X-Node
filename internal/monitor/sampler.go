@@ -3,12 +3,12 @@ package monitor
 
 import (
 	"context"
+	"encoding/json"
 	"net"
 	"runtime"
 	"sync/atomic"
 	"time"
 
-	"github.com/VanSail-Opensource/X-Node/internal/protocol"
 	"github.com/shirou/gopsutil/v4/cpu"
 	"github.com/shirou/gopsutil/v4/disk"
 	"github.com/shirou/gopsutil/v4/host"
@@ -71,6 +71,7 @@ type Sampler struct {
 	slow     Snapshot
 	hostInfo *host.InfoStat
 	cpuInfo  []cpu.InfoStat
+	goStats  runtimeSample
 }
 
 func New() *Sampler {
@@ -80,10 +81,19 @@ func New() *Sampler {
 }
 func (s *Sampler) Snapshot() Snapshot {
 	if p := s.latest.Load(); p != nil {
-		return protocol.Clone(*p)
+		return p.clone()
 	}
 	return Snapshot{}
 }
+
+// SnapshotJSON encodes the immutable published sample directly for telemetry.
+func (s *Sampler) SnapshotJSON() (json.RawMessage, error) {
+	if p := s.latest.Load(); p != nil {
+		return json.Marshal(p)
+	}
+	return json.Marshal(Snapshot{})
+}
+
 func (s *Sampler) collect(ctx context.Context, now time.Time) Snapshot {
 	out := Snapshot{Time: now.UTC(), Disks: []Disk{}, Interfaces: []Interface{}, Errors: map[string]string{}}
 	if !s.last.IsZero() {
@@ -157,11 +167,7 @@ func (s *Sampler) collect(ctx context.Context, now time.Time) Snapshot {
 	s.previous = next
 	s.last = now
 	s.collectSlow(ctx, now, &out)
-	var m runtime.MemStats
-	runtime.ReadMemStats(&m)
+	s.goStats.collect(&out)
 	out.Goroutines = runtime.NumGoroutine()
-	out.GoHeap = m.HeapAlloc
-	out.GCCount = m.NumGC
-	out.GCPauseNanos = m.PauseTotalNs
 	return out
 }

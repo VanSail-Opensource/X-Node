@@ -44,10 +44,9 @@ func (l *Lease) Account(upload bool, n uint64) {
 	}
 }
 func (l *Lease) Wait(ctx context.Context, n int) error {
-	l.registry.mu.RLock()
-	policy := l.user.speed
-	l.registry.mu.RUnlock()
-	return policy.wait(ctx, n)
+	// Every payload buffer visits this path. A rate policy is replaced
+	// atomically, and its own state is synchronized independently.
+	return l.user.speed.Load().wait(ctx, n)
 }
 func (r *Registry) CloseUser(id int, tag string) {
 	r.mu.RLock()

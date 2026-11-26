@@ -4,11 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/VanSail-Opensource/X-Node/internal/nlog"
-	"github.com/VanSail-Opensource/X-Node/internal/protocol"
 	"net"
 	"os"
 	"time"
+
+	"github.com/VanSail-Opensource/X-Node/internal/nlog"
+	"github.com/VanSail-Opensource/X-Node/internal/protocol"
 )
 
 func (a *Agent) sendStatus() {
@@ -23,7 +24,11 @@ func (a *Agent) publishStatus() {
 		return
 	}
 	synchronized := d.HasConfig && d.ConfigRevision == d.Revision && !a.applying.Load()
-	report := protocol.TelemetryReport{AgentID: d.AgentID, BootID: a.BootID, Time: time.Now().UTC(), Connected: a.Client.Connected(), Liveness: true, Ready: a.Runtime.Ready(), Synchronized: synchronized, ConfigRevision: d.ConfigRevision, Users: summary, Machine: telemetryJSON(a.Sampler.Snapshot()), Certificates: telemetryJSON(a.Certificates.Status()), TransportDropped: a.Client.Dropped()}
+	machine, err := a.Sampler.SnapshotJSON()
+	if err != nil {
+		nlog.Core().Warn("machine telemetry could not be encoded")
+	}
+	report := protocol.TelemetryReport{AgentID: d.AgentID, BootID: a.BootID, Time: time.Now().UTC(), Connected: a.Client.Connected(), Liveness: true, Ready: a.Runtime.Ready(), Synchronized: synchronized, ConfigRevision: d.ConfigRevision, Users: summary, Machine: machine, Certificates: telemetryJSON(a.Certificates.Status()), TransportDropped: a.Client.Dropped()}
 	var message protocol.Message
 	if a.Client.CompactTelemetry() {
 		message = protocol.New("telemetry.compact", "", d.Revision, protocol.CompactTelemetry(report))

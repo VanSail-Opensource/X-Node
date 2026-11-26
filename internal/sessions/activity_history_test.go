@@ -62,7 +62,7 @@ func TestActivityHistoryBoundsAndLiveObservationRefresh(t *testing.T) {
 	h.observe(key, at)
 	h.observe(key, at.Add(time.Second))
 	h.observe(key, at)
-	value := h.entries[key].Value.(activityRecord)
+	value := h.entries[key].Value.(*activityRecord)
 	if value.count != 2 || !value.at.Equal(at.Add(time.Second)) {
 		t.Fatal("duplicate or reordered observation advanced the counter", value)
 	}

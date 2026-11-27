@@ -98,6 +98,23 @@ func (f *Flow) TryAcquire(direction Direction, want, minAtomic int) (*Permit, Wa
 	allocations, free := o.creditAllocations(b, uint64(n), c.session)
 	reduced := uint64(n) - free
 	if reduced > tokens {
+		// A reduced-rate stream can otherwise send a succession of very
+		// small writes as new tokens arrive. Wait briefly for a usable chunk
+		// before allocating a permit. Do not hold tokens during this wait and
+		// leave reserved-credit and whole-datagram admissions unchanged.
+		if minAtomic == 1 && free == 0 && grant != nil {
+			const maxCoalesce = time.Millisecond
+			target := min(uint64(n), b.capacity(), min(uint64(1024), grant.grant.RateBytesPerSecond/1000))
+			if target > 1 && tokens < target {
+				delay := b.delay(target - tokens)
+				if delay > 0 && delay <= maxCoalesce && grant.deadline.Sub(now) > delay {
+					wait.After = delay
+					c.notify()
+					wait.Changed = o.waitChange()
+					return nil, wait, nil
+				}
+			}
+		}
 		if minAtomic > 1 {
 			if grant != nil {
 				wait.After = b.delay(reduced - tokens)

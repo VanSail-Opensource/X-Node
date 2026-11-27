@@ -1,19 +1,17 @@
 package hourly
 
-import "time"
-
 type Permit struct {
 	flow              *Flow
 	bucket            *bucket
 	grant             *grantState
 	session           string
-	direction         Direction
 	bytes             int
 	reduced           uint64
-	credits           []creditAllocation
-	started, finished bool
+	credits           creditPlan
 	timer             Stopper
 	drains            []*Drain
+	direction         Direction
+	started, finished bool
 }
 
 func (p *Permit) Bytes() int { return p.bytes }
@@ -30,13 +28,13 @@ func (p *Permit) Begin() error {
 	if p.started || p.finished {
 		return ErrRevoked
 	}
-	valid := !p.flow.closed && !p.flow.fenced && c.authorized(p.flow.binding, now) && c.session != "" && p.session == c.session && p.bucket.scope.DayUTC == now.UTC().Format(time.DateOnly)
+	valid := !p.flow.closed && !p.flow.fenced && c.authorized(p.flow.binding, now) && c.session != "" && p.session == c.session && p.bucket.contains(now)
 	if p.grant != nil {
 		valid = valid && p.grant == p.bucket.grant && p.grant.grant.SessionID == c.session && p.grant.deadline.After(now)
 	} else {
 		valid = valid && p.reduced == 0
 	}
-	for _, a := range p.credits {
+	for _, a := range p.credits.entries() {
 		valid = valid && !a.credit.frozen && a.credit.installed.marker.active()
 	}
 	if !valid {
@@ -54,11 +52,11 @@ func (p *Permit) Begin() error {
 	p.bucket.refill(now)
 	p.started = true
 	p.bucket.held -= p.reduced
-	for _, a := range p.credits {
+	for _, a := range p.credits.entries() {
 		a.credit.held -= a.bytes
 		a.credit.admitted[p.direction] += a.bytes
 	}
-	deadline := time.Date(now.UTC().Year(), now.UTC().Month(), now.UTC().Day()+1, 0, 0, 0, 0, time.UTC)
+	deadline := p.bucket.dayEnd
 	if p.grant != nil && p.grant.deadline.Before(deadline) {
 		deadline = p.grant.deadline
 	}
@@ -94,7 +92,7 @@ func (p *Permit) cancelLocked() {
 		p.bucket.refill(p.flow.controller.options.Now())
 		p.bucket.held -= p.reduced
 		p.bucket.tokens = min(p.bucket.tokens+p.reduced, p.bucket.capacity())
-		for _, a := range p.credits {
+		for _, a := range p.credits.entries() {
 			a.credit.held -= a.bytes
 		}
 	}

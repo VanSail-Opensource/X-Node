@@ -51,6 +51,7 @@ type ownerState struct {
 
 type bucket struct {
 	scope                   Scope
+	dayStart, dayEnd        time.Time
 	incarnation             uint64
 	grant                   *grantState
 	pending                 *pendingDemand
@@ -130,12 +131,25 @@ func (c *Controller) newOwner(key OwnerKey) *ownerState {
 
 // Only the controller's clock supplies this day; a received grant cannot move it.
 func (o *ownerState) currentBucket(now time.Time) *bucket {
-	day := now.UTC().Format(time.DateOnly)
-	if o.bucket == nil || o.bucket.scope.DayUTC != day {
-		o.incarnation++
-		o.bucket = &bucket{scope: Scope{Owner: o.key, DayUTC: day}, incarnation: o.incarnation, last: now}
+	if o.bucket == nil || !o.bucket.contains(now) {
+		o.resetBucket(now)
 	}
 	return o.bucket
+}
+
+func (o *ownerState) resetBucket(now time.Time) {
+	year, month, day := now.UTC().Date()
+	start := time.Date(year, month, day, 0, 0, 0, 0, time.UTC)
+	o.incarnation++
+	o.bucket = &bucket{
+		scope:    Scope{Owner: o.key, DayUTC: start.Format(time.DateOnly)},
+		dayStart: start, dayEnd: start.Add(24 * time.Hour),
+		incarnation: o.incarnation, last: now,
+	}
+}
+
+func (b *bucket) contains(now time.Time) bool {
+	return !now.Before(b.dayStart) && now.Before(b.dayEnd)
 }
 
 func reserveCount(count *atomic.Int64, limit int) bool {

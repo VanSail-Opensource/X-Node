@@ -1,7 +1,8 @@
 package hourly
 
 import (
-	"sort"
+	"cmp"
+	"slices"
 	"time"
 
 	"github.com/VanSail-Opensource/X-Node/internal/protocol"
@@ -18,6 +19,34 @@ type creditState struct {
 type creditAllocation struct {
 	credit *creditState
 	bytes  uint64
+}
+
+// Most permits spend either no credit or just one reservation.
+type creditPlan struct {
+	first    [1]creditAllocation
+	multiple []creditAllocation
+}
+
+func (p *creditPlan) entries() []creditAllocation {
+	if p.multiple != nil {
+		return p.multiple
+	}
+	if p.first[0].credit == nil {
+		return nil
+	}
+	return p.first[:]
+}
+
+func (p *creditPlan) append(a creditAllocation) {
+	if p.first[0].credit == nil {
+		p.first[0] = a
+		return
+	}
+	if p.multiple == nil {
+		p.multiple = []creditAllocation{p.first[0], a}
+		return
+	}
+	p.multiple = append(p.multiple, a)
 }
 
 func (s *creditState) available() uint64 {
@@ -75,35 +104,43 @@ func (c *Controller) InstallCredit(installed InstalledCredit) error {
 	return nil
 }
 
-func (o *ownerState) creditAllocations(b *bucket, want uint64, session string) ([]creditAllocation, uint64) {
-	keys := make([]string, 0, len(o.credits))
-	for id, credit := range o.credits {
+func (o *ownerState) creditAllocations(b *bucket, want uint64, session string) (creditPlan, uint64) {
+	var plan creditPlan
+	if want == 0 || len(o.credits) == 0 {
+		return plan, 0
+	}
+	var local [4]*creditState
+	eligible := local[:0]
+	for _, credit := range o.credits {
 		i := credit.installed.install
 		if !credit.frozen && i.SessionID == session && i.DayUTC == b.scope.DayUTC && credit.installed.marker.active() && credit.available() > 0 {
-			keys = append(keys, id)
+			eligible = append(eligible, credit)
 		}
 	}
-	sort.Slice(keys, func(i, j int) bool {
-		a, b := o.credits[keys[i]].installed.install, o.credits[keys[j]].installed.install
-		if a.Kind != b.Kind {
-			return a.Kind == "free"
-		}
-		return a.IssueSequence < b.IssueSequence
-	})
-	var allocations []creditAllocation
+	if len(eligible) > 1 {
+		slices.SortFunc(eligible, compareCredits)
+	}
 	var allocated uint64
-	for _, id := range keys {
-		credit := o.credits[id]
+	for _, credit := range eligible {
 		n := min(want-allocated, credit.available())
-		if n > 0 {
-			allocations = append(allocations, creditAllocation{credit, n})
-			allocated += n
-		}
+		plan.append(creditAllocation{credit, n})
+		allocated += n
 		if allocated == want {
 			break
 		}
 	}
-	return allocations, allocated
+	return plan, allocated
+}
+
+func compareCredits(a, b *creditState) int {
+	left, right := &a.installed.install, &b.installed.install
+	if left.Kind == "free" && right.Kind != "free" {
+		return -1
+	}
+	if left.Kind != "free" && right.Kind == "free" {
+		return 1
+	}
+	return cmp.Compare(left.IssueSequence, right.IssueSequence)
 }
 
 // A low-water edge is a hint to redistribute existing credits, not authority to

@@ -49,7 +49,7 @@ func (c *Controller) FreezeCredit(id string) (*Drain, error) {
 		if p.started {
 			continue
 		}
-		for _, a := range p.credits {
+		for _, a := range p.credits.entries() {
 			if a.credit == credit {
 				p.cancelLocked()
 				break

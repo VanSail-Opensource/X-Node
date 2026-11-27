@@ -3,12 +3,15 @@ package xray
 import (
 	"context"
 	"errors"
+	"net"
 	"net/netip"
 	"strings"
+	"sync"
 	"sync/atomic"
 
 	"github.com/xtls/xray-core/common"
 	xnet "github.com/xtls/xray-core/common/net"
+	"github.com/xtls/xray-core/common/protocol"
 	"github.com/xtls/xray-core/common/session"
 	"github.com/xtls/xray-core/features/routing"
 	"github.com/xtls/xray-core/proxy"
@@ -25,42 +28,156 @@ type InboundObservation struct {
 func init() {
 	common.Must(common.RegisterConfig((*InboundConfig)(nil), func(ctx context.Context, raw any) (any, error) {
 		config := raw.(*InboundConfig)
-		message, err := config.native().GetInstance()
+		inbound, err := newNativeInbound(ctx, config)
 		if err != nil {
 			return nil, err
-		}
-		object, err := common.CreateObject(ctx, message)
-		if err != nil {
-			return nil, err
-		}
-		inbound, ok := object.(proxy.Inbound)
-		if !ok {
-			return nil, errors.New("native object is not an inbound")
-		}
-		users, ok := object.(proxy.UserManager)
-		if !ok {
-			return nil, errors.New("managed inbound lacks public user management")
 		}
 		bridge, _ := ctx.Value(bridgeKey{}).(*integration)
-		return &observedInbound{Inbound: inbound, UserManager: users, bridge: bridge, tag: config.Tag, reality: config.Reality}, nil
+		var gate *inboundGate
+		if bridge != nil {
+			if pending := bridge.inboundGate.Load(); pending != nil && pending.tag == config.Tag {
+				gate = pending
+			}
+		}
+		if gate != nil && gate.auxiliary {
+			return &gatedInbound{Inbound: inbound, gate: gate}, nil
+		}
+		users, ok := inbound.(proxy.UserManager)
+		if !ok {
+			_ = common.Close(inbound)
+			return nil, errors.New("managed inbound lacks public user management")
+		}
+		return &observedInbound{
+			active:   &inboundGeneration{Inbound: inbound, UserManager: users},
+			networks: inbound.Network(), construction: ctx,
+			bridge: bridge, gate: gate, tag: config.Tag, reality: config.Reality,
+		}, nil
 	}))
 }
 
-type observedInbound struct {
-	proxy.Inbound
-	proxy.UserManager
-	bridge  *integration
-	tag     string
-	reality bool
+func newNativeInbound(ctx context.Context, config *InboundConfig) (proxy.Inbound, error) {
+	message, err := config.native().GetInstance()
+	if err != nil {
+		return nil, err
+	}
+	object, err := common.CreateObject(ctx, message)
+	if err != nil {
+		return nil, err
+	}
+	inbound, ok := object.(proxy.Inbound)
+	if !ok {
+		_ = common.Close(object)
+		return nil, errors.New("native object is not an inbound")
+	}
+	return inbound, nil
 }
 
-func (h *observedInbound) Close() error { return common.Close(h.Inbound) }
+type inboundGeneration struct {
+	proxy.Inbound
+	proxy.UserManager
+	activeCalls int // guarded by the parent
+}
+
+type observedInbound struct {
+	mu           sync.Mutex
+	active       *inboundGeneration
+	networks     []xnet.Network
+	construction context.Context
+	bridge       *integration
+	gate         *inboundGate
+	tag          string
+	reality      bool
+}
+
+func (h *observedInbound) acquire() *inboundGeneration {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	generation := h.active
+	if generation != nil {
+		generation.activeCalls++
+	}
+	return generation
+}
+
+func (h *observedInbound) release(generation *inboundGeneration) {
+	h.mu.Lock()
+	generation.activeCalls--
+	retired := generation != h.active && generation.activeCalls == 0
+	h.mu.Unlock()
+	if retired {
+		_ = common.Close(generation.Inbound)
+	}
+}
+
+func (h *observedInbound) replace(next *inboundGeneration) error {
+	h.mu.Lock()
+	old := h.active
+	h.active = next
+	retired := old != nil && old.activeCalls == 0
+	h.mu.Unlock()
+	if retired {
+		return common.Close(old.Inbound)
+	}
+	return nil
+}
+
+func (h *observedInbound) Close() error            { return h.replace(nil) }
+func (h *observedInbound) Network() []xnet.Network { return h.networks }
+func (h *observedInbound) AddUser(ctx context.Context, user *protocol.MemoryUser) error {
+	g := h.acquire()
+	if g == nil {
+		return net.ErrClosed
+	}
+	defer h.release(g)
+	return g.AddUser(ctx, user)
+}
+func (h *observedInbound) RemoveUser(ctx context.Context, email string) error {
+	g := h.acquire()
+	if g == nil {
+		return net.ErrClosed
+	}
+	defer h.release(g)
+	return g.RemoveUser(ctx, email)
+}
+func (h *observedInbound) GetUser(ctx context.Context, email string) *protocol.MemoryUser {
+	g := h.acquire()
+	if g == nil {
+		return nil
+	}
+	defer h.release(g)
+	return g.GetUser(ctx, email)
+}
+func (h *observedInbound) GetUsers(ctx context.Context) []*protocol.MemoryUser {
+	g := h.acquire()
+	if g == nil {
+		return nil
+	}
+	defer h.release(g)
+	return g.GetUsers(ctx)
+}
+func (h *observedInbound) GetUsersCount(ctx context.Context) int64 {
+	g := h.acquire()
+	if g == nil {
+		return 0
+	}
+	defer h.release(g)
+	return g.GetUsersCount(ctx)
+}
+
 func (h *observedInbound) Process(ctx context.Context, network xnet.Network, conn stat.Connection, dispatcher routing.Dispatcher) error {
+	if h.gate != nil && !h.gate.await(ctx) {
+		return net.ErrClosed
+	}
+	generation := h.acquire()
+	if generation == nil {
+		return net.ErrClosed
+	}
+	defer h.release(generation)
 	if h.bridge == nil || h.bridge.Observe == nil {
-		return h.Inbound.Process(ctx, network, conn, dispatcher)
+		return generation.Process(ctx, network, conn, dispatcher)
 	}
 	tracker := &authDispatcher{Dispatcher: dispatcher}
-	err := h.Inbound.Process(ctx, network, conn, tracker)
+	err := generation.Process(ctx, network, conn, tracker)
 	if tracker.authorized.Load() || ctx.Err() != nil {
 		return err
 	}

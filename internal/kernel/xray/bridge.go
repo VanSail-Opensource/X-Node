@@ -2,16 +2,15 @@ package xray
 
 import (
 	"context"
+	"runtime"
 	"strconv"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"time"
 
-	"github.com/xtls/xray-core/app/proxyman"
-	nativeoutbound "github.com/xtls/xray-core/app/proxyman/outbound"
 	"github.com/xtls/xray-core/common"
 	"github.com/xtls/xray-core/common/buf"
+	"github.com/xtls/xray-core/common/serial"
 	"github.com/xtls/xray-core/common/session"
 	"github.com/xtls/xray-core/features/outbound"
 	"github.com/xtls/xray-core/transport"
@@ -22,59 +21,34 @@ import (
 type bridgeKey struct{}
 type leaseKey struct{}
 type integration struct {
-	Observe   func(InboundObservation)
-	Registry  *sessions.Registry
-	BanNanos  atomic.Int64
-	Auxiliary atomic.Pointer[map[string]bool]
+	Observe     func(InboundObservation)
+	Registry    *sessions.Registry
+	BanNanos    atomic.Int64
+	Auxiliary   atomic.Pointer[map[string]bool]
+	inboundGate atomic.Pointer[inboundGate]
 }
-type managedManager struct {
-	outbound.Manager
-	bridge      *integration
-	selectionMu sync.RWMutex
-}
-
-func init() {
-	common.Must(common.RegisterConfig((*ManagerConfig)(nil), func(ctx context.Context, _ any) (any, error) {
-		original, err := nativeoutbound.New(ctx, &proxyman.OutboundConfig{})
-		if err != nil {
-			return nil, err
-		}
-		return &managedManager{Manager: original, bridge: ctx.Value(bridgeKey{}).(*integration)}, nil
-	}))
-}
-func (m *managedManager) AddHandler(ctx context.Context, h outbound.Handler) error {
-	m.selectionMu.Lock()
-	defer m.selectionMu.Unlock()
-	if _, ok := h.(*managedOutbound); ok {
-		return m.Manager.AddHandler(ctx, h)
-	}
-	return m.Manager.AddHandler(ctx, &managedOutbound{Handler: h, bridge: m.bridge})
-}
-
-// Select preserves the public balancer interface. Serialize the upstream tag
-// cache with additions/removals, including lookups made by live balancers.
-func (m *managedManager) Select(selectors []string) []string {
-	m.selectionMu.RLock()
-	defer m.selectionMu.RUnlock()
-	selector, ok := m.Manager.(outbound.HandlerSelector)
-	if !ok {
-		return nil
-	}
-	return selector.Select(selectors)
-}
-
-func (m *managedManager) RemoveHandler(ctx context.Context, tag string) error {
-	m.selectionMu.Lock()
-	defer m.selectionMu.Unlock()
-	return m.Manager.RemoveHandler(ctx, tag)
-}
-
 type managedOutbound struct {
 	outbound.Handler
-	bridge *integration
+	bridge   *integration
+	lifetime *outboundLifetime
+}
+
+func (h *managedOutbound) SenderSettings() *serial.TypedMessage {
+	settings := h.Handler.SenderSettings()
+	runtime.KeepAlive(h)
+	return settings
+}
+
+func (h *managedOutbound) ProxySettings() *serial.TypedMessage {
+	settings := h.Handler.ProxySettings()
+	runtime.KeepAlive(h)
+	return settings
 }
 
 func (h *managedOutbound) Dispatch(ctx context.Context, link *transport.Link) {
+	// Native routing looks up the handler before dispatching. The wrapper
+	// remains a lifetime pin from lookup until the concrete handler returns.
+	defer func() { runtime.KeepAlive(h) }()
 	si := session.InboundFromContext(ctx)
 	// Native forwarding attaches a level-only MemoryUser with an empty email.
 	if si == nil || si.Tag == coreDNSTag || (si.User == nil || si.User.Email == "") && h.bridge.auxiliaryAllowed(si.Tag) {

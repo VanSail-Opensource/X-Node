@@ -8,3 +8,10 @@ message InboundConfig {
   string tag = 3;
   bool reality = 4;
 }
+// Reloadable application features preserve their public core interfaces.
+message DNSConfig {
+  bytes native_value = 1;
+  bool use_local = 2;
+}
+message PolicyConfig { bytes native_value = 1; }
+message RouterConfig { bytes native_value = 1; }

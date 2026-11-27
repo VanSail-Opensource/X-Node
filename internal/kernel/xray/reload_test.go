@@ -7,7 +7,7 @@ import (
 	"github.com/VanSail-Opensource/X-Node/internal/sessions"
 )
 
-func TestForcedReloadValidatesBeforeStoppingWorkingRuntime(t *testing.T) {
+func TestReloadNeverReconstructsWorkingRuntime(t *testing.T) {
 	config, _ := testConfig(t)
 	runtime := New(sessions.New())
 	defer runtime.Stop()
@@ -17,10 +17,10 @@ func TestForcedReloadValidatesBeforeStoppingWorkingRuntime(t *testing.T) {
 	instance := runtime.instance
 	invalid := config
 	invalid.Xray = []byte(`{"inbounds":false}`)
-	if err := runtime.Apply(context.Background(), invalid, true); err == nil || !runtime.Ready() || runtime.instance != instance {
+	if err := runtime.Apply(context.Background(), invalid); err == nil || !runtime.Ready() || runtime.instance != instance {
 		t.Fatal("invalid reload stopped the working runtime", err)
 	}
-	if err := runtime.Apply(context.Background(), config, true); err != nil || !runtime.Ready() || runtime.instance == instance {
-		t.Fatal("forced reload did not rebuild", err)
+	if err := runtime.Apply(context.Background(), config); err != nil || !runtime.Ready() || runtime.instance != instance {
+		t.Fatal("identical reload reconstructed the working runtime", err)
 	}
 }

@@ -1,6 +1,6 @@
 # Incremental Xray configuration
 
-The agent uses the merged Xray v26.10.31 dependency. Compilation means native
+The agent uses the pinned Xray dependency in `go.mod`. Compilation means native
 configuration/matcher construction; no configuration action compiles a binary.
 Signed binaries are built only in release delivery.
 
@@ -23,11 +23,17 @@ memory-only, and synthetic validation material never becomes an activation
 candidate. Core construction mutates the global system dialer, so the serving
 instance is never accompanied by a second complete candidate instance.
 
-Normal `runtime.reload` rechecks external dependencies and uses incremental
-application. Only changed immutable core components require reconstruction.
-`runtime.reload` with `{"force":true}` explicitly requests recovery reconstruction. Configuration reconciliation and unchanged geodata refresh do not
-implicitly request a forced reconstruction. Production fleet updates are separate
-from code/release delivery.
+`runtime.reload` rechecks external dependencies and uses incremental
+application. The optional legacy `{"force":true}` form also rechecks material
+without restarting the serving runtime. An unsupported live transition fails
+without restarting the runtime or replacing its working configuration.
+This protects connection availability during reloads. It does not override
+deliberate access revocation, firewall rules, or other policy changes.
+Validation of the candidate configuration alone does not prove that a
+transition from the current runtime can happen live.
+Initial startup and recovery with no serving runtime are separate from
+reloading a running instance. Signed binary upgrades and rollbacks still
+restart X-Node. Production fleet updates are separate from code delivery.
 
 ## Action and configuration consumers
 
@@ -38,17 +44,19 @@ from code/release delivery.
 | User IDs/credentials/transit accounts/inbound bindings | Changed inbound account builder and public user manager |
 | Providers, DDNS, updates, telemetry | Utility/sampler; referenced certificate providers also invalidate preparation |
 | Firewall rules, source GeoIP, bans, forwarding | Existing firewall transaction; identical pending ID or confirmed policy reused |
-| Native inbounds and certificate bindings/material | Changed listeners; content hashes form admission epochs |
-| Native outbounds and MemberOutbounds guards | Changed outbounds validated; supported changes quiesce only affected flows |
+| Native inbounds and certificate bindings/material | Eligible VLESS and Trojan proxy changes reuse the listener. Compatible additions stage on unused endpoints. Changes that would require replacing a running receiver are refused |
+| Native outbounds and MemberOutbounds guards | Eligible new/default-handler changes apply live with existing flow handlers retained. Unsafe replacement or removal is refused |
 | Native routing and BlockedDomains | Changed native routing; safe suffix append retains existing matchers |
 | Torrent enablement | Generated routing/outbound and affected sniffing settings |
 | Torrent ban duration | Dispatch bridge atomic value only |
 | Geodata interval/cron | Existing schedule; no native compilation |
 | Geodata URL/hash/generation, explicit refresh | Prepare verified generation; only actual dependent sections rebuild |
-| DNS/other static core fields, routing strategy/script | Native component build and runtime reconstruction |
+| Native DNS and session policy levels | Native preparation and in-process replacement |
+| Routing strategy/script | Prepared with native routing rules and balancers |
+| Other static core fields, including system-level counters | Transitions without a live application path are rejected while serving |
 | Unchanged resend/reconnect | Reuse active sections; absent/unhealthy runtime reconstructs |
 | config.validate, client previews/probes | Separate validation/client candidate; no serving listener changes |
-| runtime.reload | Recheck material, reuse native sections and unchanged listeners; `force` requests reconstruction |
+| runtime.reload | Recheck material, reuse native sections and unchanged listeners; the legacy `force` argument does not restart a serving runtime |
 | Binary install/rollback | Explicit process restart |
 
 The classifier begins with all configuration fields, removing only known
@@ -57,15 +65,19 @@ Hosted exhaustiveness tests require every protocol command and configuration
 field to receive an explicit consumer. Protocol validation and authorization are
 always performed, including on cache hits.
 
-Rule replacement recompiles the native table's matchers because the public core
-API exposes atomic table replacement, not reusable private matcher objects.
-Only a strict suffix append with unchanged balancers/strategy/script reuses the
-previous matchers. Outbound changes involving affected mux/reverse/dialer chains,
-default changes or configured observers use reconstruction. Replacement/removal
-on nodes with untracked utility flows also reconstructs; additions remain live.
+Rule replacement reuses unchanged compiled rule definitions when available
+and publishes native rules atomically. Outbound changes are subject to live
+application checks for affected mux/reverse/dialer chains, observers and
+untracked utility flows.
 The dependency graph includes XHTTP's independent download transport after
 native alias, `extra` and socket-penetration selection. Case-insensitive native
-field names cannot bypass cycle checks or chain/mux reconstruction.
+field names cannot bypass cycle checks or live application restrictions.
+The agent also refuses receiver and certificate changes on an active listener
+when Xray has no safe way to replace that listener in place. In that case,
+the agent reports a failed activation and continues to serve the old material.
+It also refuses gRPC and Hysteria listener additions while serving. Xray's
+gRPC listener does not return asynchronous bind failures and its Hysteria
+transport requires a native validator that cannot share the staging gate.
 
 Native protobufs are immutable snapshots; core construction receives a clone.
 Each runtime/validator keeps only active/latest candidates. Cached client
@@ -75,11 +87,12 @@ not file modification timestamps. Synthetic validation material is never reused
 for real activation.
 
 Hosted Quality publishes `reload-benchmark` with cold/cached preparation at 1 and
-1000 users and live/forced rule application. Logs report application mode, actual
+1000 users and rule application. Logs report application mode, actual
 native/section/matcher builders, reconstruction count and listener-gap duration.
-The gap is measured around stop/start only; preparation happens while serving.
+Preparation happens while serving.
 
-The `incremental_reload_v1` capability negotiates these reload semantics. Whitelist
-and firewall-only changes update admission/guards without native preparation.
-Hosted `BenchmarkRuntimeReload` compares normal reload against the prior forced
-behavior, with timing, allocations, reconstruction count and listener-gap data.
+The `incremental_reload_v1` capability identifies incremental reload support.
+Whitelist and firewall-only changes update admission/guards without native
+preparation.
+Hosted `BenchmarkRuntimeReload` reports timing, allocations, runtime builds and
+listener-gap data.

@@ -2,10 +2,10 @@ package xray
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"sync/atomic"
-	"time"
 
 	applog "github.com/xtls/xray-core/app/log"
 	xlog "github.com/xtls/xray-core/common/log"
@@ -17,6 +17,10 @@ import (
 	wire "github.com/VanSail-Opensource/X-Node/internal/protocol"
 	"github.com/VanSail-Opensource/X-Node/internal/sessions"
 )
+
+// ErrReloadUnsupported means the requested transition cannot be applied
+// without interrupting the serving Xray runtime.
+var ErrReloadUnsupported = errors.New("configuration cannot be hot-reloaded")
 
 type Runtime struct {
 	observe  func(InboundObservation)
@@ -46,12 +50,12 @@ func (r *Runtime) Stop() {
 	}
 	r.current = nil
 }
-func (r *Runtime) Apply(ctx context.Context, c wire.Config, reload ...bool) error {
+func (r *Runtime) Apply(ctx context.Context, c wire.Config) error {
 	next, err := r.Prepare(c)
 	if err != nil {
 		return err
 	}
-	return r.ApplyPrepared(ctx, next, len(reload) > 0 && reload[0])
+	return r.ApplyPrepared(ctx, next)
 }
 
 // Prepare builds against one immutable active snapshot, without opening sockets.
@@ -64,102 +68,93 @@ func (r *Runtime) Prepare(c wire.Config) (*Prepared, error) {
 
 // ApplyPrepared consumes a validated candidate without parsing/building twice.
 // ctx is the runtime lifetime, not the supersedable preparation context.
-func (r *Runtime) ApplyPrepared(ctx context.Context, next *Prepared, force bool) error {
+func (r *Runtime) ApplyPrepared(ctx context.Context, next *Prepared) (result error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.recordBuilds(next)
 	r.stats.ListenerGapMillis = 0
 	r.stats.ListenerGapMicros = 0
 	c := next.Source
-	live := r.instance != nil && !force && hotEligible(r.current, next)
-	if r.instance != nil && !force && routingEdit(r.current, next) {
-		if !live {
-			return fmt.Errorf("routing change requires an explicit forced reload")
-		}
-		if sameOutbounds(r.current, next) {
-			// Build a candidate rule table before atomically publishing it.
-			// On rejection the old table is still active. Reapplying it would
-			// unnecessarily rebuild matchers and reset unrelated rule state.
-			if err := r.replaceRouting(next); err != nil {
-				return err
-			}
-			r.bridge.BanNanos.Store(int64(c.BanDuration()))
-			r.current = next
-			r.stats.LiveApplies++
-			r.stats.LastMode = "live"
-			return nil
-		}
+	if r.instance != nil && !sameNonReloadableStatic(r.current, next) {
+		return fmt.Errorf("%w: changed native startup-only settings", ErrReloadUnsupported)
 	}
-	if live {
-		if r.bridge != nil {
-			r.bridge.BanNanos.Store(int64(c.BanDuration()))
-			r.bridge.setAuxiliary(next.Auxiliary)
+	nativeEnvironmentMu.Lock()
+	defer nativeEnvironmentMu.Unlock()
+	restore, err := setNativeEnvironment(preparedEnvironment(next))
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if result != nil {
+			restore()
 		}
-		if err := r.updateLive(ctx, next); err == nil {
-			r.current = next
-			r.running.Store(true)
-			r.stats.LiveApplies++
-			r.stats.LastMode = "live"
-			return nil
-		} else {
-			r.bridge.setAuxiliary(r.current.Auxiliary)
-			// Reconcile listeners from the last working structure with current
-			// authorization. A rejected hot update must not restart other users.
-			old := r.current
-			safe := wire.Clone(old.Source)
-			safe.Users = compatibleUsers(c.Users, old.Inbounds)
-			if rollback, e := PrepareCached(safe, old); e == nil {
-				r.current = next
-				r.registry.SetInboundEpochs(rollback.Epochs)
-				if e = r.updateInbounds(ctx, rollback); e == nil {
-					r.current = rollback
-					return err
-				}
-				r.current = old
-			}
+	}()
+	if r.instance != nil {
+		if err := r.applyLive(ctx, next); err != nil {
 			return err
 		}
+		r.bridge.BanNanos.Store(int64(c.BanDuration()))
+		r.current = next
+		r.stats.LiveApplies++
+		r.stats.LastMode = "live"
+		return nil
 	}
-	old := r.current
-	// Copying immutable protobufs is preparation; allocate before listeners stop.
-	compiled := proto.Clone(next.Core).(*core.Config)
-	started := time.Now()
-	r.running.Store(false)
-	r.registry.CloseAll()
-	if r.instance != nil {
-		_ = r.instance.Close()
-		r.instance = nil
-	}
-	if err := r.start(ctx, next, c, compiled); err != nil {
-		if old != nil {
-			safe := wire.Clone(old.Source)
-			safe.Users = compatibleUsers(c.Users, old.Inbounds)
-			if rollback, e := PrepareCached(safe, old); e == nil {
-				_ = r.start(ctx, rollback, safe)
-			}
-		}
+	if err := r.start(ctx, next, c); err != nil {
 		return fmt.Errorf("Xray listener activation failed: %w", err)
 	}
 	r.stats.Rebuilds++
 	r.stats.MatcherBuilds += uint64(len(next.Router.Rule))
-	r.stats.LastMode = "rebuild"
-	r.stats.ListenerGapMillis = time.Since(started).Milliseconds()
-	r.stats.ListenerGapMicros = time.Since(started).Microseconds()
+	r.stats.LastMode = "start"
 	return nil
 }
-func (r *Runtime) start(ctx context.Context, p *Prepared, c wire.Config, prepared ...*core.Config) error {
-	r.registry.SetInboundEpochs(p.Epochs)
+
+func (r *Runtime) applyLive(ctx context.Context, next *Prepared) error {
+	if blocker := outboundReloadBlocker(r.current, next); blocker != "" {
+		return fmt.Errorf("%w: %s", ErrReloadUnsupported, blocker)
+	}
+	features, err := prepareFeatureReload(r.instance, r.current, next)
+	if err != nil {
+		return err
+	}
+	defer features.Discard()
+	outbounds, err := r.prepareOutboundUpdate(next)
+	if err != nil {
+		return err
+	}
+	defer outbounds.abort()
+	routes, err := r.prepareRoutingUpdate(next)
+	if err != nil {
+		return err
+	}
+	defer routes.abort()
+	inbounds, err := r.prepareInboundUpdate(ctx, next)
+	if err != nil {
+		return err
+	}
+	defer inbounds.abort()
+
+	if err = outbounds.publish(); err != nil {
+		return err
+	}
+	if err = routes.commit(); err != nil {
+		return err
+	}
+	features.Commit()
+	inbounds.commit()
+	outbounds.commit()
+	r.stats.MatcherBuilds += uint64(routes.matchers)
+	return nil
+}
+
+func (r *Runtime) start(ctx context.Context, p *Prepared, c wire.Config) error {
 	bridge := &integration{Registry: r.registry, Observe: r.observe}
 	bridge.setAuxiliary(p.Auxiliary)
 	bridge.BanNanos.Store(int64(c.BanDuration()))
 	child := context.WithValue(ctx, bridgeKey{}, bridge)
 	// Native constructors may normalize protobufs. Preserve cached candidates.
-	compiled := p.Core
-	if len(prepared) > 0 {
-		compiled = prepared[0]
-	} else {
-		compiled = proto.Clone(p.Core).(*core.Config)
-	}
+	compiled := proto.Clone(p.Core).(*core.Config)
+	installReloadableFeatures(compiled)
+	installReloadableRouter(compiled)
 	inst, err := core.NewWithContext(child, compiled)
 	if err != nil {
 		return err
@@ -167,6 +162,7 @@ func (r *Runtime) start(ctx context.Context, p *Prepared, c wire.Config, prepare
 	if logger, ok := inst.GetFeature((*applog.Instance)(nil)).(xlog.Handler); ok {
 		nlog.BindXray(logger)
 	}
+	r.registry.SetInboundEpochs(p.Epochs)
 	if err = inst.Start(); err != nil {
 		_ = inst.Close()
 		return err
@@ -176,29 +172,4 @@ func (r *Runtime) start(ctx context.Context, p *Prepared, c wire.Config, prepare
 	r.current = p
 	r.running.Store(true)
 	return nil
-}
-func compatibleUsers(users []wire.User, inbounds map[string]*core.InboundHandlerConfig) []wire.User {
-	out := []wire.User{}
-	for _, u := range wire.Clone(users) {
-		tags := []string{}
-		for _, tag := range u.InboundTags {
-			if _, ok := inbounds[tag]; ok {
-				tags = append(tags, tag)
-			} else {
-				delete(u.Credentials, tag)
-			}
-		}
-		u.InboundTags = tags
-		transit := u.TransitCredentials[:0]
-		for _, binding := range u.TransitCredentials {
-			if _, exists := inbounds[binding.InboundTag]; exists {
-				transit = append(transit, binding)
-			}
-		}
-		u.TransitCredentials = transit
-		if len(tags) > 0 {
-			out = append(out, u)
-		}
-	}
-	return out
 }

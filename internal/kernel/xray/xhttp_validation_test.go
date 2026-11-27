@@ -55,7 +55,7 @@ func TestMalformedXHTTPSettingsPreserveServingListenerAndAccountedStreams(t *tes
 				stream := inbound["streamSettings"].(map[string]any)
 				stream["xhttpSettings"] = settings
 			})
-			if err := runtime.Apply(context.Background(), invalid, true); err == nil {
+			if err := runtime.Apply(context.Background(), invalid); err == nil {
 				t.Fatal("malformed HTTP/2 candidate reached activation")
 			}
 			if !runtime.Ready() || runtime.instance != instance || runtime.current.Epochs["in"] != epoch {

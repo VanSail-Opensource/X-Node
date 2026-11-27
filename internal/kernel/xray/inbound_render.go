@@ -100,7 +100,10 @@ func renderInbounds(c protocol.Config, root map[string]any, auxiliary map[string
 		if auxiliary[tag] {
 			continue
 		}
-		epochHash := sha256.Sum256(b)
+		// Admission labels bind the listener identity and user credential, not
+		// mutable settings like certificate material or protocol options. A
+		// compatible generation can switch without expiring admitted leases.
+		epochHash := sha256.Sum256([]byte("xnode-inbound-v1\x00" + tag + "\x00" + proto))
 		epochs[tag] = hex.EncodeToString(epochHash[:12])
 		clients := []any{}
 		for _, u := range c.Users {

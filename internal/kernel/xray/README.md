@@ -109,30 +109,32 @@ an unconfigured server name exercises camouflage forwarding and `xray_invalid`.
 
 `transit.go` expands owner-scoped peer accounts with separate credential generations and managed authentication labels. `domain_blocks.go` inserts the master domain block rule before all native/system rules with a reserved block outbound. Agent validation refuses unresolved IP geodata and mixed REALITY/source-filter sockets before listener activation.
 
-`reload_test.go` verifies forced reload validates before stopping the serving runtime and rebuilds unchanged native documents. The optional reload flag on `Runtime.Apply` retains account-only updates and activation fallback.
+The reload contract is described in repository path `docs/hot-reload.md`.
+Preparation and reload do not stop a serving runtime. A candidate that cannot
+be applied live returns an error instead of reconstructing that runtime.
 
-Incremental configuration is described in repository path `docs/hot-reload.md`. `sections.go` retains immutable static,
-inbound, outbound and routing protobufs. Effective listener identities include
-certificate bytes and never include global routing. `live.go` stages public
-outbound handlers and quiesces only affected registry flows; `routing_update.go`
-uses native rule replacement or a safe suffix append. Unsupported immutable,
-default-outbound, mux/chain and observer changes reconstruct after preparation.
+`sections.go` retains immutable static, inbound, outbound and routing protobufs.
+Listener preparation includes certificate bytes but never includes global
+routing. Compatible in-place proxy replacements keep existing sessions on their
+native proxy generation. Live outbound publication keeps eligible existing
+flows on their previous handler. Routing replaces the prepared native rules in
+process.
 `statistics.go` exposes memory-only build/rebuild counters for hosted regressions.
 `client_prepared.go` caches one immutable client configuration, never a live core.
 Dependency validation and reload classification include effective XHTTP download
 dialers, native case aliases, `extra` replacement and socket penetration. Missing
-peers and cycles fail preparation; changing either side of a chain reconstructs
-the runtime. Mux case aliases also retain this reconstruction boundary.
+peers and cycles fail preparation. Native case aliases must pass the same
+live application checks as the canonical names.
 
 `live_stream_test.go`, `outbound_stream_test.go` and `sections_test.go` cover real
 TCP/mux/UDP continuity, scoped outbound replacement and section/matcher work.
-The hosted benchmark compares cold/cached preparation and forced/live application.
+The hosted benchmark reports cold/cached preparation and live application.
 `balancer_reload_test.go` verifies public selector forwarding and live balancer
 changes. The managed manager serializes upstream selector-cache access with
 handler additions/removals.
 
-`reload_benchmark_test.go` compares unchanged normal reload to the previous
-forced behavior. `live_stream_test.go` checks unchanged TCP/mux sessions across
+`reload_benchmark_test.go` measures reload work and listener gaps.
+`live_stream_test.go` checks unchanged TCP/mux sessions across
 repeated normal reload, using the same runtime application path as the agent.
 
 Firewall detection evidence is not produced for Hysteria inbounds; their transport rejects unauthenticated handshakes before the observation wrapper could classify them.

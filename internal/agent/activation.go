@@ -34,7 +34,7 @@ func (a *Agent) activate(lifetime context.Context, job applyJob) error {
 	}
 	previous, hasPrevious := a.Store.Configuration()
 	changes := protocol.Classify(previous, c)
-	native := !hasPrevious || changes.Native || job.ForceRebuild || job.RefreshAssets || !a.Runtime.Ready()
+	native := !hasPrevious || changes.Native || job.RefreshAssets || !a.Runtime.Ready()
 	// A completed certificate renewal must recheck material even when the
 	// desired document is unchanged; regular reconciliations avoid that I/O.
 	native = native || job.RecheckMaterial
@@ -47,7 +47,7 @@ func (a *Agent) activate(lifetime context.Context, job applyJob) error {
 			}
 			a.geoCandidate, a.geoCandidateKey = target, assetKey(c, p)
 		}
-		candidate, dir, err := a.prepareCertificateNative(job.Context, lifetime, c, p, job.RecheckMaterial || job.ForceRebuild, job.Certificate)
+		candidate, dir, err := a.prepareCertificateNative(job.Context, lifetime, c, p, job.RecheckMaterial, job.Certificate)
 		if err != nil {
 			return err
 		}
@@ -61,7 +61,7 @@ func (a *Agent) activate(lifetime context.Context, job applyJob) error {
 				return errors.New("CERTIFICATE_SUPERSEDED")
 			}
 		}
-		if err = a.Runtime.ApplyPrepared(lifetime, candidate, job.ForceRebuild); err != nil {
+		if err = a.Runtime.ApplyPrepared(lifetime, candidate); err != nil {
 			return err
 		}
 		a.Certificates.RetainRuntime(c, candidate.Source)

@@ -68,7 +68,7 @@ func TestInboundObservationIncludesRealityAndExcludesAuthenticatedTermination(t 
 		t.Run(test.name, func(t *testing.T) {
 			var observations []InboundObservation
 			bridge := &integration{Observe: func(event InboundObservation) { observations = append(observations, event) }}
-			handler := &observedInbound{Inbound: observationInbound{identity: test.identity, failure: test.failure}, bridge: bridge, tag: "managed", reality: test.reality}
+			handler := &observedInbound{active: &inboundGeneration{Inbound: observationInbound{identity: test.identity, failure: test.failure}}, bridge: bridge, tag: "managed", reality: test.reality}
 			ctx := session.ContextWithInbound(context.Background(), &session.Inbound{Tag: "managed"})
 			conn := observationSocket(t)
 			_ = handler.Process(ctx, xnet.Network_TCP, &stat.CounterConnection{Connection: conn}, nil)

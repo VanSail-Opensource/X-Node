@@ -83,20 +83,24 @@ func TestCustomRouteEditsDoNotReconfigureOtherUsers(t *testing.T) {
 	global := editNative(t, good, func(root map[string]any) {
 		root["routing"].(map[string]any)["domainStrategy"] = "IPIfNonMatch"
 	})
-	for _, candidate := range []protocol.Config{invalid, global} {
-		if err := runtime.Apply(t.Context(), candidate); err == nil {
-			t.Fatal("invalid or disruptive routing change was published")
-		}
-		check(keep)
-		fresh := dial()
-		check(fresh)
-		_ = fresh.Close()
+	if err := runtime.Apply(t.Context(), invalid); err == nil {
+		t.Fatal("invalid routing change was published")
 	}
 	after := runtime.Statistics()
 	if runtime.current != active || runtime.instance != instance || runtime.current.Epochs["in"] != epoch ||
 		after.Rebuilds != 1 || after.HandlerReplacements != before.HandlerReplacements || after.MatcherBuilds != before.MatcherBuilds || !runtime.Ready() {
 		t.Fatalf("failed edits changed the serving configuration: before=%+v after=%+v", before, after)
 	}
+	if err := runtime.Apply(t.Context(), global); err != nil {
+		t.Fatal("global strategy was not applied live", err)
+	}
+	if runtime.instance != instance || runtime.current.Router.DomainStrategy == active.Router.DomainStrategy {
+		t.Fatal("route strategy did not change in the same core")
+	}
+	check(keep)
+	fresh := dial()
+	check(fresh)
+	_ = fresh.Close()
 }
 
 func TestRuleCompilationReusesUnchangedRulesInCandidateOrder(t *testing.T) {

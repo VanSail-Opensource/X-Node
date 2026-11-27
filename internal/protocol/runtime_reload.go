@@ -1,7 +1,8 @@
 package protocol
 
-// RuntimeReloadArgs rechecks external material and applies it incrementally.
-// Force is accepted from older masters but no longer restarts a serving core.
+// RuntimeReloadArgs rechecks external material and applies it live where possible.
+// Changed active receivers may require an embedded restart. Force is accepted
+// for compatibility and does not restart an unchanged runtime.
 type RuntimeReloadArgs struct {
 	Force bool `json:"force,omitempty"`
 }

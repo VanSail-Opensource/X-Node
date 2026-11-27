@@ -4,9 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"strings"
+
 	"github.com/VanSail-Opensource/X-Node/internal/nlog"
 	"github.com/VanSail-Opensource/X-Node/internal/protocol"
-	"strings"
 )
 
 func (a *Agent) failStorage(err error) {
@@ -95,13 +97,21 @@ func (a *Agent) queue(ctx context.Context, job applyJob) {
 	}
 	a.applying.Store(true)
 }
-func (a *Agent) applyLoop(ctx context.Context) {
+func (a *Agent) applyLoop(ctx context.Context, recoverOnStart bool) {
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case job := <-a.apply:
 			err := a.activate(ctx, job)
+			if recoverOnStart && err != nil && !a.Runtime.Ready() {
+				if fallbackErr := a.restoreAcceptedRuntime(ctx, job); fallbackErr != nil {
+					err = errors.Join(err, fmt.Errorf("restore last accepted runtime: %w", fallbackErr))
+				}
+			}
+			// Only cold startup needs this fallback. A running instance has
+			// its own last-known-good native snapshot for a failed cutover.
+			recoverOnStart = recoverOnStart && !a.Runtime.Ready()
 			select {
 			case a.applied <- applied{Job: job, Error: err}:
 			case <-ctx.Done():

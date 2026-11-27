@@ -61,7 +61,7 @@ func (a *Agent) activate(lifetime context.Context, job applyJob) error {
 				return errors.New("CERTIFICATE_SUPERSEDED")
 			}
 		}
-		if err = a.Runtime.ApplyPrepared(lifetime, candidate); err != nil {
+		if err = a.Runtime.ApplyPreparedContext(lifetime, job.Context, candidate, job.RetryReceiver); err != nil {
 			return err
 		}
 		a.Certificates.RetainRuntime(c, candidate.Source)

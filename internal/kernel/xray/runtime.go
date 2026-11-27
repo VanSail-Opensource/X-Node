@@ -23,14 +23,16 @@ import (
 var ErrReloadUnsupported = errors.New("configuration cannot be hot-reloaded")
 
 type Runtime struct {
-	observe  func(InboundObservation)
-	mu       sync.Mutex
-	instance *core.Instance
-	current  *Prepared
-	registry *sessions.Registry
-	running  atomic.Bool
-	bridge   *integration
-	stats    Statistics
+	observe           func(InboundObservation)
+	mu                sync.Mutex
+	instance          *core.Instance
+	instanceCancel    context.CancelFunc
+	current           *Prepared
+	registry          *sessions.Registry
+	running           atomic.Bool
+	bridge            *integration
+	stats             Statistics
+	failedReceiverKey [32]byte
 }
 
 func New(registry *sessions.Registry) *Runtime { return &Runtime{registry: registry} }
@@ -42,13 +44,26 @@ func (r *Runtime) Ready() bool {
 func (r *Runtime) Stop() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	r.stopInstance()
+	r.failedReceiverKey = [32]byte{}
+}
+
+func (r *Runtime) stopInstance() {
 	r.running.Store(false)
+	if r.bridge != nil {
+		r.bridge.stopping.Store(true)
+	}
+	if r.instanceCancel != nil {
+		r.instanceCancel()
+		r.instanceCancel = nil
+	}
 	r.registry.CloseAll()
 	if r.instance != nil {
 		_ = r.instance.Close()
 		r.instance = nil
 	}
 	r.current = nil
+	r.bridge = nil
 }
 func (r *Runtime) Apply(ctx context.Context, c wire.Config) error {
 	next, err := r.Prepare(c)
@@ -68,13 +83,23 @@ func (r *Runtime) Prepare(c wire.Config) (*Prepared, error) {
 
 // ApplyPrepared consumes a validated candidate without parsing/building twice.
 // ctx is the runtime lifetime, not the supersedable preparation context.
-func (r *Runtime) ApplyPrepared(ctx context.Context, next *Prepared) (result error) {
+func (r *Runtime) ApplyPrepared(ctx context.Context, next *Prepared) error {
+	return r.ApplyPreparedContext(ctx, ctx, next, true)
+}
+
+// ApplyPreparedContext keeps the running instance on the lifetime context.
+// A superseded request can abandon preparation, but cannot abandon recovery
+// after a receiver cutover starts. Retry permits an explicit repeat of a
+// receiver change that previously failed after taking the core offline.
+func (r *Runtime) ApplyPreparedContext(ctx, operation context.Context, next *Prepared, retry bool) (result error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	if err := operation.Err(); err != nil {
+		return err
+	}
 	r.recordBuilds(next)
 	r.stats.ListenerGapMillis = 0
 	r.stats.ListenerGapMicros = 0
-	c := next.Source
 	if r.instance != nil && !sameNonReloadableStatic(r.current, next) {
 		return fmt.Errorf("%w: changed native startup-only settings", ErrReloadUnsupported)
 	}
@@ -90,22 +115,30 @@ func (r *Runtime) ApplyPrepared(ctx context.Context, next *Prepared) (result err
 		}
 	}()
 	if r.instance != nil {
+		if receiverChanged(r.current, next) {
+			return r.reloadReceivers(ctx, operation, next, retry, restore)
+		}
 		if err := r.applyLive(ctx, next); err != nil {
 			return err
 		}
-		r.bridge.BanNanos.Store(int64(c.BanDuration()))
+		r.bridge.BanNanos.Store(int64(next.Source.BanDuration()))
 		r.current = next
 		r.stats.LiveApplies++
 		r.stats.LastMode = "live"
 		return nil
 	}
-	if err := r.start(ctx, next, c); err != nil {
+	if err := r.startCompiled(ctx, next, compiledRuntime(next)); err != nil {
 		return fmt.Errorf("Xray listener activation failed: %w", err)
 	}
-	r.stats.Rebuilds++
-	r.stats.MatcherBuilds += uint64(len(next.Router.Rule))
-	r.stats.LastMode = "start"
+	r.recordStart(next, "start")
+	r.failedReceiverKey = [32]byte{}
 	return nil
+}
+
+func (r *Runtime) recordStart(p *Prepared, mode string) {
+	r.stats.Rebuilds++
+	r.stats.MatcherBuilds += uint64(len(p.Router.Rule))
+	r.stats.LastMode = mode
 }
 
 func (r *Runtime) applyLive(ctx context.Context, next *Prepared) error {
@@ -122,7 +155,7 @@ func (r *Runtime) applyLive(ctx context.Context, next *Prepared) error {
 		return err
 	}
 	defer outbounds.abort()
-	routes, err := r.prepareRoutingUpdate(next)
+	routes, err := r.prepareRoutingUpdate(next, true)
 	if err != nil {
 		return err
 	}
@@ -146,17 +179,22 @@ func (r *Runtime) applyLive(ctx context.Context, next *Prepared) error {
 	return nil
 }
 
-func (r *Runtime) start(ctx context.Context, p *Prepared, c wire.Config) error {
-	bridge := &integration{Registry: r.registry, Observe: r.observe}
-	bridge.setAuxiliary(p.Auxiliary)
-	bridge.BanNanos.Store(int64(c.BanDuration()))
-	child := context.WithValue(ctx, bridgeKey{}, bridge)
+func compiledRuntime(p *Prepared) *core.Config {
 	// Native constructors may normalize protobufs. Preserve cached candidates.
 	compiled := proto.Clone(p.Core).(*core.Config)
 	installReloadableFeatures(compiled)
 	installReloadableRouter(compiled)
+	return compiled
+}
+
+func (r *Runtime) startCompiled(ctx context.Context, p *Prepared, compiled *core.Config) error {
+	bridge := &integration{Registry: r.registry, Observe: r.observe}
+	bridge.setAuxiliary(p.Auxiliary)
+	bridge.BanNanos.Store(int64(p.Source.BanDuration()))
+	child, cancel := context.WithCancel(context.WithValue(ctx, bridgeKey{}, bridge))
 	inst, err := core.NewWithContext(child, compiled)
 	if err != nil {
+		cancel()
 		return err
 	}
 	if logger, ok := inst.GetFeature((*applog.Instance)(nil)).(xlog.Handler); ok {
@@ -164,10 +202,12 @@ func (r *Runtime) start(ctx context.Context, p *Prepared, c wire.Config) error {
 	}
 	r.registry.SetInboundEpochs(p.Epochs)
 	if err = inst.Start(); err != nil {
+		cancel()
 		_ = inst.Close()
 		return err
 	}
 	r.instance = inst
+	r.instanceCancel = cancel
 	r.bridge = bridge
 	r.current = p
 	r.running.Store(true)

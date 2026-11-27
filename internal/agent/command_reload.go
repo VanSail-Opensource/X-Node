@@ -15,6 +15,7 @@ type reloadRequest struct {
 	Done             chan error
 	Context          context.Context
 	RefreshAssets    bool
+	RetryReceiver    bool
 }
 
 // Only the actor reads desired state or schedules material activation.
@@ -39,7 +40,7 @@ func (a *Agent) handleReloadRequest(request reloadRequest) {
 			return
 		}
 	}
-	a.queue(request.Context, applyJob{ID: request.ID, Revision: a.Store.Revision(), Config: protocol.Clone(a.desired), Cached: a.desiredCached, RefreshAssets: request.RefreshAssets, RecheckMaterial: true, Done: request.Done, Certificate: request.Certificate})
+	a.queue(request.Context, applyJob{ID: request.ID, Revision: a.Store.Revision(), Config: protocol.Clone(a.desired), Cached: a.desiredCached, RefreshAssets: request.RefreshAssets, RecheckMaterial: true, RetryReceiver: request.RetryReceiver, Done: request.Done, Certificate: request.Certificate})
 }
 
 type reloadOptions struct{ RefreshAssets bool }
@@ -68,7 +69,7 @@ func (a *Agent) reloadRuntime(ctx context.Context, id string, options ...reloadO
 	defer cancel()
 	done := make(chan error, 1)
 	select {
-	case a.notify <- reloadRequest{ID: id, Done: done, Context: child, RefreshAssets: settings.RefreshAssets}:
+	case a.notify <- reloadRequest{ID: id, Done: done, Context: child, RefreshAssets: settings.RefreshAssets, RetryReceiver: !settings.RefreshAssets}:
 	case <-child.Done():
 		return nil, child.Err()
 	}

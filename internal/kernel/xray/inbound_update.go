@@ -220,6 +220,18 @@ func (r *Runtime) prepareInboundUpdate(ctx context.Context, next *Prepared) (_ *
 }
 
 func (r *Runtime) stageInbound(ctx context.Context, manager inbound.Manager, cfg *core.InboundHandlerConfig, gate *inboundGate) error {
+	managed, err := r.newStagedInbound(cfg, gate)
+	if err != nil {
+		return err
+	}
+	if err := manager.AddHandler(ctx, managed); err != nil {
+		_ = managed.Close()
+		return fmt.Errorf("native inbound %q listener activation failed: %w", cfg.Tag, err)
+	}
+	return nil
+}
+
+func (r *Runtime) newStagedInbound(cfg *core.InboundHandlerConfig, gate *inboundGate) (*stagedInboundHandler, error) {
 	staged := proto.Clone(cfg).(*core.InboundHandlerConfig)
 	if gate.auxiliary {
 		staged.ProxySettings = serial.ToTypedMessage(&InboundConfig{
@@ -230,23 +242,18 @@ func (r *Runtime) stageInbound(ctx context.Context, manager inbound.Manager, cfg
 	object, err := core.CreateObject(r.instance, staged)
 	r.bridge.inboundGate.Store(nil)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	handler, ok := object.(inbound.Handler)
 	if !ok {
 		_ = common.Close(object)
-		return errors.New("invalid native inbound handler")
+		return nil, errors.New("invalid native inbound handler")
 	}
 	if _, ok := handler.(proxy.GetInbound); !ok {
 		_ = common.Close(handler)
-		return errors.New("native inbound handler cannot expose its proxy")
+		return nil, errors.New("native inbound handler cannot expose its proxy")
 	}
-	managed := &stagedInboundHandler{Handler: handler}
-	if err := manager.AddHandler(ctx, managed); err != nil {
-		_ = managed.Close()
-		return fmt.Errorf("native inbound %q listener activation failed: %w", cfg.Tag, err)
-	}
-	return nil
+	return &stagedInboundHandler{Handler: handler}, nil
 }
 
 func prepareInboundSwap(h *observedInbound, old, next *core.InboundHandlerConfig) (*inboundGeneration, error) {
@@ -299,19 +306,20 @@ func prepareInboundSwap(h *observedInbound, old, next *core.InboundHandlerConfig
 	return &inboundGeneration{Inbound: native, UserManager: users}, nil
 }
 
-func safeNewEndpoint(candidate *core.InboundHandlerConfig, active, desired []*core.InboundHandlerConfig) error {
-	parse := func(cfg *core.InboundHandlerConfig) (*proxyman.ReceiverConfig, error) {
-		if cfg.ReceiverSettings == nil {
-			return nil, fmt.Errorf("native inbound %q lacks receiver settings", cfg.Tag)
-		}
-		obj, err := cfg.ReceiverSettings.GetInstance()
-		receiver, ok := obj.(*proxyman.ReceiverConfig)
-		if !ok || err != nil {
-			return nil, fmt.Errorf("native inbound %q has unsupported receiver settings", cfg.Tag)
-		}
-		return receiver, nil
+func receiverSettings(cfg *core.InboundHandlerConfig) (*proxyman.ReceiverConfig, error) {
+	if cfg.ReceiverSettings == nil {
+		return nil, fmt.Errorf("native inbound %q lacks receiver settings", cfg.Tag)
 	}
-	a, err := parse(candidate)
+	obj, err := cfg.ReceiverSettings.GetInstance()
+	receiver, ok := obj.(*proxyman.ReceiverConfig)
+	if !ok || err != nil {
+		return nil, fmt.Errorf("native inbound %q has unsupported receiver settings", cfg.Tag)
+	}
+	return receiver, nil
+}
+
+func safeNewEndpoint(candidate *core.InboundHandlerConfig, active, desired []*core.InboundHandlerConfig) error {
+	a, err := receiverSettings(candidate)
 	if err != nil {
 		return err
 	}
@@ -325,7 +333,7 @@ func safeNewEndpoint(candidate *core.InboundHandlerConfig, active, desired []*co
 			if other == candidate {
 				continue
 			}
-			b, err := parse(other)
+			b, err := receiverSettings(other)
 			if err != nil {
 				return err
 			}

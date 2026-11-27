@@ -128,7 +128,7 @@ func (a *Agent) command(ctx context.Context, m protocol.Message) error {
 			if err := protocol.Decode(args, &settings); err != nil {
 				return nil, err
 			}
-			// Retain the legacy wire field, but a reload never restarts Xray.
+			// Retain the wire field without forcing cutover on unchanged material.
 			return a.reloadRuntime(ctx, m.ID)
 		case "geodata.refresh":
 			return a.reloadRuntime(ctx, m.ID, reloadOptions{RefreshAssets: true})

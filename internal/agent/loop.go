@@ -60,7 +60,11 @@ func (a *Agent) Run(ctx context.Context) error {
 	go a.Client.Run(child)
 	go a.Sampler.Run(child)
 	applyDone := make(chan struct{})
-	go func() { defer close(applyDone); a.applyLoop(child) }()
+	recoverOnStart := d.DesiredConfig != nil && d.Config != nil
+	go func() {
+		defer close(applyDone)
+		a.applyLoop(child, recoverOnStart)
+	}()
 	guardDone, kernelDone := make(chan struct{}), make(chan struct{})
 	go func() { defer close(guardDone); a.Guard.Run(child, a.Client.Send) }()
 	go func() { defer close(kernelDone); a.Guard.RunKernel(child) }()

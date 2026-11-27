@@ -127,7 +127,11 @@ See `docs/hot-reload.md` for consumer boundaries and fallback behavior.
 `force` option is present. The actor retains the intent through superseding
 controls until successful activation. `activation.go` rechecks asset/certificate
 material and sends the prepared candidate through the incremental runtime path
-without restarting a serving runtime. Hosted `activation_test.go` covers
+or the embedded core rebuild for changed active receivers. Explicit reloads
+can retry a failed receiver cutover. On a cold start,
+`startup_recovery.go` can restore accepted listeners if the pending
+configuration fails, while retaining the pending revision and authoritative
+authorization. Hosted `activation_test.go` covers
 reload counters and whitelist/firewall updates without native rebuilding.
 Traffic capture/ACK and authorization paths remain owned by the actor while
 activation runs in the serialized worker.

@@ -55,6 +55,16 @@ func (p *Pool) Prepare(ctx context.Context, c protocol.Config) (protocol.Config,
 // PrepareContext stages immutable material while renewal managers outlive attempts.
 // An explicit candidate pins all aliases of its profile to exactly those bytes.
 func (p *Pool) PrepareContext(ctx, lifetime context.Context, c protocol.Config, candidate *Candidate) (protocol.Config, error) {
+	return p.prepareContext(ctx, lifetime, c, candidate, false)
+}
+
+// PrepareRetained prepares a last-accepted runtime using only existing local
+// certificate material. It does not issue certificates or prune candidates.
+func (p *Pool) PrepareRetained(ctx context.Context, c protocol.Config) (protocol.Config, error) {
+	return p.prepareContext(ctx, ctx, c, nil, true)
+}
+
+func (p *Pool) prepareContext(ctx, lifetime context.Context, c protocol.Config, candidate *Candidate, retained bool) (protocol.Config, error) {
 	if err := p.prepareMu.LockContext(ctx); err != nil {
 		return protocol.Config{}, err
 	}
@@ -63,7 +73,9 @@ func (p *Pool) PrepareContext(ctx, lifetime context.Context, c protocol.Config, 
 	if len(c.Certificates) > protocol.MaxCertificateProfiles {
 		return out, errors.New("too many certificate profiles")
 	}
-	p.discardUnusedCandidates(c)
+	if !retained {
+		p.discardUnusedCandidates(c)
+	}
 	prepared := map[string]kernel.TLSCert{}
 	for id, spec := range c.Certificates {
 		_, key := profileSettings(c, spec)
@@ -76,6 +88,8 @@ func (p *Pool) PrepareContext(ctx, lifetime context.Context, c protocol.Config, 
 		var err error
 		if shared, ok := prepared[key]; ok {
 			material = shared
+		} else if retained {
+			material, err = retainedMaterial(ctx, entry.manager)
 		} else if candidate != nil && candidate.Key == key {
 			material = candidate.Material
 		} else {
@@ -88,7 +102,9 @@ func (p *Pool) PrepareContext(ctx, lifetime context.Context, c protocol.Config, 
 		unlockProfile(entry)
 		release()
 		if err != nil {
-			p.profilePhase(key, "", "failed", "CERTIFICATE_PREPARATION_FAILED")
+			if !retained {
+				p.profilePhase(key, "", "failed", "CERTIFICATE_PREPARATION_FAILED")
+			}
 			return out, errors.New("CERTIFICATE_PREPARATION_FAILED")
 		}
 		if len(material.CertPEM) == 0 || len(material.KeyPEM) == 0 {
@@ -115,13 +131,30 @@ func (p *Pool) PrepareContext(ctx, lifetime context.Context, c protocol.Config, 
 		p.mu.Lock()
 		p.prepared[certFile] = metadata
 		p.mu.Unlock()
-		if candidate == nil || candidate.Key != key {
+		if !retained && (candidate == nil || candidate.Key != key) {
 			p.acquired(key, metadata, entry.elapsed.Load())
 		}
 		spec.Config.CertFile, spec.Config.KeyFile = certFile, keyFile
 		out.Certificates[id] = spec
 	}
 	return out, nil
+}
+
+func retainedMaterial(ctx context.Context, manager *Manager) (kernel.TLSCert, error) {
+	switch manager.resolveMode() {
+	case "http", "dns", "self":
+		certificate, err := readCertificateFile(filepath.Join(manager.cfg.CertDir, "cert.pem"))
+		if err != nil {
+			return kernel.TLSCert{}, err
+		}
+		key, err := readCertificateFile(filepath.Join(manager.cfg.CertDir, "key.pem"))
+		return kernel.TLSCert{CertPEM: certificate, KeyPEM: key}, err
+	case "file", "content":
+		err := manager.StartContext(ctx, ctx)
+		return manager.TLSCert(), err
+	default:
+		return kernel.TLSCert{}, errors.New("certificate profile has no retained material")
+	}
 }
 
 func writeMaterial(path string, material []byte) error {

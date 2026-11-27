@@ -142,7 +142,7 @@ func (f *Flow) TryAcquire(direction Direction, want, minAtomic int) (*Permit, Wa
 		grant = nil // Fully reserved bytes do not borrow a reduced-rate lease.
 	}
 	p := &Permit{flow: f, bucket: b, grant: grant, session: c.session, direction: direction, bytes: n, reduced: reduced, credits: allocations}
-	for _, a := range allocations {
+	for _, a := range p.credits.entries() {
 		a.credit.held += a.bytes
 	}
 	b.tokens -= reduced

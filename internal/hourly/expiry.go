@@ -56,11 +56,11 @@ func (c *Controller) expirePermit(p *Permit, deadline time.Time) {
 	now := c.options.Now()
 	if p.started && !p.finished && !deadline.After(now) {
 		valid := !p.flow.closed && !p.flow.fenced && c.session != "" && p.session == c.session &&
-			c.authorized(p.flow.binding, now) && p.bucket.scope.DayUTC == now.UTC().Format(time.DateOnly)
+			c.authorized(p.flow.binding, now) && p.bucket.contains(now)
 		// Paid renewal may extend the bound captured by Begin. Re-evaluate that
 		// authority without extending the original grant or original UTC day.
 		// Bytes were already consumed at Begin; this only preserves their handoff.
-		next := time.Date(now.UTC().Year(), now.UTC().Month(), now.UTC().Day()+1, 0, 0, 0, 0, time.UTC)
+		next := p.bucket.dayEnd
 		if p.grant != nil {
 			valid = valid && p.grant.grant.SessionID == c.session
 			if p.grant.deadline.Before(next) {

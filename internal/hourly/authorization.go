@@ -96,8 +96,7 @@ func (c *Controller) SetSession(session string) *Drain {
 			credit.frozen = true
 		}
 		actions = append(actions, owner.retirePermits(func(*Permit) bool { return true }, drain)...)
-		owner.incarnation++
-		owner.bucket = &bucket{scope: Scope{Owner: owner.key, DayUTC: c.options.Now().UTC().Format(time.DateOnly)}, incarnation: owner.incarnation, last: c.options.Now()}
+		owner.resetBucket(c.options.Now())
 		owner.lastSequence = 0
 		owner.signal()
 		owner.mu.Unlock()

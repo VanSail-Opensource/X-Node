@@ -54,9 +54,8 @@ func (c *Controller) ApplyGrant(grant protocol.HourlyGrant) (*Drain, error) {
 	if deadline.After(pending.deadline) {
 		deadline = pending.deadline
 	}
-	midnight := time.Date(now.UTC().Year(), now.UTC().Month(), now.UTC().Day()+1, 0, 0, 0, 0, time.UTC)
-	if midnight.Before(deadline) {
-		deadline = midnight
+	if b.dayEnd.Before(deadline) {
+		deadline = b.dayEnd
 	}
 	if !deadline.After(now) {
 		b.pending = nil

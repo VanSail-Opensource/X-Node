@@ -9,14 +9,19 @@ Custom routing changes reuse unchanged native rule definitions. Rule-only
 updates publish atomically without restarting listeners, replacing handlers,
 or reconnecting existing users.
 
-Configuration and material reloads no longer restart a serving Xray runtime.
 Native DNS, session policy levels, and routing strategy and script changes
-apply in process. The legacy `runtime.reload` option `force: true` still
-requests a material recheck, but it cannot restart the runtime. The agent
-reports unsupported live transitions and retains the serving runtime. For
-example, it refuses certificate changes that require replacing an occupied
-listener. Explicit access revocations still take effect. Signed X-Node binary
-upgrades and rollbacks still restart the service.
+apply live. A change to an active listener or its TLS material rebuilds
+embedded Xray after validation, without restarting X-Node. That cutover
+can interrupt connections. If native startup fails, X-Node attempts to
+restore the previous listeners and certificate bytes. The same failed cutover
+does not repeat automatically. An explicit `runtime.reload` can retry it, and
+the legacy `force` flag does not restart an unchanged core. Configurations
+with gRPC listeners remain ineligible for this receiver cutover.
+
+At startup, if the pending configuration fails, X-Node attempts to restore
+the last accepted listeners and retries the pending configuration. Neither
+recovery path rolls back authorization. Signed X-Node binary updates and
+rollbacks still restart the service.
 
 Private state stores identical authorization records once and preserves older
 accepted credentials when they differ. Unchanged configuration retries and

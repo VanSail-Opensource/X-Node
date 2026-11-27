@@ -23,17 +23,12 @@ memory-only, and synthetic validation material never becomes an activation
 candidate. Core construction mutates the global system dialer, so the serving
 instance is never accompanied by a second complete candidate instance.
 
-`runtime.reload` rechecks external dependencies and uses incremental
-application. The optional legacy `{"force":true}` form also rechecks material
-without restarting the serving runtime. An unsupported live transition fails
-without restarting the runtime or replacing its working configuration.
-This protects connection availability during reloads. It does not override
-deliberate access revocation, firewall rules, or other policy changes.
-Validation of the candidate configuration alone does not prove that a
-transition from the current runtime can happen live.
-Initial startup and recovery with no serving runtime are separate from
-reloading a running instance. Signed binary upgrades and rollbacks still
-restart X-Node. Production fleet updates are separate from code delivery.
+`runtime.reload` rechecks external dependencies. Changes that do not alter an
+active receiver use incremental application. The legacy `{"force":true}`
+form behaves identically and does not restart an unchanged runtime. An
+unsupported transition outside receiver reload fails without restarting.
+Deliberate access revocation, firewall rules, and other policy effects still
+apply. Signed binary upgrades and rollbacks restart X-Node itself.
 
 ## Action and configuration consumers
 
@@ -44,7 +39,7 @@ restart X-Node. Production fleet updates are separate from code delivery.
 | User IDs/credentials/transit accounts/inbound bindings | Changed inbound account builder and public user manager |
 | Providers, DDNS, updates, telemetry | Utility/sampler; referenced certificate providers also invalidate preparation |
 | Firewall rules, source GeoIP, bans, forwarding | Existing firewall transaction; identical pending ID or confirmed policy reused |
-| Native inbounds and certificate bindings/material | Eligible VLESS and Trojan proxy changes reuse the listener. Compatible additions stage on unused endpoints. Changes that would require replacing a running receiver are refused |
+| Native inbounds and certificate bindings/material | Eligible VLESS and Trojan proxy changes reuse the listener. Compatible additions stage on unused endpoints. Changes to active receiver settings or compiled TLS material can rebuild embedded Xray after preflight |
 | Native outbounds and MemberOutbounds guards | Eligible new/default-handler changes apply live with existing flow handlers retained. Unsafe replacement or removal is refused |
 | Native routing and BlockedDomains | Changed native routing; safe suffix append retains existing matchers |
 | Torrent enablement | Generated routing/outbound and affected sniffing settings |
@@ -56,7 +51,7 @@ restart X-Node. Production fleet updates are separate from code delivery.
 | Other static core fields, including system-level counters | Transitions without a live application path are rejected while serving |
 | Unchanged resend/reconnect | Reuse active sections; absent/unhealthy runtime reconstructs |
 | config.validate, client previews/probes | Separate validation/client candidate; no serving listener changes |
-| runtime.reload | Recheck material, reuse native sections and unchanged listeners; the legacy `force` argument does not restart a serving runtime |
+| runtime.reload | Recheck material, apply incrementally or rebuild for changed active receivers, and permit an explicit retry after a failed receiver cutover. The legacy `force` argument does not change this behavior |
 | Binary install/rollback | Explicit process restart |
 
 The classifier begins with all configuration fields, removing only known
@@ -72,12 +67,32 @@ untracked utility flows.
 The dependency graph includes XHTTP's independent download transport after
 native alias, `extra` and socket-penetration selection. Case-insensitive native
 field names cannot bypass cycle checks or live application restrictions.
-The agent also refuses receiver and certificate changes on an active listener
-when Xray has no safe way to replace that listener in place. In that case,
-the agent reports a failed activation and continues to serve the old material.
-It also refuses gRPC and Hysteria listener additions while serving. Xray's
-gRPC listener does not return asynchronous bind failures and its Hysteria
+The agent refuses gRPC and Hysteria listener additions through live application.
+Xray's gRPC listener does not return asynchronous bind failures and its Hysteria
 transport requires a native validator that cannot share the staging gate.
+
+## Receiver reload and recovery
+
+Effective changes to an existing listener's receiver settings, including its
+compiled TLS certificate and key, trigger a full reload of the embedded Xray
+core after validation. X-Node probes compatible new endpoints that do not
+overlap serving listeners. Validation and these probes cannot guarantee every
+bind will succeed. A receiver reload is refused if the active or desired
+configuration uses a gRPC receiver, whose binding cannot be verified.
+
+X-Node stops the old core before starting the replacement. This can interrupt
+connections and briefly stop new admissions, but does not restart the X-Node
+process or change its boot ID. Failed native startup restores the previous
+compiled configuration when possible, including the original certificate
+bytes even if the source files have changed. Interrupted connections cannot be
+restored. Automatic reconciliation does not repeat a failed disruptive cutover
+with the same receivers. Correct the receiver or run `runtime.reload` to retry
+explicitly.
+
+At process startup, X-Node attempts the persisted pending configuration first.
+If activation fails, it tries to serve the last accepted listeners while
+retaining and retrying the pending revision. Restoring accepted listeners does
+not roll back authoritative authorization or mark the pending revision applied.
 
 Native protobufs are immutable snapshots; core construction receives a clone.
 Each runtime/validator keeps only active/latest candidates. Cached client

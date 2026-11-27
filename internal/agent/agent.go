@@ -28,6 +28,7 @@ type applyJob struct {
 	Done            chan error
 	RefreshAssets   bool
 	RecheckMaterial bool
+	RetryReceiver   bool
 	ID              string
 	Revision        uint64
 	Config          protocol.Config

@@ -2,7 +2,6 @@ package xray
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net"
 	"testing"
@@ -114,12 +113,4 @@ func TestInboundStagingFailureLeavesOldAndNewConnectionsServing(t *testing.T) {
 	}
 	checkEcho(t, old)
 	checkEcho(t, dialInboundEcho(t, newPort, additionalInboundUser, echo))
-	broken := editNative(t, updated, func(root map[string]any) {
-		root["inbounds"].([]any)[0].(map[string]any)["port"] = blocked
-	})
-	if err := r.Apply(ctx, broken); !errors.Is(err, ErrReloadUnsupported) {
-		t.Fatalf("receiver edit must decline live without stopping the listener: %v", err)
-	}
-	checkEcho(t, old)
-	checkEcho(t, dialInboundEcho(t, port, testUUID, echo))
 }

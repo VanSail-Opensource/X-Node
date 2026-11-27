@@ -24,6 +24,7 @@ type integration struct {
 	Observe     func(InboundObservation)
 	Registry    *sessions.Registry
 	BanNanos    atomic.Int64
+	stopping    atomic.Bool
 	Auxiliary   atomic.Pointer[map[string]bool]
 	inboundGate atomic.Pointer[inboundGate]
 }
@@ -49,6 +50,11 @@ func (h *managedOutbound) Dispatch(ctx context.Context, link *transport.Link) {
 	// Native routing looks up the handler before dispatching. The wrapper
 	// remains a lifetime pin from lookup until the concrete handler returns.
 	defer func() { runtime.KeepAlive(h) }()
+	if h.bridge.stopping.Load() || ctx.Err() != nil {
+		_ = common.Interrupt(link.Reader)
+		_ = common.Interrupt(link.Writer)
+		return
+	}
 	si := session.InboundFromContext(ctx)
 	// Native forwarding attaches a level-only MemoryUser with an empty email.
 	if si == nil || si.Tag == coreDNSTag || (si.User == nil || si.User.Email == "") && h.bridge.auxiliaryAllowed(si.Tag) {

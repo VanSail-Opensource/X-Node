@@ -110,8 +110,10 @@ an unconfigured server name exercises camouflage forwarding and `xray_invalid`.
 `transit.go` expands owner-scoped peer accounts with separate credential generations and managed authentication labels. `domain_blocks.go` inserts the master domain block rule before all native/system rules with a reserved block outbound. Agent validation refuses unresolved IP geodata and mixed REALITY/source-filter sockets before listener activation.
 
 The reload contract is described in repository path `docs/hot-reload.md`.
-Preparation and reload do not stop a serving runtime. A candidate that cannot
-be applied live returns an error instead of reconstructing that runtime.
+Preparation does not stop a serving runtime. Receiver and TLS changes can
+rebuild embedded Xray only after preflight. The fallback restores the last
+working compiled configuration if candidate startup fails, without rolling
+back authorization. Other unsupported transitions are rejected while serving.
 
 `sections.go` retains immutable static, inbound, outbound and routing protobufs.
 Listener preparation includes certificate bytes but never includes global

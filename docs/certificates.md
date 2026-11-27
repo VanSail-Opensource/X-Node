@@ -21,6 +21,11 @@ the attempt under its shared per-domain storage coordination; its public
 PreChecker extension disables interactive prompts while email remains optional.
 Background management uses agent lifetime rather than command timeout. ACME
 failure leaves previously valid in-memory and serving material available.
+Activating changed TLS material on an existing listener, after either a manual
+or background renewal, follows the [receiver reload rules](hot-reload.md).
+That can interrupt proxy connections while embedded Xray restarts. A failed
+cutover can leave the new certificate acquired while the old one resumes
+serving.
 
 `command.progress` uses the command ID in its envelope and typed data
 `{profile_id, action, phase}`. Phases are `issuing`, `renewing`, `applying`, `idle`

@@ -43,8 +43,9 @@ unchanged inventories.
 
 `CommandTimeout(name)` exposes the native execution deadline shared by master and agent. Delivery acceptance is bounded separately to 30 seconds.
 
-`types.go` also exports `RuntimeReloadArgs` for incremental reload. The legacy
-`force` field still decodes, but does not restart the serving runtime.
+`types.go` also exports `RuntimeReloadArgs` for material checks and reloads.
+The legacy `force` field still decodes but does not restart an unchanged
+runtime or bypass receiver reload checks.
 
 ## Negotiated compressed reports
 

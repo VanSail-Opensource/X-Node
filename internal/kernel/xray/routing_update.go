@@ -16,7 +16,7 @@ type routingUpdate struct {
 	matchers   int
 }
 
-func (r *Runtime) prepareRoutingUpdate(next *Prepared) (*routingUpdate, error) {
+func (r *Runtime) prepareRoutingUpdate(next *Prepared, allowAppend bool) (*routingUpdate, error) {
 	u := new(routingUpdate)
 	if sameRouting(r.current, next) {
 		return u, nil
@@ -24,7 +24,7 @@ func (r *Runtime) prepareRoutingUpdate(next *Prepared) (*routingUpdate, error) {
 	u.router = r.instance.GetFeature(routing.RouterType()).(*reloadableRouter)
 	config := next.Router
 	old := r.current.Router
-	if sameOutbounds(r.current, next) && len(config.Rule) > len(old.Rule) && r.current.Keys["routing-env"] == next.Keys["routing-env"] &&
+	if allowAppend && sameOutbounds(r.current, next) && len(config.Rule) > len(old.Rule) && r.current.Keys["routing-env"] == next.Keys["routing-env"] &&
 		sameRouterSettings(old, config) && slices.EqualFunc(old.BalancingRule, config.BalancingRule, equalBalancingRule) &&
 		slices.EqualFunc(old.Rule, config.Rule[:len(old.Rule)], equalRoutingRule) {
 		// Keep existing matchers and balancer state for strict suffix appends.

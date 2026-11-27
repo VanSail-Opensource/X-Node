@@ -28,6 +28,7 @@ type Prepared struct {
 	StaticHash  [32]byte
 	Keys        map[string][32]byte
 	Counts      BuildCounts
+	ruleKeys    [][32]byte // ordered with Router.Rule
 }
 
 func Prepare(c protocol.Config) (*Prepared, error) {
@@ -114,12 +115,14 @@ func PrepareCached(c protocol.Config, previous *Prepared) (*Prepared, error) {
 	routingKey := []any{root["routing"]}
 	if assetReferences(root["routing"], "") {
 		routingKey = append(routingKey, root["env"])
+		p.Keys["routing-env"] = sectionKey(root["env"])
 	}
 	p.Keys["routing"] = sectionKey(routingKey)
 	if err := buildSections(p, previous); err != nil {
 		return nil, fmt.Errorf("Xray configuration validation failed: %w", err)
 	}
 	pb := p.Core
+	hasBuiltRouter := p.Router != nil
 	// Loading PEM during configuration parsing does not itself check key pairing.
 	for _, in := range pb.Inbound {
 		if e := validateTLSMaterial(in.ReceiverSettings); e != nil {
@@ -127,6 +130,9 @@ func PrepareCached(c protocol.Config, previous *Prepared) (*Prepared, error) {
 		}
 	}
 	for i, app := range pb.App {
+		if p.Router != nil && app.Type == routerMessageType {
+			continue // incremental builder already owns the immutable protobuf
+		}
 		obj, err := app.GetInstance()
 		if err != nil {
 			return nil, err
@@ -136,6 +142,11 @@ func PrepareCached(c protocol.Config, previous *Prepared) (*Prepared, error) {
 		}
 		if routing, ok := obj.(*router.Config); ok {
 			p.Router = routing
+		}
+	}
+	if !hasBuiltRouter {
+		if err := validateRouteAttributes(p.Router); err != nil {
+			return nil, err
 		}
 	}
 	pbmap := map[string]*core.InboundHandlerConfig{}

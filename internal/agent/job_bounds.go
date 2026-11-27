@@ -104,7 +104,13 @@ func cloneJobResult(result JobResult) JobResult {
 // Each caller normalizes entries first. Preserve uncertain mutation identities;
 // later observations cannot evict them to admit another command.
 func retainJob(history []JobResult, result JobResult, protect bool) ([]JobResult, error) {
+	next, _, err := retainJobWithEvictions(history, result, protect)
+	return next, err
+}
+
+func retainJobWithEvictions(history []JobResult, result JobResult, protect bool) ([]JobResult, []string, error) {
 	next := make([]JobResult, 0, len(history)+1)
+	var evicted []string
 	for _, old := range history {
 		if old.ID != result.ID {
 			next = append(next, old)
@@ -124,10 +130,11 @@ func retainJob(history []JobResult, result JobResult, protect bool) ([]JobResult
 			}
 		}
 		if remove < 0 || next[remove].ID == result.ID {
-			return nil, errJobCapacity
+			return nil, nil, errJobCapacity
 		}
 		size -= next[remove].encodedBytes + 1
+		evicted = append(evicted, next[remove].ID)
 		next = append(next[:remove], next[remove+1:]...)
 	}
-	return next, nil
+	return next, evicted, nil
 }

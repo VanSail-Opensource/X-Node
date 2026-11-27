@@ -20,7 +20,8 @@ func (a *Agent) command(ctx context.Context, m protocol.Message) error {
 	if e := protocol.Decode(m.Data, &request); e != nil {
 		return e
 	}
-	if protocol.ClassifyAction(request.Name) == protocol.ReconcileAction {
+	action := protocol.ClassifyAction(request.Name)
+	if action == protocol.ReconcileAction {
 		return errors.New("unsupported utility command")
 	}
 	args := request.Args
@@ -64,7 +65,7 @@ func (a *Agent) command(ctx context.Context, m protocol.Message) error {
 		return nil
 	}
 	var configuration protocol.Config
-	switch protocol.ClassifyAction(request.Name) {
+	switch action {
 	case protocol.UtilityAction, protocol.FirewallAction:
 		if request.Name == "ddns.run" || request.Name == "firewall.apply" {
 			configuration, _ = a.Store.Configuration()
@@ -85,7 +86,7 @@ func (a *Agent) command(ctx context.Context, m protocol.Message) error {
 			slots = a.Jobs.urgent
 		}
 	default:
-		if protocol.ClassifyAction(request.Name) == protocol.ObserveAction {
+		if action == protocol.ObserveAction {
 			slots = a.Jobs.inspection
 		}
 	}

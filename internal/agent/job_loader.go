@@ -107,10 +107,22 @@ func (j *Jobs) loadHistory() error {
 			return errors.New("JOURNAL_EVIDENCE: original history could not be preserved")
 		}
 	}
-	if err := j.writeHistory(history); err != nil {
-		return errors.New("JOURNAL_COMPACTION: verified history could not be persisted")
+	canonical, err := encodeJobHistory(history)
+	if err != nil {
+		return errors.New("JOURNAL_COMPACTION: verified history could not be encoded")
+	}
+	var existing [sha256.Size]byte
+	copy(existing[:], digest.Sum(nil))
+	if info.Mode().Perm() != 0600 || int64(len(canonical)) != info.Size() || sha256.Sum256(canonical) != existing {
+		if err := j.write(j.path, canonical, 0600); err != nil {
+			return errors.New("JOURNAL_COMPACTION: verified history could not be persisted")
+		}
 	}
 	j.history = history
+	j.historyIndex = make(map[string]JobResult, len(history))
+	for _, result := range history {
+		j.historyIndex[result.ID] = result
+	}
 	return nil
 }
 

@@ -18,6 +18,9 @@ func canonicalCommandArgs(raw []byte) ([]byte, error) {
 	if len(raw) == 0 || len(raw) > protocol.MaxFrameBytes {
 		return nil, errors.New("utility arguments exceed bounds")
 	}
+	if bytes.Equal(bytes.Trim(raw, " \t\r\n"), []byte("{}")) {
+		return []byte("{}"), nil
+	}
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.UseNumber()
 	var preserveOrder bool
@@ -104,6 +107,20 @@ func commandArgValue(decoder *json.Decoder, depth int, preserveOrder *bool) (any
 
 // Equivalent to Unicode simple-fold comparison without quadratic sibling scans.
 func foldedCommandKey(key string) string {
+	upper := false
+	for i := 0; i < len(key); i++ {
+		if key[i] >= 0x80 {
+			return foldUnicodeCommandKey(key)
+		}
+		upper = upper || key[i] >= 'A' && key[i] <= 'Z'
+	}
+	if !upper {
+		return key
+	}
+	return strings.ToLower(key)
+}
+
+func foldUnicodeCommandKey(key string) string {
 	var out strings.Builder
 	out.Grow(len(key))
 	for _, r := range key {
@@ -112,6 +129,9 @@ func foldedCommandKey(key string) string {
 			if next < least {
 				least = next
 			}
+		}
+		if least >= 'A' && least <= 'Z' {
+			least += 'a' - 'A'
 		}
 		out.WriteRune(least)
 	}

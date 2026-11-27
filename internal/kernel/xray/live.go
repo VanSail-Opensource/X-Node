@@ -128,6 +128,7 @@ func (r *Runtime) updateLive(ctx context.Context, next *Prepared) (result error)
 	}
 	defer release()
 	installed := []outboundChange{}
+	routingPublished := false
 	defer func() {
 		if result == nil {
 			return
@@ -143,8 +144,10 @@ func (r *Runtime) updateLive(ctx context.Context, next *Prepared) (result error)
 				result = errors.Join(result, manager.AddHandler(ctx, change.old))
 			}
 		}
-		router := r.instance.GetFeature(routing.RouterType()).(routing.Router)
-		result = errors.Join(result, router.AddRule(serial.ToTypedMessage(r.current.Router), false))
+		if routingPublished {
+			router := r.instance.GetFeature(routing.RouterType()).(routing.Router)
+			result = errors.Join(result, router.AddRule(serial.ToTypedMessage(r.current.Router), false))
+		}
 	}()
 	for _, change := range changes {
 		if change.next == nil {
@@ -161,10 +164,11 @@ func (r *Runtime) updateLive(ctx context.Context, next *Prepared) (result error)
 		}
 		r.stats.HandlerReplacements++
 	}
-	if !proto.Equal(r.current.Router, next.Router) {
+	if !sameRouting(r.current, next) {
 		if err = r.replaceRouting(next); err != nil {
 			return err
 		}
+		routingPublished = true
 	}
 	r.registry.SetInboundEpochs(next.Epochs)
 	if err = r.updateInbounds(ctx, next); err != nil {

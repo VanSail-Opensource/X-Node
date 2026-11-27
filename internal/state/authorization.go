@@ -67,7 +67,9 @@ func (s *Store) AuthorizeView(users []protocol.User, revision uint64) (Authoriza
 	if err != nil {
 		return AuthorizationView{}, err
 	}
-	next := protocol.Clone(s.data)
+	// The transaction replaces these fields and leaves the immutable accepted
+	// config and historical journals untouched.
+	next := s.data
 	next.IPBlocks = protocol.RemapIPBlocks(s.data.IPBlocks, replacements)
 	next.Users, next.Revision, next.DesiredConfig = nextUsers, revision, nil
 	return s.commitAuthorizationLocked(next)

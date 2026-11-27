@@ -77,7 +77,7 @@ type Agent struct {
 	previous            state.Traffic
 	previousRates       state.Traffic
 	lastSample          time.Time
-	previousAccounting  map[string][2]uint64
+	previousAccounting  map[accountingCounterKey][2]uint64
 	previousHourly      map[uint64][2]uint64
 	lastCapture         time.Time
 	accountingRequests  chan accountingRequest
@@ -137,7 +137,6 @@ func New(dir, version string, client *transport.Client, logs *nlog.Stream) (*Age
 			a.Guard.Observe(event.IP, event.Rule)
 		}
 	})
-	a.previousAccounting = map[string][2]uint64{}
 	a.accountingRequests = make(chan accountingRequest, 16)
 	a.Updater = updatepkg.New(filepath.Join(dir, "updates"), version, runner)
 	a.Jobs, e = NewJobs(dir, client.Send)

@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"math"
-	"strconv"
 	"time"
 )
 
@@ -38,24 +37,34 @@ func ValidateHourlyDemand(demand HourlyDemand) error {
 }
 
 func ValidateHourlyDemandBatch(batch HourlyDemandBatch) error {
+	_, err := HourlyDemandFrame(batch)
+	return err
+}
+
+// HourlyDemandFrame validates and returns the same payload it size-checked.
+func HourlyDemandFrame(batch HourlyDemandBatch) (Message, error) {
 	if !ValidStreamID(batch.SessionID) || len(batch.Demands) > MaxHourlyItems || len(batch.Progress) > MaxHourlyItems || len(batch.Demands)+len(batch.Progress) == 0 {
-		return errors.New("invalid hourly demand batch")
+		return Message{}, errors.New("invalid hourly demand batch")
 	}
-	owners, credits := map[string]bool{}, map[string]bool{}
+	owners := make(map[HourlyOwner]struct{}, len(batch.Demands))
+	credits := make(map[string]struct{}, len(batch.Progress))
 	for _, demand := range batch.Demands {
-		key := demand.Owner.ID + ":" + strconv.FormatUint(demand.Owner.Generation, 10)
-		if ValidateHourlyDemand(demand) != nil || owners[key] {
-			return errors.New("invalid or duplicate hourly demand")
+		if _, duplicate := owners[demand.Owner]; duplicate || ValidateHourlyDemand(demand) != nil {
+			return Message{}, errors.New("invalid or duplicate hourly demand")
 		}
-		owners[key] = true
+		owners[demand.Owner] = struct{}{}
 	}
 	for _, progress := range batch.Progress {
-		if ValidateHourlyProgress(progress) != nil || credits[progress.ReservationID] {
-			return errors.New("invalid or duplicate hourly progress")
+		if _, duplicate := credits[progress.ReservationID]; duplicate || ValidateHourlyProgress(progress) != nil {
+			return Message{}, errors.New("invalid or duplicate hourly progress")
 		}
-		credits[progress.ReservationID] = true
+		credits[progress.ReservationID] = struct{}{}
 	}
-	return validateHourlyFrame(batch)
+	data, err := marshalHourlyFrame(batch)
+	if err != nil {
+		return Message{}, err
+	}
+	return Message{V: Version, Type: "hourly.demand", Data: data}, nil
 }
 
 func ValidateHourlyGrant(grant HourlyGrant) error {
@@ -73,9 +82,14 @@ func ValidateHourlySample(sample HourlySample) error {
 }
 
 func validateHourlyFrame(value any) error {
+	_, err := marshalHourlyFrame(value)
+	return err
+}
+
+func marshalHourlyFrame(value any) ([]byte, error) {
 	encoded, err := json.Marshal(value)
 	if err != nil || len(encoded) > MaxHourlyFrameBytes {
-		return errors.New("hourly frame capacity exceeded")
+		return nil, errors.New("hourly frame capacity exceeded")
 	}
-	return nil
+	return encoded, nil
 }

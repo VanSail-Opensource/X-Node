@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/VanSail-Opensource/X-Node/internal/nlog"
 	"github.com/VanSail-Opensource/X-Node/internal/protocol"
 )
 
@@ -102,7 +103,8 @@ func (a *Agent) sendHourlyDemand(session string, demands []protocol.HourlyDemand
 	// Separate bounded arrays avoid serializing a growing batch for every item.
 	// Frame validation remains explicit even though valid field lengths fit.
 	send := func(batch protocol.HourlyDemandBatch) {
-		if protocol.ValidateHourlyDemandBatch(batch) != nil || !a.Client.Send(protocol.New("hourly.demand", "", 0, batch), false) {
+		message, err := protocol.HourlyDemandFrame(batch)
+		if err != nil || !a.Client.Send(message, false) {
 			success = false
 		}
 	}
@@ -120,20 +122,12 @@ func (a *Agent) sendHourlyDemand(session string, demands []protocol.HourlyDemand
 }
 
 func (a *Agent) publishHourlyProofs() {
-	batch := protocol.HourlyCreditProofBatch{}
-	flush := func() {
-		if len(batch.Proofs) > 0 {
-			a.Client.Send(protocol.New("hourly.credit.proofs", "", 0, batch), false)
-		}
-		batch.Proofs = nil
+	frames, err := protocol.HourlyProofFrames(a.hourly.store.Recovery())
+	if err != nil {
+		nlog.Core().Warn("hourly credit proofs could not be framed", "error", err)
+		return
 	}
-	for _, proof := range a.hourly.store.Recovery() {
-		batch.Proofs = append(batch.Proofs, proof)
-		if protocol.ValidateHourlyProofBatch(batch) != nil {
-			batch.Proofs = batch.Proofs[:len(batch.Proofs)-1]
-			flush()
-			batch.Proofs = append(batch.Proofs, proof)
-		}
+	for _, frame := range frames {
+		a.Client.Send(frame, false)
 	}
-	flush()
 }

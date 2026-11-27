@@ -6,17 +6,27 @@ func (s *Store) AddTraffic(delta Traffic) error { return s.AddAccounting(delta, 
 
 // Batch drains historical journals before the current boot's immutable queue.
 func (s *Store) Batch() (*Batch, error) {
+	batch, _, err := s.TrafficReportHead("", true)
+	return batch, err
+}
+
+// TrafficReportHead returns a detached snapshot only when the sealed head
+// differs from knownID. An unchanged head can be replayed from a caller's wire
+// cache. Only periodic reporting may seal new usage through this path.
+func (s *Store) TrafficReportHead(knownID string, seal bool) (batch *Batch, unchanged bool, err error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.data.Pending != nil {
-		return cloneTrafficBatch(s.data.Pending), nil
-	}
-	if len(s.traffic.queue) == 0 {
+	head := s.pendingLocked()
+	if seal && head == nil {
 		if err := s.traffic.seal(s.data.AgentID); err != nil {
-			return nil, err
+			return nil, false, err
 		}
+		head = s.pendingLocked()
 	}
-	return cloneTrafficBatch(s.pendingLocked()), nil
+	if head != nil && knownID != "" && head.ID == knownID {
+		return nil, true, nil
+	}
+	return cloneTrafficBatch(head), false, nil
 }
 
 func (s *Store) Ack(id string) error { _, err := s.Acknowledge(id); return err }
@@ -65,7 +75,6 @@ func (s *Store) pendingLocked() *Batch {
 // Pending returns only a sealed head. Ordinary sampling/reporting seals new data
 // on the configured report interval, independently of acknowledgement replay.
 func (s *Store) Pending() *Batch {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return cloneTrafficBatch(s.pendingLocked())
+	batch, _, _ := s.TrafficReportHead("", false)
+	return batch
 }

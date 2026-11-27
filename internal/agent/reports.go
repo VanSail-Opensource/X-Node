@@ -22,6 +22,7 @@ func (a *Agent) requestReports(flags uint32) {
 }
 
 func (a *Agent) runReports(ctx context.Context) {
+	var traffic protocol.Message // immutable, report worker only
 	for {
 		select {
 		case <-ctx.Done():
@@ -40,21 +41,36 @@ func (a *Agent) runReports(ctx context.Context) {
 						a.Client.Send(protocol.New("ddns.changes", "", 0, protocol.DDNSChanges{Changes: changes}), true)
 					}
 				}
-				batch, err := a.Store.Batch()
-				if err != nil {
+				if err := a.sendTrafficReport(&traffic, true); err != nil {
 					a.failStorage(err)
-				} else if batch != nil {
-					a.Client.Send(protocol.New("traffic.report", batch.ID, 0, batch), true)
 				}
 				entries, dropped := a.Logs.Drain()
 				if len(entries) > 0 || dropped > 0 {
 					a.Client.Send(protocol.New("logs.report", "", 0, map[string]any{"entries": entries, "dropped": dropped}), false)
 				}
 			} else if flags&reportReplay != 0 {
-				if batch := a.Store.Pending(); batch != nil {
-					a.Client.Send(protocol.New("traffic.report", batch.ID, 0, batch), true)
-				}
+				// A replay never seals, so unlike the periodic operation it cannot
+				// fail from queue pressure.
+				_ = a.sendTrafficReport(&traffic, false)
 			}
 		}
 	}
+}
+
+func (a *Agent) sendTrafficReport(cached *protocol.Message, seal bool) error {
+	batch, unchanged, err := a.Store.TrafficReportHead(cached.ID, seal)
+	if err != nil {
+		return err
+	}
+	if !unchanged {
+		*cached = protocol.Message{}
+		if batch == nil {
+			return nil
+		}
+		*cached = protocol.New("traffic.report", batch.ID, 0, batch)
+	}
+	// Negotiated compatibility is still checked by the socket writer on each
+	// send. An unchanged report is replayed, not treated as acknowledged.
+	a.Client.Send(*cached, true)
+	return nil
 }

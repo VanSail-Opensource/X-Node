@@ -22,7 +22,7 @@ func (a *Agent) handle(ctx context.Context, m protocol.Message) {
 		a.receiveCompute(ctx, m)
 		return
 	case "state.sync", "config.apply", "users.sync", "users.delta", "user.controls":
-		d := a.Store.Snapshot()
+		d := a.Store.Metadata()
 		if m.Revision == 0 || m.Revision <= d.Revision {
 			if m.Type == "state.sync" && m.Revision == d.ConfigRevision && a.Runtime.Ready() {
 				a.Client.Send(protocol.New("state.applied", m.ID, m.Revision, map[string]bool{"ready": true}), true)
@@ -63,8 +63,9 @@ func (a *Agent) handle(ctx context.Context, m protocol.Message) {
 					e = p.Validate()
 				}
 				if e == nil {
-					users := map[int]protocol.User{}
-					for _, u := range d.Users {
+					baseline := a.Store.Users()
+					users := make(map[int]protocol.User, len(baseline))
+					for _, u := range baseline {
 						users[u.ID] = u
 					}
 					for _, id := range p.Remove {
@@ -76,7 +77,7 @@ func (a *Agent) handle(ctx context.Context, m protocol.Message) {
 					c.Users = make([]protocol.User, 0, len(users))
 					// Preserve existing order and append only newly introduced users.
 					// Random map order caused unchanged identities to rebuild Xray.
-					for _, old := range d.Users {
+					for _, old := range baseline {
 						if user, ok := users[old.ID]; ok {
 							c.Users = append(c.Users, user)
 							delete(users, old.ID)

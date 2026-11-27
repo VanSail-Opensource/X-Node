@@ -7,8 +7,6 @@ import (
 	"os"
 	"strings"
 
-	"github.com/xtls/xray-core/app/router"
-	"github.com/xtls/xray-core/common/serial"
 	"github.com/xtls/xray-core/core"
 	"github.com/xtls/xray-core/infra/conf"
 )
@@ -57,7 +55,10 @@ func assetReferences(value any, exclude string) bool {
 			}
 		}
 	case string:
-		return strings.HasPrefix(v, "geosite:") || strings.HasPrefix(v, "geoip:")
+		v = strings.TrimLeft(v, "!")
+		return strings.HasPrefix(v, "geosite:") || strings.HasPrefix(v, "geoip:") ||
+			strings.HasPrefix(v, "ext:") || strings.HasPrefix(v, "ext-ip:") ||
+			strings.HasPrefix(v, "ext-domain:") || strings.HasPrefix(v, "ext-site:")
 	}
 	return false
 }
@@ -82,6 +83,9 @@ func buildSections(p, previous *Prepared) error {
 	if previous == nil || c.API != nil || c.Metrics != nil || len(c.Transport) > 0 {
 		p.Core, err = c.Build()
 		p.Counts = BuildCounts{1, len(c.InboundConfigs), len(c.OutboundConfigs), 1}
+		if err == nil && c.API == nil && c.Metrics == nil && len(c.Transport) == 0 && c.RouterConfig != nil {
+			p.ruleKeys = routingRuleKeys(c.RouterConfig.RuleList)
+		}
 		return err
 	}
 	if err = conf.PostProcessConfigureFile(&c); err != nil {
@@ -90,7 +94,7 @@ func buildSections(p, previous *Prepared) error {
 	coreConfig := &core.Config{}
 	if previous.StaticHash == p.StaticHash {
 		for _, app := range previous.Core.App {
-			if app.Type != serial.ToTypedMessage(&router.Config{}).Type {
+			if app.Type != routerMessageType {
 				coreConfig.App = append(coreConfig.App, app)
 			}
 		}
@@ -103,15 +107,8 @@ func buildSections(p, previous *Prepared) error {
 			return err
 		}
 	}
-	if previous.Keys["routing"] == p.Keys["routing"] {
-		coreConfig.App = append(coreConfig.App, serial.ToTypedMessage(previous.Router))
-	} else {
-		routing, e := c.RouterConfig.Build()
-		if e != nil {
-			return e
-		}
-		coreConfig.App = append(coreConfig.App, serial.ToTypedMessage(routing))
-		p.Counts.Routing++
+	if e := buildRoutingSection(p, previous, coreConfig, c.RouterConfig); e != nil {
+		return e
 	}
 	for i := range c.InboundConfigs {
 		in := &c.InboundConfigs[i]

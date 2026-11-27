@@ -1,3 +1,28 @@
+# X-Node v2.0.32
+
+Improves command handling from the master. Command receipt lookup is indexed,
+argument-free commands bypass general JSON normalization, and state messages
+read revision metadata without copying unrelated journals. Request identity,
+argument binding, executor limits and mutation recovery rules are unchanged.
+
+Custom routing changes reuse unchanged native rule definitions. Rule-only
+updates publish atomically without restarting listeners, replacing handlers,
+or reconnecting existing users. A rejected update leaves the previous rules
+serving. Routing changes that need to recreate the native runtime, including
+changes to the global routing strategy or script, require an explicit forced
+reload rather than implicitly interrupting the serving runtime.
+
+Private state stores identical authorization records once and preserves older
+accepted credentials when they differ. Unchanged configuration retries and
+already-canonical job journals avoid redundant disk writes. New revisions and
+mutation receipts still cross their existing durability barriers.
+
+Earlier performance changes since v2.0.31 coalesce tiny reduced-rate TCP
+handoffs, reuse UTC permit boundaries, and avoid unnecessary reserved-credit
+sorting and allocation. Traffic report retries reuse their encoded payload
+and credit proofs are framed in one pass. Byte accounting, grant deadlines,
+traffic acknowledgments and frame limits are unchanged.
+
 # X-Node v2.0.31
 
 Reduces work in the proxy and telemetry paths without changing admission limits

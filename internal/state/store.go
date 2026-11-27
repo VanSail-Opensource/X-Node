@@ -4,7 +4,6 @@ package state
 import (
 	"crypto/rand"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -58,7 +57,7 @@ func Open(dir string) (*Store, error) {
 	s := &Store{path: filepath.Join(dir, "state.json")}
 	b, err := ReadRecoveryFile(s.path, MaxStoreBytes)
 	if err == nil {
-		if len(b) > MaxStoreBytes || json.Unmarshal(b, &s.data) != nil || s.data.AgentID == "" {
+		if len(b) > MaxStoreBytes || decodeState(b, &s.data) != nil || s.data.AgentID == "" {
 			return nil, errors.New("invalid persisted state")
 		}
 	} else if !os.IsNotExist(err) {
@@ -108,7 +107,7 @@ func (s *Store) change(fn func(*Data) error) error {
 }
 func (s *Store) persist(d Data) error {
 	d, _ = withoutConnectionControls(d)
-	b, err := json.Marshal(d)
+	b, err := encodeState(d)
 	if err != nil {
 		return err
 	}
@@ -116,18 +115,6 @@ func (s *Store) persist(d Data) error {
 		return errors.New("durable state capacity exhausted")
 	}
 	return AtomicWrite(s.path, b, 0600)
-}
-func (s *Store) Accept(c protocol.Config, revision uint64) error {
-	return s.change(func(d *Data) error {
-		if revision != d.Revision {
-			return errors.New("authorization revision changed")
-		}
-		c.Users = protocol.Clone(d.Users)
-		d.Config = &c
-		d.ConfigRevision = revision
-		d.DesiredConfig = nil
-		return nil
-	})
 }
 func (s *Store) Ban(id int, until time.Time) error {
 	return s.change(func(d *Data) error {

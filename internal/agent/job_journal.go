@@ -9,7 +9,7 @@ func (j *Jobs) recordIntent(id, command string) error {
 	defer j.persistMu.Unlock()
 	intent := boundedJobResult(JobResult{ID: id, Command: command, Status: "uncertain", Error: "mutation outcome pending"})
 	j.mu.Lock()
-	next, err := retainJob(j.history, intent, true)
+	next, evicted, err := retainJobWithEvictions(j.history, intent, true)
 	j.mu.Unlock()
 	if err != nil {
 		return err
@@ -19,6 +19,7 @@ func (j *Jobs) recordIntent(id, command string) error {
 	}
 	j.mu.Lock()
 	j.history = next
+	j.historyIndex = indexRetainedJob(j.historyIndex, intent, evicted)
 	j.mu.Unlock()
 	return nil
 }
@@ -27,7 +28,7 @@ func (j *Jobs) recordCompletion(result JobResult) JobResult {
 	j.persistMu.Lock()
 	defer j.persistMu.Unlock()
 	j.mu.Lock()
-	next, err := retainJob(j.history, result, true)
+	next, evicted, err := retainJobWithEvictions(j.history, result, true)
 	j.mu.Unlock()
 	if err == nil {
 		err = j.writeHistory(next)
@@ -36,20 +37,29 @@ func (j *Jobs) recordCompletion(result JobResult) JobResult {
 		result.Status, result.Error = "uncertain", "job result persistence failed; native reconciliation required"
 		result = boundedJobResult(result)
 		j.mu.Lock()
-		next, _ = retainJob(j.history, result, true)
+		next, evicted, _ = retainJobWithEvictions(j.history, result, true)
 		j.mu.Unlock()
 	}
 	j.mu.Lock()
 	if next != nil {
 		j.history = next
+		j.historyIndex = indexRetainedJob(j.historyIndex, result, evicted)
 	}
 	j.mu.Unlock()
 	return result
 }
 
 func (j *Jobs) writeHistory(history []JobResult) error {
+	raw, err := encodeJobHistory(history)
+	if err != nil {
+		return err
+	}
+	return j.write(j.path, raw, 0600)
+}
+
+func encodeJobHistory(history []JobResult) ([]byte, error) {
 	if len(history) > maxJobHistory {
-		return errJobCapacity
+		return nil, errJobCapacity
 	}
 	receipts := make([]journalJobResult, 0, len(history))
 	for _, result := range durableJobHistory(history) {
@@ -57,10 +67,10 @@ func (j *Jobs) writeHistory(history []JobResult) error {
 	}
 	raw, err := marshalJobBounded(receipts, maxJobJournalBytes-1)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if len(raw) >= maxJobJournalBytes {
-		return errors.New("job journal byte capacity exhausted")
+		return nil, errors.New("job journal byte capacity exhausted")
 	}
-	return j.write(j.path, raw, 0600)
+	return raw, nil
 }

@@ -21,6 +21,14 @@ func (s *Store) Revision() uint64 {
 	return s.data.Revision
 }
 
+// Users is the detached authorization baseline for a user delta, without
+// copying either native configuration or unrelated journals.
+func (s *Store) Users() []protocol.User {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return protocol.Clone(s.data.Users)
+}
+
 // Configuration avoids cloning accounting and traffic journals for a utility job.
 func (s *Store) Configuration() (protocol.Config, bool) {
 	s.mu.Lock()

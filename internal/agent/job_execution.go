@@ -86,8 +86,9 @@ func (j *Jobs) finishVolatile(result JobResult) JobResult {
 	// Large read results can be returned within the transport bound, but are
 	// disposable: retrying that read does not require retaining the full policy.
 	if remember.encodedBytes <= maxJobResultBytes {
-		if next, err := retainJob(j.observations, remember, false); err == nil {
+		if next, evicted, err := retainJobWithEvictions(j.observations, remember, false); err == nil {
 			j.observations = next
+			j.observedIndex = indexRetainedJob(j.observedIndex, remember, evicted)
 		}
 	}
 	j.mu.Unlock()

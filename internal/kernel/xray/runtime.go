@@ -71,7 +71,26 @@ func (r *Runtime) ApplyPrepared(ctx context.Context, next *Prepared, force bool)
 	r.stats.ListenerGapMillis = 0
 	r.stats.ListenerGapMicros = 0
 	c := next.Source
-	if r.instance != nil && !force && hotEligible(r.current, next) {
+	live := r.instance != nil && !force && hotEligible(r.current, next)
+	if r.instance != nil && !force && routingEdit(r.current, next) {
+		if !live {
+			return fmt.Errorf("routing change requires an explicit forced reload")
+		}
+		if sameOutbounds(r.current, next) {
+			// Build a candidate rule table before atomically publishing it.
+			// On rejection the old table is still active. Reapplying it would
+			// unnecessarily rebuild matchers and reset unrelated rule state.
+			if err := r.replaceRouting(next); err != nil {
+				return err
+			}
+			r.bridge.BanNanos.Store(int64(c.BanDuration()))
+			r.current = next
+			r.stats.LiveApplies++
+			r.stats.LastMode = "live"
+			return nil
+		}
+	}
+	if live {
 		if r.bridge != nil {
 			r.bridge.BanNanos.Store(int64(c.BanDuration()))
 			r.bridge.setAuxiliary(next.Auxiliary)

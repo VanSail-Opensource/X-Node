@@ -30,17 +30,19 @@ type journalJobResult struct {
 }
 
 type Jobs struct {
-	mu           sync.Mutex
-	persistMu    sync.Mutex // Workers only; never acquired by the control reader.
-	path         string
-	running      map[string]runningJob
-	history      []JobResult
-	observations []JobResult
-	recovery     string
-	slots        chan struct{}
-	urgent       chan struct{}
-	accounting   chan struct{}
-	inspection   chan struct{}
+	mu            sync.Mutex
+	persistMu     sync.Mutex // Workers only; never acquired by the control reader.
+	path          string
+	running       map[string]runningJob
+	history       []JobResult
+	historyIndex  map[string]JobResult
+	observations  []JobResult
+	observedIndex map[string]JobResult
+	recovery      string
+	slots         chan struct{}
+	urgent        chan struct{}
+	accounting    chan struct{}
+	inspection    chan struct{}
 	// Production uses Client.Send: a bounded queue offer with no network wait.
 	send   func(protocol.Message, bool) bool
 	redact func(string) string
@@ -63,7 +65,7 @@ func (j *Jobs) StartControl(ctx context.Context, id, command string, fn func(con
 }
 
 func (j *Jobs) start(ctx context.Context, id, command string, slots chan struct{}, args []byte, fn func(context.Context, func(any)) (any, error)) error {
-	if id == "" || len(id) > 128 || command == "" || len(command) > 64 || strings.ContainsAny(id+command, "\x00\r\n") {
+	if id == "" || len(id) > 128 || command == "" || len(command) > 64 || strings.ContainsAny(id, "\x00\r\n") || strings.ContainsAny(command, "\x00\r\n") {
 		return errors.New("invalid utility command identity")
 	}
 	var fingerprint [sha256.Size]byte
@@ -82,21 +84,16 @@ func (j *Jobs) start(ctx context.Context, id, command string, slots chan struct{
 		j.send(protocol.New("command.accepted", id, 0, map[string]string{"command": command}), true)
 		return nil
 	}
-	for _, history := range [][]JobResult{j.history, j.observations} {
-		for _, result := range history {
-			if result.ID != id {
-				continue
-			}
-			j.mu.Unlock()
-			if result.Command != command {
-				return errors.New("request ID was reused for another command")
-			}
-			if result.fingerprint != [sha256.Size]byte{} && result.fingerprint != fingerprint {
-				return errors.New("request ID was reused with different command arguments")
-			}
-			j.send(protocol.New("command.result", id, 0, result), true)
-			return nil
+	if result, ok := j.receipt(id); ok {
+		j.mu.Unlock()
+		if result.Command != command {
+			return errors.New("request ID was reused for another command")
 		}
+		if result.fingerprint != [sha256.Size]byte{} && result.fingerprint != fingerprint {
+			return errors.New("request ID was reused with different command arguments")
+		}
+		j.send(protocol.New("command.result", id, 0, result), true)
+		return nil
 	}
 	if j.recovery != "" && persistentJob(command) {
 		j.mu.Unlock()
@@ -129,12 +126,11 @@ func (j *Jobs) Cancel(id string) bool {
 
 func (j *Jobs) Snapshot() []JobResult {
 	j.mu.Lock()
-	defer j.mu.Unlock()
 	out := make([]JobResult, 0, len(j.history)+len(j.observations)+len(j.running)+1)
 	for _, history := range [][]JobResult{j.history, j.observations} {
 		for _, result := range history {
 			if _, active := j.running[result.ID]; !active {
-				out = append(out, cloneJobResult(result))
+				out = append(out, result)
 			}
 		}
 	}
@@ -144,5 +140,30 @@ func (j *Jobs) Snapshot() []JobResult {
 	if j.recovery != "" {
 		out = append(out, JobResult{ID: "journal-recovery-required", Command: "journal.recovery", Status: "uncertain", Error: j.recovery})
 	}
+	j.mu.Unlock()
+	// Cached result payloads are immutable. Keep defensive copies outside
+	// the command admission lock so inspection does not stall a new request.
+	for i := range out {
+		out[i] = cloneJobResult(out[i])
+	}
 	return out
+}
+
+func (j *Jobs) receipt(id string) (JobResult, bool) {
+	if result, ok := j.historyIndex[id]; ok {
+		return result, true
+	}
+	result, ok := j.observedIndex[id]
+	return result, ok
+}
+
+func indexRetainedJob(index map[string]JobResult, result JobResult, evicted []string) map[string]JobResult {
+	if index == nil {
+		index = make(map[string]JobResult)
+	}
+	for _, id := range evicted {
+		delete(index, id)
+	}
+	index[result.ID] = result
+	return index
 }

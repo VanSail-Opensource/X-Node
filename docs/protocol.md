@@ -168,7 +168,7 @@ failure; see `job-journal.md` for the exact persistence and recovery boundaries.
 | `users.active_ips` | Optional `user_id`; omission requests current active source addresses for all users |
 | `ips.control` | `source_ip`, optional `user_id`, and `drop`, `block_seconds` or `unblock` |
 | `metrics.get`, `certificates.get`, `jobs.list`, `firewall.status`, `update.check` | Empty object |
-| `runtime.reload` | `{force?:boolean}`; recheck material and apply incrementally; force requests recovery |
+| `runtime.reload` | `{force?:boolean}`; recheck material and apply incrementally; the legacy force argument never restarts the serving runtime |
 | `ddns.run` | `job_id` from the accepted configuration |
 | `geodata.refresh` | Empty object; refresh then incrementally apply the verified generation |
 | `speedtest` | `peer_outbound`, HTTPS `download_url`/`upload_url`, optional `max_bytes`/`timeout_seconds` |
@@ -314,7 +314,7 @@ generation stages; source commits never overwrite a newer paid exemption.
 
 `source_geoip_firewall_v1` accepts only master-resolved prefix generations and non-REALITY listener bindings. Agents reject GeoIP downloads and routing/DNS selectors. `shared_domain_blocks_v1` adds a front-of-routing domain block policy. `geodata_interval_v1` permits completion-based `geodata.interval_hours` (0 disables, 1..8760 enables); legacy cron is retained when interval is absent.
 
-Commands have a separate 30-second acceptance deadline. Execution is bounded to 30 seconds by default, two minutes for native validation/reload/update checks and traffic barriers, 90 seconds for speedtests, five minutes for geodata refresh/firewall preparation and ten minutes for installation or bulk range preparation. `runtime.reload` and `geodata.refresh` on agents advertising `activation_commands_v1` complete only after activation, retaining the previous runtime until native preparation succeeds. `update.status` returns the durable transaction (ID, version, previous version, status and deadline); it and `jobs.list` reply without a utility slot. `update_transaction_v1` enables reconciliation after reconnect. Confirm an upgrade only with a matching confirmed transaction plus fresh ready/synchronized telemetry at the current configuration revision. A version string alone is insufficient.
+Commands have a separate 30-second acceptance deadline. Execution is bounded to 30 seconds by default, two minutes for native validation/reload/update checks and traffic barriers, 90 seconds for speedtests, five minutes for geodata refresh/firewall preparation and ten minutes for installation or bulk range preparation. `runtime.reload` and `geodata.refresh` on agents advertising `activation_commands_v1` complete only after activation. The serving runtime is not restarted, and the agent rejects configuration that cannot be applied live. `update.status` returns the durable transaction (ID, version, previous version, status and deadline); it and `jobs.list` reply without a utility slot. `update_transaction_v1` enables reconciliation after reconnect. Confirm an upgrade only with a matching confirmed transaction plus fresh ready/synchronized telemetry at the current configuration revision. A version string alone is insufficient.
 
 ## Whitelists and fleet detection
 

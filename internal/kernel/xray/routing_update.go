@@ -9,33 +9,63 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-func (r *Runtime) replaceRouting(next *Prepared) error {
-	config, appendOnly := next.Router, false
+type routingUpdate struct {
+	router     *reloadableRouter
+	generation *routerGeneration
+	append     *approuter.Config
+	matchers   int
+}
+
+func (r *Runtime) prepareRoutingUpdate(next *Prepared) (*routingUpdate, error) {
+	u := new(routingUpdate)
+	if sameRouting(r.current, next) {
+		return u, nil
+	}
+	u.router = r.instance.GetFeature(routing.RouterType()).(*reloadableRouter)
+	config := next.Router
 	old := r.current.Router
-	if len(config.Rule) > len(old.Rule) && r.current.Keys["routing-env"] == next.Keys["routing-env"] &&
-		sameRouterSettings(old, config) && slices.EqualFunc(old.BalancingRule, config.BalancingRule, equalBalancingRule) {
-		appendOnly = true
-		for i, rule := range old.Rule {
-			if !proto.Equal(rule, config.Rule[i]) {
-				appendOnly = false
-				break
-			}
-		}
-		if appendOnly {
-			config = &approuter.Config{Rule: config.Rule[len(old.Rule):]}
-		}
+	if sameOutbounds(r.current, next) && len(config.Rule) > len(old.Rule) && r.current.Keys["routing-env"] == next.Keys["routing-env"] &&
+		sameRouterSettings(old, config) && slices.EqualFunc(old.BalancingRule, config.BalancingRule, equalBalancingRule) &&
+		slices.EqualFunc(old.Rule, config.Rule[:len(old.Rule)], equalRoutingRule) {
+		// Keep existing matchers and balancer state for strict suffix appends.
+		// With an outbound change, prepare the entire router before either
+		// component is published so rule construction cannot fail mid-commit.
+		u.append = &approuter.Config{Rule: config.Rule[len(old.Rule):]}
+		u.matchers = len(u.append.Rule)
+		return u, nil
 	}
-	router := r.instance.GetFeature(routing.RouterType()).(routing.Router)
-	if err := router.AddRule(serial.ToTypedMessage(config), appendOnly); err != nil {
-		return err
+	generation, err := u.router.build(proto.Clone(config).(*approuter.Config))
+	if err != nil {
+		return nil, err
 	}
-	r.stats.MatcherBuilds += uint64(len(config.Rule))
+	if err = generation.router.Start(); err != nil {
+		generation.release()
+		return nil, err
+	}
+	u.generation, u.matchers = generation, len(config.Rule)
+	return u, nil
+}
+
+func (u *routingUpdate) abort() {
+	if u.generation != nil {
+		u.generation.release()
+	}
+}
+
+func (u *routingUpdate) commit() error {
+	switch {
+	case u.append != nil:
+		return u.router.AddRule(serial.ToTypedMessage(u.append), true)
+	case u.generation != nil:
+		u.router.publish(u.generation)
+		u.generation = nil
+	}
 	return nil
 }
 
-func equalBalancingRule(a, b *approuter.BalancingRule) bool {
-	return proto.Equal(a, b)
-}
+func equalBalancingRule(a, b *approuter.BalancingRule) bool { return proto.Equal(a, b) }
+
+func equalRoutingRule(a, b *approuter.RoutingRule) bool { return proto.Equal(a, b) }
 
 func sameRouterSettings(a, b *approuter.Config) bool {
 	return a.DomainStrategy == b.DomainStrategy && a.Script == b.Script
@@ -43,19 +73,4 @@ func sameRouterSettings(a, b *approuter.Config) bool {
 
 func sameRouting(a, b *Prepared) bool {
 	return a.Keys["routing-env"] == b.Keys["routing-env"] && proto.Equal(a.Router, b.Router)
-}
-
-// Routing edits can also introduce or remove a dedicated outbound. Native
-// listener and static core changes are distinct, broader configuration changes.
-func routingEdit(old, next *Prepared) bool {
-	if old == nil || old.Router == nil || next.Router == nil || old.StaticHash != next.StaticHash || sameRouting(old, next) ||
-		len(old.Inbounds) != len(next.Inbounds) {
-		return false
-	}
-	for tag, config := range old.Inbounds {
-		if !proto.Equal(config, next.Inbounds[tag]) || old.Epochs[tag] != next.Epochs[tag] || old.Auxiliary[tag] != next.Auxiliary[tag] {
-			return false
-		}
-	}
-	return true
 }

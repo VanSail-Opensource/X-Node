@@ -14,6 +14,10 @@ import (
 )
 
 func echoListener(t *testing.T) net.Listener {
+	return serveTCP(t, func(conn net.Conn) { _, _ = io.Copy(conn, conn) })
+}
+
+func serveTCP(t *testing.T, serve func(net.Conn)) net.Listener {
 	t.Helper()
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -26,7 +30,7 @@ func echoListener(t *testing.T) net.Listener {
 			if err != nil {
 				return
 			}
-			go func() { defer conn.Close(); _, _ = io.Copy(conn, conn) }()
+			go func() { defer conn.Close(); serve(conn) }()
 		}
 	}()
 	return listener
@@ -34,18 +38,29 @@ func echoListener(t *testing.T) net.Listener {
 
 func checkEcho(t *testing.T, conn net.Conn) {
 	t.Helper()
+	checkResponse(t, conn, "data")
+}
+
+func checkResponse(t *testing.T, conn net.Conn, expected string) {
+	t.Helper()
 	_ = conn.SetDeadline(time.Now().Add(3 * time.Second))
 	if _, err := conn.Write([]byte("data")); err != nil {
 		t.Fatal(err)
 	}
-	b := make([]byte, 4)
-	if _, err := io.ReadFull(conn, b); err != nil || string(b) != "data" {
-		t.Fatal("echo failed", err)
+	b := make([]byte, len(expected))
+	if _, err := io.ReadFull(conn, b); err != nil || string(b) != expected {
+		t.Fatalf("echo failed: got %q, want %q (%v)", b, expected, err)
 	}
 }
 
-func TestOutboundReplacementClosesOnlyAffectedRealFlow(t *testing.T) {
+func TestOutboundReplacementKeepsExistingRealFlowsAndChangesNewFlows(t *testing.T) {
 	a, b := echoListener(t), echoListener(t)
+	c := serveTCP(t, func(conn net.Conn) {
+		var payload [4]byte
+		if _, err := io.ReadFull(conn, payload[:]); err == nil {
+			_, _ = conn.Write([]byte("next"))
+		}
+	})
 	cfg, port := testConfig(t)
 	cfg = editNative(t, cfg, func(r map[string]any) {
 		out := map[string]any{"tag": "alternate", "protocol": "freedom", "settings": map[string]any{"finalRules": []any{map[string]any{"action": "allow", "ip": []string{"127.0.0.0/8"}}}}}
@@ -75,7 +90,7 @@ func TestOutboundReplacementClosesOnlyAffectedRealFlow(t *testing.T) {
 	checkEcho(t, affected)
 	checkEcho(t, unchanged)
 	cfg = editNative(t, cfg, func(r map[string]any) {
-		r["outbounds"].([]any)[1].(map[string]any)["settings"].(map[string]any)["domainStrategy"] = "UseIPv4"
+		r["outbounds"].([]any)[1].(map[string]any)["settings"].(map[string]any)["redirect"] = c.Addr().String()
 	})
 	if err := runtime.Apply(context.Background(), cfg); err != nil {
 		t.Fatal(err)
@@ -84,12 +99,18 @@ func TestOutboundReplacementClosesOnlyAffectedRealFlow(t *testing.T) {
 		t.Fatal("outbound replacement rebuilt runtime")
 	}
 	checkEcho(t, unchanged)
-	_ = affected.SetReadDeadline(time.Now().Add(3 * time.Second))
-	_, _ = affected.Write([]byte("obsolete"))
-	if _, err := affected.Read(make([]byte, 1)); err == nil {
-		t.Fatal("replaced outbound kept obsolete flow")
+	checkEcho(t, affected)
+	checkResponse(t, dial(a), "next")
+	checkEcho(t, dial(b))
+	cfg = editNative(t, cfg, func(r map[string]any) {
+		outs := r["outbounds"].([]any)
+		outs[0], outs[1] = outs[1], outs[0]
+	})
+	if err := runtime.Apply(context.Background(), cfg); err != nil {
+		t.Fatal(err)
 	}
-	checkEcho(t, dial(a))
+	checkEcho(t, unchanged)
+	checkResponse(t, dial(b), "next")
 }
 
 func TestRoutingUpdatesKeepRealUDPAssociation(t *testing.T) {

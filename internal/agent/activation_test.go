@@ -63,7 +63,7 @@ func TestControlsAndAuxiliarySettingsBypassNativeActivation(t *testing.T) {
 	}
 }
 
-func TestNormalReloadRechecksWithoutReconstructionAndForceStillRecovers(t *testing.T) {
+func TestReloadRechecksWithoutReconstructionIncludingLegacyForce(t *testing.T) {
 	a, c := activationFixture(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
@@ -86,12 +86,20 @@ func TestNormalReloadRechecksWithoutReconstructionAndForceStillRecovers(t *testi
 	if after.Rebuilds != before.Rebuilds || after.InboundBuilds != before.InboundBuilds || after.NativeBuilds != before.NativeBuilds || after.LiveApplies < before.LiveApplies+3 {
 		t.Fatalf("normal reload reconstructed: before=%+v after=%+v", before, after)
 	}
-	if _, err := a.reloadRuntime(ctx, "forced", reloadOptions{Force: true}); err != nil {
-		t.Fatal(err)
-	}
+	a.Client.Incoming <- protocol.New("command", "legacy-force", 0, map[string]any{
+		"name": "runtime.reload", "args": map[string]bool{"force": true},
+	})
+	await(t, func() bool {
+		for _, job := range a.Jobs.Snapshot() {
+			if job.ID == "legacy-force" && job.Status == "completed" {
+				return true
+			}
+		}
+		return false
+	})
 	forced := a.Runtime.Statistics()
-	if forced.Rebuilds != after.Rebuilds+1 || !a.Runtime.Ready() {
-		t.Fatalf("forced recovery not applied: %+v", forced)
+	if forced.Rebuilds != after.Rebuilds || forced.LiveApplies != after.LiveApplies+1 || !a.Runtime.Ready() {
+		t.Fatalf("legacy force did not perform a live reload: %+v", forced)
 	}
 }
 

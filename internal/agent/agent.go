@@ -26,7 +26,6 @@ import (
 type applyJob struct {
 	Certificate     *cert.Candidate
 	Done            chan error
-	ForceRebuild    bool
 	RefreshAssets   bool
 	RecheckMaterial bool
 	ID              string

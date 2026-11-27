@@ -7,10 +7,16 @@ argument binding, executor limits and mutation recovery rules are unchanged.
 
 Custom routing changes reuse unchanged native rule definitions. Rule-only
 updates publish atomically without restarting listeners, replacing handlers,
-or reconnecting existing users. A rejected update leaves the previous rules
-serving. Routing changes that need to recreate the native runtime, including
-changes to the global routing strategy or script, require an explicit forced
-reload rather than implicitly interrupting the serving runtime.
+or reconnecting existing users.
+
+Configuration and material reloads no longer restart a serving Xray runtime.
+Native DNS, session policy levels, and routing strategy and script changes
+apply in process. The legacy `runtime.reload` option `force: true` still
+requests a material recheck, but it cannot restart the runtime. The agent
+reports unsupported live transitions and retains the serving runtime. For
+example, it refuses certificate changes that require replacing an occupied
+listener. Explicit access revocations still take effect. Signed X-Node binary
+upgrades and rollbacks still restart the service.
 
 Private state stores identical authorization records once and preserves older
 accepted credentials when they differ. Unchanged configuration retries and

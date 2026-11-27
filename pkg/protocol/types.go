@@ -122,5 +122,5 @@ func ReadMessagePayload(reader io.Reader) ([]byte, error) { return wire.ReadMess
 func ExemptionPrefix(raw string) (netip.Prefix, error) { return wire.ExemptionPrefix(raw) }
 func ExemptionKey(raw string) (string, error)          { return wire.ExemptionKey(raw) }
 
-// RuntimeReloadArgs selects incremental material recheck or explicit recovery.
+// RuntimeReloadArgs requests a material recheck and live application.
 type RuntimeReloadArgs = wire.RuntimeReloadArgs

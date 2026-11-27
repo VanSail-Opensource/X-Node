@@ -1,72 +1,24 @@
 package xray
 
 import (
-	"context"
 	"errors"
-	"time"
+	"fmt"
+	"strings"
 
-	"github.com/xtls/xray-core/common"
-	"github.com/xtls/xray-core/common/serial"
 	"github.com/xtls/xray-core/core"
 	"github.com/xtls/xray-core/features/outbound"
-	"github.com/xtls/xray-core/features/routing"
 	"google.golang.org/protobuf/proto"
 )
 
-func hotEligible(old, next *Prepared) bool {
-	if old.StaticHash != next.StaticHash || old.Router == nil || next.Router == nil {
-		return false
+func defaultOutboundTag(p *Prepared) string {
+	if len(p.Core.Outbound) == 0 {
+		return ""
 	}
-	if old.Router.DomainStrategy != next.Router.DomainStrategy || old.Router.Script != next.Router.Script {
-		return false
-	}
-	if len(old.Core.Outbound) == 0 || len(next.Core.Outbound) == 0 || !proto.Equal(old.Core.Outbound[0], next.Core.Outbound[0]) {
-		return false
-	}
-	if sameOutbounds(old, next) {
-		return true
-	}
-	if old.Native["observatory"] != nil || old.Native["burstObservatory"] != nil {
-		return false
-	}
-	changed := map[string]bool{}
-	for tag, cfg := range next.Outbounds {
-		if !proto.Equal(old.Outbounds[tag], cfg) {
-			changed[tag] = true
-		}
-	}
-	for tag := range old.Outbounds {
-		if next.Outbounds[tag] == nil {
-			changed[tag] = true
-		}
-	}
-	if len(old.Auxiliary) > 0 || len(next.Auxiliary) > 0 {
-		for tag := range changed {
-			if old.Outbounds[tag] != nil {
-				return false
-			}
-		}
-	}
-	for _, p := range []*Prepared{old, next} {
-		for _, raw := range p.Native["outbounds"].([]any) {
-			out := raw.(map[string]any)
-			tag, _ := out["tag"].(string)
-			dependencies, err := outboundDependencies(raw)
-			if err != nil || changed[tag] && unsafeOutbound(raw, dependencies) {
-				return false
-			}
-			for _, dependency := range dependencies {
-				if changed[dependency] {
-					return false
-				}
-			}
-		}
-	}
-	return true
+	return p.Core.Outbound[0].Tag
 }
 
 func sameOutbounds(a, b *Prepared) bool {
-	if len(a.Outbounds) != len(b.Outbounds) {
+	if len(a.Outbounds) != len(b.Outbounds) || defaultOutboundTag(a) != defaultOutboundTag(b) {
 		return false
 	}
 	for tag, out := range a.Outbounds {
@@ -77,116 +29,261 @@ func sameOutbounds(a, b *Prepared) bool {
 	return true
 }
 
-type outboundChange struct {
-	tag       string
-	old, next outbound.Handler
-}
-
-func (r *Runtime) updateLive(ctx context.Context, next *Prepared) (result error) {
-	manager := r.instance.GetFeature(outbound.ManagerType()).(outbound.Manager)
-	changes := []outboundChange{}
-	committed := false
-	defer func() {
-		if !committed {
-			for _, change := range changes {
-				if change.next != nil {
-					_ = common.Close(change.next)
+func outboundReloadBlocker(old, next *Prepared) string {
+	if sameOutbounds(old, next) {
+		return ""
+	}
+	if defaultOutboundTag(next) == "" {
+		return "there is no configured default outbound"
+	}
+	changed := map[string]bool{}
+	for tag, cfg := range next.Outbounds {
+		if !proto.Equal(old.Outbounds[tag], cfg) {
+			changed[tag] = true
+		}
+	}
+	for tag := range old.Outbounds {
+		if next.Outbounds[tag] == nil {
+			changed[tag] = true
+			if routingMaySelect(old, tag) || routingMaySelect(next, tag) || old.Native["api"] != nil || next.Native["api"] != nil || old.Native["observatory"] != nil || old.Native["burstObservatory"] != nil {
+				// Xray's native dispatcher selects a route and looks up the
+				// handler in separate calls. An older selection must still be
+				// able to resolve its tag after our commit.
+				return "a removed outbound may still be selected by routing or a native service"
+			}
+		}
+	}
+	for _, p := range []*Prepared{old, next} {
+		for _, raw := range p.Native["outbounds"].([]any) {
+			out := raw.(map[string]any)
+			tag, _ := out["tag"].(string)
+			dependencies, err := outboundDependencies(raw)
+			if err != nil || changed[tag] && unsafeOutbound(raw, dependencies) {
+				return "the changed outbound uses native mux, reverse, or chaining"
+			}
+			for _, dependency := range dependencies {
+				if changed[dependency] {
+					return "a changed outbound is used by a native dialer chain"
 				}
 			}
 		}
-	}()
+	}
+	return ""
+}
+
+func routingMaySelect(p *Prepared, tag string) bool {
+	if p.Router == nil {
+		return false
+	}
+	if p.Router.Script != "" {
+		return true
+	}
+	for _, rule := range p.Router.Rule {
+		if rule.GetTag() == tag {
+			return true
+		}
+	}
+	for _, rule := range p.Router.BalancingRule {
+		if rule.GetFallbackTag() == tag {
+			return true
+		}
+		for _, selector := range rule.GetOutboundSelector() {
+			if strings.HasPrefix(tag, selector) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// outboundUpdate starts changed concrete handlers before making them visible.
+// Runtime serializes configured publications; the native API can still add or
+// remove unrelated dynamic handlers through the public manager interfaces.
+type outboundUpdate struct {
+	manager          *managedManager
+	original         *outboundTable
+	previous         map[string]*managedOutbound
+	created          map[string]*managedOutbound
+	primaryTag       string
+	publishedPrimary *managedOutbound
+	stats            *Statistics
+	published        bool
+	committed        bool
+}
+
+func (r *Runtime) prepareOutboundUpdate(next *Prepared) (*outboundUpdate, error) {
+	manager, ok := r.instance.GetFeature(outbound.ManagerType()).(*managedManager)
+	if !ok {
+		return nil, errors.New("managed outbound table is unavailable")
+	}
+	if err := manager.checkRouteHistory(r.current, next); err != nil {
+		return nil, err
+	}
+	if sameOutbounds(r.current, next) {
+		return nil, nil
+	}
+	stage := &outboundUpdate{manager: manager, original: manager.table.Load(), previous: make(map[string]*managedOutbound), created: make(map[string]*managedOutbound), primaryTag: defaultOutboundTag(next), stats: &r.stats}
 	for tag, cfg := range next.Outbounds {
 		if proto.Equal(r.current.Outbounds[tag], cfg) {
 			continue
 		}
+		existing := stage.original.tagged[tag]
+		if r.current.Outbounds[tag] == nil && existing != nil {
+			stage.abort()
+			return nil, fmt.Errorf("outbound tag %q is used by a dynamic handler", tag)
+		}
 		object, err := core.CreateObject(r.instance, proto.Clone(cfg))
 		if err != nil {
-			return err
+			stage.abort()
+			return nil, err
 		}
 		handler, ok := object.(outbound.Handler)
 		if !ok {
-			return errors.New("invalid outbound handler")
+			stage.abort()
+			return nil, errors.New("invalid outbound handler")
 		}
-		changes = append(changes, outboundChange{tag, manager.GetHandler(tag), handler})
+		stage.previous[tag] = existing
+		stage.created[tag] = manager.newHandler(handler)
+		if err := handler.Start(); err != nil {
+			stage.abort()
+			return nil, err
+		}
 	}
 	for tag := range r.current.Outbounds {
 		if next.Outbounds[tag] == nil {
-			changes = append(changes, outboundChange{tag: tag, old: manager.GetHandler(tag)})
+			stage.previous[tag] = stage.original.tagged[tag]
 		}
 	}
-	tags := []string{}
-	for _, change := range changes {
-		if change.old != nil {
-			tags = append(tags, change.tag)
-		}
+	return stage, nil
+}
+
+func (m *managedManager) checkRouteHistory(current, next *Prepared) error {
+	if sameOutbounds(current, next) && sameRouting(current, next) {
+		return nil
 	}
-	child, cancel := context.WithTimeout(ctx, 30*time.Second)
-	defer cancel()
-	release, err := r.registry.QuiesceOutbounds(child, tags)
-	if err != nil {
-		return err
-	}
-	defer release()
-	installed := []outboundChange{}
-	routingPublished := false
-	defer func() {
-		if result == nil {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	var prefixes []string
+	note := func(tag string) {
+		if current.Outbounds[tag] == nil {
 			return
 		}
-		// Only public manager interfaces are used. Restore handlers before rules;
-		// the registry continues enforcing the latest authoritative credentials.
-		for i := len(installed) - 1; i >= 0; i-- {
-			change := installed[i]
-			if change.next != nil {
-				result = errors.Join(result, manager.RemoveHandler(ctx, change.tag))
-			}
-			if change.old != nil {
-				result = errors.Join(result, manager.AddHandler(ctx, change.old))
+		if m.routed == nil {
+			m.routed = make(map[string]struct{})
+		}
+		m.routed[tag] = struct{}{}
+	}
+	if current.Router != nil {
+		for _, rule := range current.Router.Rule {
+			note(rule.GetTag())
+		}
+		for _, rule := range current.Router.BalancingRule {
+			note(rule.GetFallbackTag())
+			prefixes = append(prefixes, rule.GetOutboundSelector()...)
+		}
+		if current.Router.Script != "" {
+			prefixes = []string{""}
+		}
+	}
+	for tag := range current.Outbounds {
+		for _, prefix := range prefixes {
+			if strings.HasPrefix(tag, prefix) {
+				note(tag)
+				break
 			}
 		}
-		if routingPublished {
-			router := r.instance.GetFeature(routing.RouterType()).(routing.Router)
-			result = errors.Join(result, router.AddRule(serial.ToTypedMessage(r.current.Router), false))
+		// A dispatcher may still have a tag selected by a prior routing
+		// generation even if a previous hot update removed that rule. The
+		// set stays bounded by the configured outbound limit: these tags
+		// cannot subsequently be removed from the configured table.
+		if _, routed := m.routed[tag]; routed && next.Outbounds[tag] == nil {
+			return fmt.Errorf("%w: a previously routed outbound may still be selected", ErrReloadUnsupported)
 		}
-	}()
-	for _, change := range changes {
-		if change.next == nil {
+	}
+	return nil
+}
+
+func (u *outboundUpdate) publish() error {
+	if u == nil {
+		return nil
+	}
+	m := u.manager
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	current := m.table.Load()
+	for tag, prior := range u.previous {
+		if current.tagged[tag] != prior {
+			return fmt.Errorf("outbound tag %q changed during reload", tag)
+		}
+	}
+	if m.closed || current.primary != u.original.primary {
+		return errors.New("default outbound changed during reload")
+	}
+	next := current.clone()
+	for tag := range u.previous {
+		if candidate := u.created[tag]; candidate != nil {
+			next.tagged[tag] = candidate
+		} else {
+			delete(next.tagged, tag)
+		}
+	}
+	next.primary = next.tagged[u.primaryTag]
+	if next.primary == nil {
+		return errors.New("new default outbound is not available")
+	}
+	u.publishedPrimary = next.primary
+	u.published = true
+	m.store(next)
+	return nil
+}
+
+func (u *outboundUpdate) commit() {
+	if u == nil {
+		return
+	}
+	u.committed = true
+	m := u.manager
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for _, h := range u.previous {
+		if h != nil {
+			m.retire(h)
+		}
+	}
+	u.stats.HandlerReplacements += uint64(len(u.created))
+}
+
+func (u *outboundUpdate) abort() {
+	if u == nil || u.committed {
+		return
+	}
+	if !u.published {
+		for _, h := range u.created {
+			_ = h.lifetime.close()
+		}
+		return
+	}
+	m := u.manager
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	current := m.table.Load()
+	next := current.clone()
+	for tag, prior := range u.previous {
+		// Do not undo a concurrent mutation by the native API.
+		if current.tagged[tag] != u.created[tag] {
 			continue
 		}
-		if change.old != nil {
-			if err = manager.RemoveHandler(ctx, change.tag); err != nil {
-				return err
-			}
-		}
-		installed = append(installed, change)
-		if err = manager.AddHandler(ctx, change.next); err != nil {
-			return err
-		}
-		r.stats.HandlerReplacements++
-	}
-	if !sameRouting(r.current, next) {
-		if err = r.replaceRouting(next); err != nil {
-			return err
-		}
-		routingPublished = true
-	}
-	r.registry.SetInboundEpochs(next.Epochs)
-	if err = r.updateInbounds(ctx, next); err != nil {
-		return err
-	}
-	for _, change := range changes {
-		if change.next == nil {
-			if err = manager.RemoveHandler(ctx, change.tag); err != nil {
-				return err
-			}
-			installed = append(installed, change)
+		if prior == nil {
+			delete(next.tagged, tag)
+		} else {
+			next.tagged[tag] = prior
 		}
 	}
-	for _, change := range changes {
-		if change.old != nil {
-			_ = common.Close(change.old)
-		}
+	if current.primary == u.publishedPrimary {
+		next.primary = u.original.primary
 	}
-	committed = true
-	return nil
+	m.store(next)
+	for _, h := range u.created {
+		m.retire(h)
+	}
 }

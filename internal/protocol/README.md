@@ -76,9 +76,9 @@ transfers use `GeoIPPrefixesPerChunk` to bound each staged command.
 
 `command_deadlines.go` defines bounded execution after acceptance, independently of the 30-second delivery deadline. Recovery inspection adds `update.status`; `activation_commands_v1` identifies reload results that wait for activation, and `update_transaction_v1` identifies durable update status support.
 
-`runtime_reload.go` defines typed optional forced recovery; generated command
-schemas reject unrecognized reload arguments. Normal reload requires
-`incremental_reload_v1` for masters adopting the incremental contract.
+`runtime_reload.go` retains the typed legacy `force` argument for wire
+compatibility. Both forms request a material recheck without restarting the
+serving runtime. Generated schemas reject unrecognized reload arguments.
 
 ## Negotiated compressed reports
 

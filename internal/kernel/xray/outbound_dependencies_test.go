@@ -80,7 +80,7 @@ func TestNestedXHTTPDependencyDisablesIndependentReplacement(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if hotEligible(old, next) {
+			if outboundReloadBlocker(old, next) == "" {
 				t.Fatal("chained XHTTP outbound was classified as an independent replacement")
 			}
 		})
@@ -113,7 +113,7 @@ func TestNativeCaseMuxDisablesIndependentReplacement(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if hotEligible(old, next) {
+	if outboundReloadBlocker(old, next) == "" {
 		t.Fatal("native case alias bypassed mux reconstruction")
 	}
 }

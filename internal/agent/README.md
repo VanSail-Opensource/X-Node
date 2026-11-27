@@ -123,13 +123,14 @@ separate from synthetic certificate material and activation candidates.
 `asset_client.go` delays proxy-core creation until an actual download is needed.
 See `docs/hot-reload.md` for consumer boundaries and fallback behavior.
 
-Normal `command_reload.go` requests set only `RecheckMaterial`; the actor retains
-this intent through superseding controls until successful activation. Only an
-explicit typed force sets `ForceRebuild`. `activation.go` rechecks asset/certificate
-material and uses the existing prepared incremental runtime path. Hosted
-`activation_test.go` covers normal/forced reload counters and whitelist/firewall
-updates without native rebuilding. Traffic capture/ACK and authorization paths
-remain owned by the actor while activation runs in the serialized worker.
+`command_reload.go` requests a material recheck, including when the legacy
+`force` option is present. The actor retains the intent through superseding
+controls until successful activation. `activation.go` rechecks asset/certificate
+material and sends the prepared candidate through the incremental runtime path
+without restarting a serving runtime. Hosted `activation_test.go` covers
+reload counters and whitelist/firewall updates without native rebuilding.
+Traffic capture/ACK and authorization paths remain owned by the actor while
+activation runs in the serialized worker.
 
 `reports.go` coalesces periodic/status/replay requests in one joined worker. Report encoding runs outside the actor. Local status uses a bounded socket query. `status.go` uses value-only state metadata and rejects a summary built across a revision change. `reporting_test.go` covers request coalescing, shutdown and ACK-driven replay.
 

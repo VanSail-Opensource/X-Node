@@ -45,7 +45,7 @@ func captureHourlyFixture(t *testing.T) (*Agent, *hourly.Controller, *hourly.Flo
 	if err != nil {
 		t.Fatal(err)
 	}
-	process := &Agent{Store: store, Registry: sessions.New(), hourly: &hourlyRuntime{controller: controller}, previous: state.Traffic{}, previousAccounting: map[string][2]uint64{}}
+	process := &Agent{Store: store, Registry: sessions.New(), hourly: &hourlyRuntime{controller: controller}}
 	return process, controller, flow, key, &now
 }
 

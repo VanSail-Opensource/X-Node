@@ -28,7 +28,7 @@ func TestCaptureRestoredPeriodUsesFreshCounterGeneration(t *testing.T) {
 				}
 				return lease
 			}
-			process := &Agent{Store: store, Registry: registry, previous: state.Traffic{}, previousAccounting: map[string][2]uint64{}}
+			process := &Agent{Store: store, Registry: registry}
 			capture := func() {
 				t.Helper()
 				if err := process.captureTraffic(); err != nil {
@@ -44,6 +44,7 @@ func TestCaptureRestoredPeriodUsesFreshCounterGeneration(t *testing.T) {
 			registry.SetUsers([]protocol.User{user})
 			current := acquire()
 			defer current.Close()
+			capture() // A new, unused counter need not retain an all-zero baseline.
 			current.Account(true, fresh)
 			capture()
 			capture()

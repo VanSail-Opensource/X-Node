@@ -26,7 +26,7 @@ func TestCaptureKeepsLateClosedStreamBytesInOriginalPeriod(t *testing.T) {
 		return lease
 	}
 	old := acquire()
-	process := &Agent{Store: store, Registry: registry, previous: state.Traffic{}, previousAccounting: map[string][2]uint64{}}
+	process := &Agent{Store: store, Registry: registry}
 	old.Account(true, 10)
 	if err = process.captureTraffic(); err != nil {
 		t.Fatal(err)

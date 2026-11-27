@@ -3,7 +3,6 @@ package agent
 import (
 	"context"
 	"errors"
-	"fmt"
 	"time"
 
 	"github.com/VanSail-Opensource/X-Node/internal/protocol"
@@ -21,6 +20,12 @@ type accountingResult struct {
 	err     error
 }
 
+type accountingCounterKey struct {
+	userID     int
+	period     string
+	generation uint64
+}
+
 func (a *Agent) captureTraffic() error {
 	return a.captureTrafficFrom(a.Registry.Counters())
 }
@@ -31,8 +36,9 @@ func (a *Agent) captureTrafficFrom(current state.Traffic) error {
 	if from.IsZero() {
 		from = now.Add(-time.Second)
 	}
-	if now.UTC().Before(from.UTC()) {
-		from = now
+	nowUTC, fromUTC := now.UTC(), from.UTC()
+	if nowUTC.Before(fromUTC) {
+		from, fromUTC = now, nowUTC
 	}
 	delta := state.Traffic{}
 	for id, bytes := range current {
@@ -48,17 +54,19 @@ func (a *Agent) captureTrafficFrom(current state.Traffic) error {
 			delta[id] = [2]uint64{up, down}
 		}
 	}
-	nextAccounting := map[string][2]uint64{}
+	nextAccounting := make(map[accountingCounterKey][2]uint64, len(a.previousAccounting))
 	periodTotals := state.Traffic{}
 	var samples []protocol.TrafficSample
 	captured := a.Registry.AccountingCounters()
 	for _, counter := range captured {
-		key := fmt.Sprintf("%d:%s:%d", counter.UserID, counter.Period, counter.Generation)
+		key := accountingCounterKey{counter.UserID, counter.Period, counter.Generation}
 		old := a.previousAccounting[key]
 		if counter.Upload < old[0] || counter.Download < old[1] {
 			return errors.New("accounting counter regressed")
 		}
-		nextAccounting[key] = [2]uint64{counter.Upload, counter.Download}
+		if counter.Upload != 0 || counter.Download != 0 {
+			nextAccounting[key] = [2]uint64{counter.Upload, counter.Download}
+		}
 		up, down := counter.Upload-old[0], counter.Download-old[1]
 		if up == 0 && down == 0 {
 			continue
@@ -68,7 +76,7 @@ func (a *Agent) captureTrafficFrom(current state.Traffic) error {
 			return errors.New("accounting counter overflow")
 		}
 		periodTotals[counter.UserID] = [2]uint64{totals[0] + up, totals[1] + down}
-		samples = append(samples, protocol.TrafficSample{UserID: counter.UserID, AccountingPeriod: counter.Period, From: from.UTC(), Through: now.UTC(), UploadBytes: up, DownloadBytes: down})
+		samples = append(samples, protocol.TrafficSample{UserID: counter.UserID, AccountingPeriod: counter.Period, From: fromUTC, Through: nowUTC, UploadBytes: up, DownloadBytes: down})
 	}
 	for id, totals := range periodTotals {
 		delta[id] = totals

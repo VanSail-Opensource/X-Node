@@ -76,7 +76,9 @@ func (r *Registry) Summary() Summary {
 	for _, ips := range s.ActiveIPs {
 		sort.Strings(ips)
 	}
-	sortActivityObservations(s.ActiveIPObservations)
+	if len(s.ActiveIPObservations) > 1 {
+		sort.Sort(activityObservations(s.ActiveIPObservations))
+	}
 	return s
 }
 func (r *Registry) List(after string, limit int) []Connection {

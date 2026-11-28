@@ -1,10 +1,8 @@
 package sessions
 
 import (
-	"cmp"
 	"container/list"
 	"math"
-	"slices"
 	"time"
 
 	"github.com/VanSail-Opensource/X-Node/internal/protocol"
@@ -119,8 +117,15 @@ func (h *activityHistory) snapshot(summary *Summary) {
 	}
 }
 
-func sortActivityObservations(observations []protocol.IPActivity) {
-	slices.SortFunc(observations, func(a, b protocol.IPActivity) int {
-		return cmp.Or(cmp.Compare(a.UserID, b.UserID), cmp.Compare(a.IP, b.IP))
-	})
+// Compare by index so each comparison does not copy two full observations.
+type activityObservations []protocol.IPActivity
+
+func (s activityObservations) Len() int      { return len(s) }
+func (s activityObservations) Swap(i, j int) { s[i], s[j] = s[j], s[i] }
+func (s activityObservations) Less(i, j int) bool {
+	left, right := &s[i], &s[j]
+	if left.UserID != right.UserID {
+		return left.UserID < right.UserID
+	}
+	return left.IP < right.IP
 }

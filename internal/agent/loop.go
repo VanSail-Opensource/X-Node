@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/VanSail-Opensource/X-Node/internal/nlog"
 	"github.com/VanSail-Opensource/X-Node/internal/protocol"
 )
 
@@ -25,7 +26,11 @@ func (a *Agent) Run(ctx context.Context) error {
 		a.desired.Users = d.Users
 		a.hasDesired = true
 		a.Guard.Configure(a.desired.Firewall)
-		a.registerSecrets(a.desired)
+		if d.Config != nil && d.DesiredConfig != nil {
+			a.registerSecrets(a.desired, *d.Config)
+		} else {
+			a.registerSecrets(a.desired)
+		}
 		a.Registry.SetPorts(a.desired.BlockedPorts)
 		a.desiredCached = d.DesiredConfig == nil
 		a.queue(ctx, applyJob{Revision: d.Revision, Config: a.desired, Cached: a.desiredCached})
@@ -106,7 +111,8 @@ func (a *Agent) Run(ctx context.Context) error {
 			a.Client.Send(protocol.New("torrent.detected", "", 0, map[string]any{"user_id": event.ID, "until": event.Until}), true)
 		case done := <-a.applied:
 			finishReload(done.Job.Done, done.Error)
-			if done.Job.Generation == a.generation {
+			current := done.Job.Generation == a.generation
+			if current {
 				a.reloadDone = nil
 				a.applying.Store(false)
 				if done.Error != nil {
@@ -121,10 +127,15 @@ func (a *Agent) Run(ctx context.Context) error {
 					a.retryAt = time.Time{}
 					a.desiredCached = true
 					a.materialPending = false
+					a.activationWarnings.reset()
 				}
 			}
 			if done.Error != nil {
-				a.Client.Send(protocol.New("state.failed", done.Job.ID, done.Job.Revision, map[string]string{"error": a.Logs.Redact(done.Error.Error())}), true)
+				reason := a.Logs.Redact(done.Error.Error())
+				if current {
+					a.activationWarnings.warn(nlog.Core(), done.Job.Revision, done.Error)
+				}
+				a.Client.Send(protocol.New("state.failed", done.Job.ID, done.Job.Revision, map[string]string{"error": reason}), true)
 			} else {
 				a.Client.Send(protocol.New("state.applied", done.Job.ID, done.Job.Revision, map[string]any{"ready": a.Runtime.Ready()}), true)
 			}

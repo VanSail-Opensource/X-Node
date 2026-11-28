@@ -19,6 +19,8 @@ import (
 // core. Replace the implementation behind that reference when strategy or
 // script changes. Decisions already in progress finish on the old instance.
 type reloadableRouter struct {
+	// mu fences paired routing/outbound publication only long enough to
+	// capture immutable snapshots. DNS, scripts and matching run unlocked.
 	mu         sync.RWMutex
 	active     *routerGeneration
 	ctx        context.Context
@@ -78,22 +80,30 @@ func (r *reloadableRouter) build(config *approuter.Config) (*routerGeneration, e
 
 func (r *reloadableRouter) acquire() *routerGeneration {
 	r.mu.RLock()
-	g := r.active
-	if g != nil {
-		g.refs.Add(1)
-	}
+	g := r.acquireLocked()
 	r.mu.RUnlock()
 	return g
 }
 
-func (r *reloadableRouter) publish(g *routerGeneration) {
+func (r *reloadableRouter) acquireLocked() *routerGeneration {
+	g := r.active
+	if g != nil {
+		g.refs.Add(1)
+	}
+	return g
+}
+
+func (r *reloadableRouter) swap(g *routerGeneration) *routerGeneration {
 	r.mu.Lock()
+	old := r.swapLocked(g)
+	r.mu.Unlock()
+	return old
+}
+
+func (r *reloadableRouter) swapLocked(g *routerGeneration) *routerGeneration {
 	old := r.active
 	r.active = g
-	r.mu.Unlock()
-	if old != nil {
-		old.release()
-	}
+	return old
 }
 
 func (*reloadableRouter) Type() any { return routing.RouterType() }
@@ -108,7 +118,9 @@ func (r *reloadableRouter) Start() error {
 }
 
 func (r *reloadableRouter) Close() error {
-	r.publish(nil)
+	if old := r.swap(nil); old != nil {
+		old.release()
+	}
 	return nil
 }
 
@@ -119,6 +131,36 @@ func (r *reloadableRouter) PickRoute(ctx routing.Context) (routing.Route, error)
 	}
 	defer g.release()
 	return g.router.PickRoute(ctx)
+}
+
+// PickRouteAndHandler is used by the native dispatcher adapter. It preserves
+// the exact handler for a decision already in progress during a publication,
+// including a tag removed from the new routing and outbound configuration.
+func (r *reloadableRouter) PickRouteAndHandler(ctx routing.Context) (routing.Route, outbound.Handler, error) {
+	r.mu.RLock()
+	g := r.acquireLocked()
+	var table *outboundTable
+	if manager, ok := r.outbounds.(*managedManager); ok {
+		table = manager.table.Load()
+	}
+	r.mu.RUnlock()
+	if g == nil {
+		return nil, nil, common.ErrNoClue
+	}
+	defer g.release()
+	route, err := g.router.PickRoute(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	tag := route.GetOutboundTag()
+	if table != nil {
+		if handler := table.tagged[tag]; handler != nil {
+			return route, handler, nil
+		}
+	}
+	// Preserve native dynamic tags that first became available during
+	// matching. A missing tag must still fail closed in the dispatcher.
+	return route, r.outbounds.GetHandler(tag), nil
 }
 
 func (r *reloadableRouter) AddRule(config *serial.TypedMessage, appendOnly bool) error {

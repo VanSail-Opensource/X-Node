@@ -8,6 +8,8 @@ import (
 	"io"
 	"os"
 	"strings"
+
+	"github.com/xtls/xray-core/infra/conf"
 )
 
 // listenerIdentity includes resolved file bytes, excluding accounts and globals.
@@ -59,15 +61,53 @@ func unsafeOutbound(raw any, dependencies []string) bool {
 	var out struct {
 		Protocol string           `json:"protocol"`
 		Proxy    *json.RawMessage `json:"proxySettings"`
-		Mux      *json.RawMessage `json:"mux"`
+		Mux      *conf.MuxConfig  `json:"mux"`
 		Settings json.RawMessage  `json:"settings"`
 	}
 	value, err := json.Marshal(raw)
-	if err != nil || json.Unmarshal(value, &out) != nil {
+	if err != nil || json.Unmarshal(value, &out) != nil || ambiguousOutboundMux(raw) {
 		return true
 	}
-	if out.Proxy != nil || out.Mux != nil || len(dependencies) > 0 {
+	if out.Proxy != nil || len(dependencies) > 0 {
 		return true
+	}
+	if out.Mux != nil {
+		// Carpool can explicitly emit enabled:false. The pinned native
+		// handler never creates a mux client for that configuration.
+		mux, err := out.Mux.Build()
+		if err != nil || mux.Enabled {
+			return true
+		}
 	}
 	return strings.EqualFold(out.Protocol, "loopback") || strings.Contains(strings.ToLower(string(out.Settings)), `"reverse"`)
+}
+
+func ambiguousOutboundMux(raw any) bool {
+	fields, _ := raw.(map[string]any)
+	found := false
+	for field, value := range fields {
+		if !strings.EqualFold(field, "mux") {
+			continue
+		}
+		if found {
+			return true
+		}
+		found = true
+
+		// The native JSON decoder accepts case-insensitive field names. A
+		// case-variant duplicate in the parsed document is not safe evidence
+		// that multiplexing is disabled.
+		options, _ := value.(map[string]any)
+		seen := make(map[string]bool, len(options))
+		for key := range options {
+			switch name := strings.ToLower(key); name {
+			case "enabled", "concurrency", "xudpconcurrency", "xudpproxyudp443":
+				if seen[name] {
+					return true
+				}
+				seen[name] = true
+			}
+		}
+	}
+	return false
 }

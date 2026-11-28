@@ -3,6 +3,7 @@ package xray
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/xtls/xray-core/core"
@@ -45,10 +46,8 @@ func outboundReloadBlocker(old, next *Prepared) string {
 	for tag := range old.Outbounds {
 		if next.Outbounds[tag] == nil {
 			changed[tag] = true
-			if routingMaySelect(old, tag) || routingMaySelect(next, tag) || old.Native["api"] != nil || next.Native["api"] != nil || old.Native["observatory"] != nil || old.Native["burstObservatory"] != nil {
-				// Xray's native dispatcher selects a route and looks up the
-				// handler in separate calls. An older selection must still be
-				// able to resolve its tag after our commit.
+			if routingMaySelect(next, tag) || nativeServiceSelectsOutbound(next, tag) ||
+				(routingMaySelect(old, tag) || nativeServiceSelectsOutbound(old, tag)) && !pinMemberOutbound(old, tag) {
 				return "a removed outbound may still be selected by routing or a native service"
 			}
 		}
@@ -71,17 +70,71 @@ func outboundReloadBlocker(old, next *Prepared) string {
 	return ""
 }
 
+// Typed member graphs use direct routing rules. The dispatcher pins those
+// handlers before publishing a replacement. Keep the conservative barrier
+// for code paths that can obtain tags outside ordinary field-rule dispatch.
+func nativeServiceSelectsOutbound(p *Prepared, tag string) bool {
+	if p.Native["api"] != nil || p.Native["reverse"] != nil {
+		return true
+	}
+	for key, v := range p.Native {
+		if v == nil || !strings.EqualFold(key, "observatory") && !strings.EqualFold(key, "burstObservatory") {
+			continue
+		}
+		observer, ok := v.(map[string]any)
+		if !ok {
+			return true
+		}
+		for field, raw := range observer {
+			if !strings.EqualFold(field, "subjectSelector") || raw == nil {
+				continue
+			}
+			selectors, ok := raw.([]any)
+			if !ok {
+				return true
+			}
+			for _, value := range selectors {
+				prefix, ok := value.(string)
+				if !ok || strings.HasPrefix(tag, prefix) {
+					return true
+				}
+			}
+		}
+	}
+	// Native TUN DNS can resolve a route without our dispatcher adapter.
+	inbounds, _ := p.Native["inbounds"].([]any)
+	for _, raw := range inbounds {
+		in, _ := raw.(map[string]any)
+		if protocolName, _ := in["protocol"].(string); strings.EqualFold(protocolName, "tun") {
+			return true
+		}
+	}
+	return false
+}
+
+func pinMemberOutbound(p *Prepared, tag string) bool {
+	return tag != defaultOutboundTag(p) && slices.Contains(p.Source.MemberOutbounds, tag) &&
+		!nativeServiceSelectsOutbound(p, tag) && !routingIndirectlySelects(p, tag)
+}
+
 func routingMaySelect(p *Prepared, tag string) bool {
 	if p.Router == nil {
 		return false
-	}
-	if p.Router.Script != "" {
-		return true
 	}
 	for _, rule := range p.Router.Rule {
 		if rule.GetTag() == tag {
 			return true
 		}
+	}
+	return routingIndirectlySelects(p, tag)
+}
+
+func routingIndirectlySelects(p *Prepared, tag string) bool {
+	if p.Router == nil {
+		return false
+	}
+	if p.Router.Script != "" {
+		return true
 	}
 	for _, rule := range p.Router.BalancingRule {
 		if rule.GetFallbackTag() == tag {
@@ -164,8 +217,13 @@ func (m *managedManager) checkRouteHistory(current, next *Prepared) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	var prefixes []string
+	checked := make(map[string]bool)
 	note := func(tag string) {
-		if current.Outbounds[tag] == nil {
+		if checked[tag] || current.Outbounds[tag] == nil {
+			return
+		}
+		checked[tag] = true
+		if _, tracked := m.routed[tag]; tracked || pinMemberOutbound(current, tag) {
 			return
 		}
 		if m.routed == nil {
@@ -210,6 +268,11 @@ func (u *outboundUpdate) publish() error {
 	m := u.manager
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	return u.publishLocked()
+}
+
+func (u *outboundUpdate) publishLocked() error {
+	m := u.manager
 	current := m.table.Load()
 	for tag, prior := range u.previous {
 		if current.tagged[tag] != prior {

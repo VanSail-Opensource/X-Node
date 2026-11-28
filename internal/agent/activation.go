@@ -15,7 +15,13 @@ import (
 
 // activate owns preparation, native commit and auxiliary reconciliation. It
 // runs outside the actor, so disk/network work never holds traffic ACK handling.
-func (a *Agent) activate(lifetime context.Context, job applyJob) error {
+func (a *Agent) activate(lifetime context.Context, job applyJob) (result error) {
+	stage := activationPreparation
+	defer func() {
+		if result != nil {
+			result = activationAttemptError{stage: stage, err: result}
+		}
+	}()
 	if err := a.nativeMu.LockContext(job.Context); err != nil {
 		return err
 	}
@@ -25,6 +31,7 @@ func (a *Agent) activate(lifetime context.Context, job applyJob) error {
 	}
 	started := time.Now()
 	c := protocol.Clone(job.Config)
+	stage = activationValidation
 	if err := protocol.ValidateNativePolicies(c); err != nil {
 		return err
 	}
@@ -40,6 +47,7 @@ func (a *Agent) activate(lifetime context.Context, job applyJob) error {
 	native = native || job.RecheckMaterial
 	assetDir := ""
 	if native {
+		stage = activationPreparation
 		if job.RefreshAssets {
 			target, err := a.ensureAssets(job.Context, c, p, true)
 			if err != nil {
@@ -52,23 +60,27 @@ func (a *Agent) activate(lifetime context.Context, job applyJob) error {
 			return err
 		}
 		assetDir = dir
+		stage = activationPersistence
 		if err = a.stage(job, c); err != nil {
 			return err
 		}
 		if job.Certificate != nil {
 			key, ok := cert.ProfileKey(c, job.Certificate.ProfileID)
 			if !ok || key != job.Certificate.Key || !a.Certificates.PreparedMatches(*job.Certificate, candidate.Source) || a.Store.Revision() != job.Revision || job.Context.Err() != nil {
-				return errors.New("CERTIFICATE_SUPERSEDED")
+				return errActivationCertificateSuperseded
 			}
 		}
+		stage = activationRuntime
 		if err = a.Runtime.ApplyPreparedContext(lifetime, job.Context, candidate, job.RetryReceiver); err != nil {
 			return err
 		}
 		a.Certificates.RetainRuntime(c, candidate.Source)
 	} else {
+		stage = activationPersistence
 		if err = a.stage(job, c); err != nil {
 			return err
 		}
+		stage = activationRuntime
 		if !a.Runtime.Overlay(c) {
 			return errors.New("runtime became unavailable")
 		}
@@ -77,6 +89,7 @@ func (a *Agent) activate(lifetime context.Context, job applyJob) error {
 		return err
 	}
 	a.scheduleGeodata(p)
+	stage = activationFirewall
 	if err = a.activateFirewall(job, c); err != nil {
 		return err
 	}
@@ -84,11 +97,13 @@ func (a *Agent) activate(lifetime context.Context, job applyJob) error {
 	if err = a.Guard.ApplyUserProtection(job.Context, c.Users); err != nil {
 		return err
 	}
+	stage = activationAssets
 	if assetDir != "" && len(p.Assets) > 0 {
 		if err = geodata.Activate(filepath.Join(a.Dir, "geodata"), assetDir); err != nil {
 			return err
 		}
 	}
+	stage = activationPersistence
 	if err = a.Store.Accept(c, job.Revision); err != nil {
 		return err
 	}
@@ -97,6 +112,7 @@ func (a *Agent) activate(lifetime context.Context, job applyJob) error {
 	if native {
 		a.Certificates.Commit(c)
 	}
+	stage = activationUpdate
 	if err = a.Updater.Confirm(job.Context); err != nil {
 		return err
 	}
@@ -116,7 +132,7 @@ func (a *Agent) stage(job applyJob, c protocol.Config) error {
 		return err
 	}
 	if a.Store.Revision() != job.Revision {
-		return errors.New("configuration superseded")
+		return errActivationSuperseded
 	}
 	if !job.Cached {
 		return a.Store.Stage(c, job.Revision)

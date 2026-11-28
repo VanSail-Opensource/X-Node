@@ -52,15 +52,16 @@ func (u *routingUpdate) abort() {
 	}
 }
 
-func (u *routingUpdate) commit() error {
+func (u *routingUpdate) commit() (*routerGeneration, error) {
 	switch {
 	case u.append != nil:
-		return u.router.AddRule(serial.ToTypedMessage(u.append), true)
+		return nil, u.router.AddRule(serial.ToTypedMessage(u.append), true)
 	case u.generation != nil:
-		u.router.publish(u.generation)
+		old := u.router.swap(u.generation)
 		u.generation = nil
+		return old, nil
 	}
-	return nil
+	return nil, nil
 }
 
 func equalBalancingRule(a, b *approuter.BalancingRule) bool { return proto.Equal(a, b) }

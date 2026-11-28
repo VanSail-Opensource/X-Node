@@ -10,6 +10,7 @@ import (
 	applog "github.com/xtls/xray-core/app/log"
 	xlog "github.com/xtls/xray-core/common/log"
 	"github.com/xtls/xray-core/core"
+	"github.com/xtls/xray-core/features/routing"
 	_ "github.com/xtls/xray-core/main/distro/all"
 	"google.golang.org/protobuf/proto"
 
@@ -18,21 +19,21 @@ import (
 	"github.com/VanSail-Opensource/X-Node/internal/sessions"
 )
 
-// ErrReloadUnsupported means the requested transition cannot be applied
-// without interrupting the serving Xray runtime.
+// ErrReloadUnsupported asks the activation path to use a cold Xray cutover
+// instead of trying to publish the transition in the serving core.
 var ErrReloadUnsupported = errors.New("configuration cannot be hot-reloaded")
 
 type Runtime struct {
-	observe           func(InboundObservation)
-	mu                sync.Mutex
-	instance          *core.Instance
-	instanceCancel    context.CancelFunc
-	current           *Prepared
-	registry          *sessions.Registry
-	running           atomic.Bool
-	bridge            *integration
-	stats             Statistics
-	failedReceiverKey [32]byte
+	observe        func(InboundObservation)
+	mu             sync.Mutex
+	instance       *core.Instance
+	instanceCancel context.CancelFunc
+	current        *Prepared
+	registry       *sessions.Registry
+	running        atomic.Bool
+	bridge         *integration
+	stats          Statistics
+	failedColdKey  [32]byte
 }
 
 func New(registry *sessions.Registry) *Runtime { return &Runtime{registry: registry} }
@@ -45,7 +46,7 @@ func (r *Runtime) Stop() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.stopInstance()
-	r.failedReceiverKey = [32]byte{}
+	r.failedColdKey = [32]byte{}
 }
 
 func (r *Runtime) stopInstance() {
@@ -89,8 +90,8 @@ func (r *Runtime) ApplyPrepared(ctx context.Context, next *Prepared) error {
 
 // ApplyPreparedContext keeps the running instance on the lifetime context.
 // A superseded request can abandon preparation, but cannot abandon recovery
-// after a receiver cutover starts. Retry permits an explicit repeat of a
-// receiver change that previously failed after taking the core offline.
+// after a cold cutover starts. Retry permits an explicit repeat of a
+// configuration that previously failed after taking the core offline.
 func (r *Runtime) ApplyPreparedContext(ctx, operation context.Context, next *Prepared, retry bool) (result error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -100,25 +101,30 @@ func (r *Runtime) ApplyPreparedContext(ctx, operation context.Context, next *Pre
 	r.recordBuilds(next)
 	r.stats.ListenerGapMillis = 0
 	r.stats.ListenerGapMicros = 0
-	if r.instance != nil && !sameNonReloadableStatic(r.current, next) {
-		return fmt.Errorf("%w: changed native startup-only settings", ErrReloadUnsupported)
-	}
 	nativeEnvironmentMu.Lock()
 	defer nativeEnvironmentMu.Unlock()
-	restore, err := setNativeEnvironment(preparedEnvironment(next))
+	restore, commit, err := beginNativeRuntimeEnvironment(preparedEnvironment(next))
 	if err != nil {
 		return err
 	}
 	defer func() {
 		if result != nil {
 			restore()
+		} else {
+			commit()
 		}
 	}()
 	if r.instance != nil {
 		if receiverChanged(r.current, next) {
-			return r.reloadReceivers(ctx, operation, next, retry, restore)
+			return r.reloadCold(ctx, operation, next, retry, restore, "receiver")
+		}
+		if !sameNonReloadableStatic(r.current, next) {
+			return r.reloadCold(ctx, operation, next, retry, restore, "cold")
 		}
 		if err := r.applyLive(ctx, next); err != nil {
+			if errors.Is(err, ErrReloadUnsupported) {
+				return r.reloadCold(ctx, operation, next, retry, restore, "cold")
+			}
 			return err
 		}
 		r.bridge.BanNanos.Store(int64(next.Source.BanDuration()))
@@ -127,11 +133,15 @@ func (r *Runtime) ApplyPreparedContext(ctx, operation context.Context, next *Pre
 		r.stats.LastMode = "live"
 		return nil
 	}
-	if err := r.startCompiled(ctx, next, compiledRuntime(next)); err != nil {
+	compiled, err := compiledRuntime(next)
+	if err != nil {
+		return err
+	}
+	if err := r.startCompiled(ctx, next, compiled); err != nil {
 		return fmt.Errorf("Xray listener activation failed: %w", err)
 	}
 	r.recordStart(next, "start")
-	r.failedReceiverKey = [32]byte{}
+	r.failedColdKey = [32]byte{}
 	return nil
 }
 
@@ -166,10 +176,7 @@ func (r *Runtime) applyLive(ctx context.Context, next *Prepared) error {
 	}
 	defer inbounds.abort()
 
-	if err = outbounds.publish(); err != nil {
-		return err
-	}
-	if err = routes.commit(); err != nil {
+	if err = r.publishRouting(outbounds, routes); err != nil {
 		return err
 	}
 	features.Commit()
@@ -179,12 +186,48 @@ func (r *Runtime) applyLive(ctx context.Context, next *Prepared) error {
 	return nil
 }
 
-func compiledRuntime(p *Prepared) *core.Config {
+func (r *Runtime) publishRouting(outbounds *outboundUpdate, routes *routingUpdate) error {
+	if outbounds != nil {
+		if routes.append != nil {
+			return errors.New("route append cannot replace outbound handlers")
+		}
+		router := r.instance.GetFeature(routing.RouterType()).(*reloadableRouter)
+		// Lock the manager first. A native API change can hold that lock
+		// while starting a handler, whose startup may resolve a route.
+		outbounds.manager.mu.Lock()
+		router.mu.Lock()
+		err := outbounds.publishLocked()
+		var old *routerGeneration
+		if err == nil && routes.generation != nil {
+			old = router.swapLocked(routes.generation)
+			routes.generation = nil
+		}
+		router.mu.Unlock()
+		outbounds.manager.mu.Unlock()
+		if old != nil {
+			old.release()
+		}
+		return err
+	}
+	old, err := routes.commit()
+	if old != nil {
+		old.release()
+	}
+	return err
+}
+
+func compiledRuntime(p *Prepared) (*core.Config, error) {
 	// Native constructors may normalize protobufs. Preserve cached candidates.
 	compiled := proto.Clone(p.Core).(*core.Config)
 	installReloadableFeatures(compiled)
 	installReloadableRouter(compiled)
-	return compiled
+	installRouteDispatcher(compiled)
+	for _, cfg := range compiled.Inbound {
+		if err := enableSynchronousGRPC(cfg); err != nil {
+			return nil, err
+		}
+	}
+	return compiled, nil
 }
 
 func (r *Runtime) startCompiled(ctx context.Context, p *Prepared, compiled *core.Config) error {

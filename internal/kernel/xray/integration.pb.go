@@ -134,8 +134,39 @@ func (*RouterConfig) Descriptor() ([]byte, []int) {
 	return integrationRaw, []int{4}
 }
 
+type DispatcherConfig struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+	NativeValue   []byte `protobuf:"bytes,1,opt,name=native_value,json=nativeValue,proto3" json:"native_value,omitempty"`
+}
+
+func (x *DispatcherConfig) Reset() {
+	*x = DispatcherConfig{}
+	mi := &integrationMessages[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+func (x *DispatcherConfig) String() string { return protoimpl.X.MessageStringOf(x) }
+func (*DispatcherConfig) ProtoMessage()    {}
+func (x *DispatcherConfig) ProtoReflect() protoreflect.Message {
+	mi := &integrationMessages[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+func (*DispatcherConfig) Descriptor() ([]byte, []int) {
+	integrationOnce.Do(func() { integrationRaw = protoimpl.X.CompressGZIP(integrationRaw) })
+	return integrationRaw, []int{5}
+}
+
 var FileIntegration protoreflect.FileDescriptor
-var integrationMessages = make([]protoimpl.MessageInfo, 5)
+var integrationMessages = make([]protoimpl.MessageInfo, 6)
 var integrationOnce sync.Once
 var integrationRaw []byte
 
@@ -154,8 +185,8 @@ func init() {
 	}
 	dns := valueMessage("DNSConfig")
 	dns.Field = append(dns.Field, &descriptorpb.FieldDescriptorProto{Name: proto.String("use_local"), Number: proto.Int32(2), Label: descriptorpb.FieldDescriptorProto_LABEL_OPTIONAL.Enum(), Type: descriptorpb.FieldDescriptorProto_TYPE_BOOL.Enum()})
-	integrationRaw, _ = proto.Marshal(&descriptorpb.FileDescriptorProto{Name: &name, Package: &pkg, Syntax: &syntax, Options: &descriptorpb.FileOptions{GoPackage: &option}, MessageType: []*descriptorpb.DescriptorProto{{Name: &message}, inbound, dns, valueMessage("PolicyConfig"), valueMessage("RouterConfig")}})
+	integrationRaw, _ = proto.Marshal(&descriptorpb.FileDescriptorProto{Name: &name, Package: &pkg, Syntax: &syntax, Options: &descriptorpb.FileOptions{GoPackage: &option}, MessageType: []*descriptorpb.DescriptorProto{{Name: &message}, inbound, dns, valueMessage("PolicyConfig"), valueMessage("RouterConfig"), valueMessage("DispatcherConfig")}})
 	type marker struct{}
-	out := protoimpl.TypeBuilder{File: protoimpl.DescBuilder{GoPackagePath: reflect.TypeOf(marker{}).PkgPath(), RawDescriptor: integrationRaw, NumMessages: 5}, GoTypes: []any{(*ManagerConfig)(nil), (*InboundConfig)(nil), (*DNSConfig)(nil), (*PolicyConfig)(nil), (*RouterConfig)(nil)}, MessageInfos: integrationMessages}.Build()
+	out := protoimpl.TypeBuilder{File: protoimpl.DescBuilder{GoPackagePath: reflect.TypeOf(marker{}).PkgPath(), RawDescriptor: integrationRaw, NumMessages: 6}, GoTypes: []any{(*ManagerConfig)(nil), (*InboundConfig)(nil), (*DNSConfig)(nil), (*PolicyConfig)(nil), (*RouterConfig)(nil), (*DispatcherConfig)(nil)}, MessageInfos: integrationMessages}.Build()
 	FileIntegration = out.File
 }

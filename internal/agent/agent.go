@@ -103,6 +103,7 @@ type Agent struct {
 	utilityContext      context.Context
 	retryAt             time.Time
 	retryDelay          time.Duration
+	activationWarnings  activationFailureLog // actor-owned
 }
 
 func New(dir, version string, client *transport.Client, logs *nlog.Stream) (*Agent, error) {

@@ -24,8 +24,7 @@ func receiverChanged(old, next *Prepared) bool {
 	return false
 }
 
-// Use effective receivers, with compiled certificate bytes, so unrelated
-// user or policy updates cannot replay an already disruptive failed cutover.
+// Use effective receivers, including compiled certificate bytes.
 func receiverKey(p *Prepared) ([32]byte, error) {
 	data := &core.Config{}
 	for _, tag := range slices.Sorted(maps.Keys(p.Inbounds)) {
@@ -36,19 +35,40 @@ func receiverKey(p *Prepared) ([32]byte, error) {
 	return sha256.Sum256(raw), err
 }
 
-func (r *Runtime) reloadReceivers(lifetime, operation context.Context, next *Prepared, retry bool, restoreEnv func()) error {
-	key, err := receiverKey(next)
+func coldReloadKey(p *Prepared) ([32]byte, error) {
+	receivers, err := receiverKey(p)
+	if err != nil {
+		return [32]byte{}, err
+	}
+	outbounds := make(map[string][32]byte, len(p.Outbounds))
+	for tag := range p.Outbounds {
+		outbounds[tag] = p.Keys["out:"+tag]
+	}
+	// Exclude authorization/user churn. Include the parts of the native
+	// candidate that can actually fix a startup failure.
+	return sectionKey([]any{receivers, p.StaticHash, p.InboundBase, p.Keys["routing"], outbounds, defaultOutboundTag(p)}), nil
+}
+
+func (r *Runtime) reloadCold(lifetime, operation context.Context, next *Prepared, retry bool, restoreEnv func(), mode string) error {
+	key, err := coldReloadKey(next)
 	if err != nil {
 		return err
 	}
-	if !retry && key == r.failedReceiverKey {
-		return errors.New("receiver cutover already failed; use runtime.reload to retry after correcting the listener")
+	if !retry && key == r.failedColdKey {
+		return errors.New("cold cutover already failed; use runtime.reload to retry after correcting the configuration")
 	}
 	if err := r.preflightReceiverReload(operation, next); err != nil {
 		return err
 	}
 	previous := r.current
-	replacement, recovery := compiledRuntime(next), compiledRuntime(previous)
+	replacement, err := compiledRuntime(next)
+	if err != nil {
+		return err
+	}
+	recovery, err := compiledRuntime(previous)
+	if err != nil {
+		return err
+	}
 	if err := operation.Err(); err != nil {
 		return err
 	}
@@ -61,48 +81,28 @@ func (r *Runtime) reloadReceivers(lifetime, operation context.Context, next *Pre
 	}()
 	r.stopInstance()
 	if err := r.startCompiled(lifetime, next, replacement); err != nil {
-		activation := fmt.Errorf("Xray receiver reload failed: %w", err)
-		r.failedReceiverKey = key
+		activation := fmt.Errorf("Xray %s reload failed: %w", mode, err)
+		r.failedColdKey = key
 		// Keep the old protobuf, not its source files. A renewal may have
 		// already overwritten those files with a different certificate.
 		restoreEnv()
 		if recoveryErr := r.startCompiled(lifetime, previous, recovery); recoveryErr != nil {
 			return errors.Join(activation, fmt.Errorf("previous Xray runtime could not be restored: %w", recoveryErr))
 		}
-		r.recordStart(previous, "receiver_rollback")
+		r.recordStart(previous, mode+"_rollback")
 		return fmt.Errorf("%w (previous runtime restored)", activation)
 	}
-	r.failedReceiverKey = [32]byte{}
-	r.recordStart(next, "receiver_reload")
+	r.failedColdKey = [32]byte{}
+	r.recordStart(next, mode+"_reload")
 	return nil
 }
 
-// Prepare features against the active core without publishing them. This also
-// keeps unrelated transitions which are not supported live from implicitly
-// bypassing their validation in a mixed receiver revision.
+// The candidate has already passed native validation. Probe disjoint listeners
+// where possible without attempting to stage the unsupported live transition.
 func (r *Runtime) preflightReceiverReload(ctx context.Context, next *Prepared) error {
-	if blocker := outboundReloadBlocker(r.current, next); blocker != "" {
-		return fmt.Errorf("%w: %s", ErrReloadUnsupported, blocker)
-	}
-	features, err := prepareFeatureReload(r.instance, r.current, next)
-	if err != nil {
-		return err
-	}
-	defer features.Discard()
-	outbounds, err := r.prepareOutboundUpdate(next)
-	if err != nil {
-		return err
-	}
-	defer outbounds.abort()
-	routes, err := r.prepareRoutingUpdate(next, false)
-	if err != nil {
-		return err
-	}
-	defer routes.abort()
-
 	active := make([]*proxyman.ReceiverConfig, 0, len(r.current.Inbounds))
 	for _, cfg := range r.current.Core.Inbound {
-		receiver, err := synchronousReceiver(cfg)
+		receiver, err := receiverSettings(cfg)
 		if err != nil {
 			return err
 		}
@@ -112,7 +112,7 @@ func (r *Runtime) preflightReceiverReload(ctx context.Context, next *Prepared) e
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		receiver, err := synchronousReceiver(cfg)
+		receiver, err := receiverSettings(cfg)
 		if err != nil {
 			return err
 		}
@@ -133,22 +133,15 @@ func (r *Runtime) preflightReceiverReload(ctx context.Context, next *Prepared) e
 		if overlap || !auxiliary && cfg.ProxySettings.Type != serial.GetMessageType(&InboundConfig{}) {
 			continue
 		}
-		if err := r.probeNewReceiver(cfg, auxiliary); err != nil {
+		probe := proto.Clone(cfg).(*core.InboundHandlerConfig)
+		if err := enableSynchronousGRPC(probe); err != nil {
+			return err
+		}
+		if err := r.probeNewReceiver(probe, auxiliary); err != nil {
 			return fmt.Errorf("native inbound %q could not stage its listener: %w", cfg.Tag, err)
 		}
 	}
 	return nil
-}
-
-func synchronousReceiver(cfg *core.InboundHandlerConfig) (*proxyman.ReceiverConfig, error) {
-	receiver, err := receiverSettings(cfg)
-	if err != nil {
-		return nil, err
-	}
-	if receiver.GetStreamSettings().GetProtocolName() == "grpc" {
-		return nil, fmt.Errorf("%w: native inbound %q has asynchronous gRPC listener startup", ErrReloadUnsupported, cfg.Tag)
-	}
-	return receiver, nil
 }
 
 func (r *Runtime) probeNewReceiver(cfg *core.InboundHandlerConfig, auxiliary bool) error {

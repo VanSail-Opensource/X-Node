@@ -46,17 +46,6 @@ func TestServingDNSAndSessionPolicySwapThroughStableFeatures(t *testing.T) {
 	if got := manager.ForLevel(0).Timeouts.ConnectionIdle; got != 47*time.Second {
 		t.Fatalf("policy timeout not published: %s", got)
 	}
-	rejected := editNative(t, next, func(root map[string]any) {
-		root["dns"] = map[string]any{"hosts": map[string]any{"reload.test": "192.0.2.12"}}
-		root["policy"].(map[string]any)["system"] = map[string]any{"statsInboundUplink": true}
-	})
-	if err := r.Apply(context.Background(), rejected); err == nil {
-		t.Fatal("serving accounting counter policy unexpectedly changed")
-	}
-	assertResolverIP("192.0.2.11")
-	if r.instance != original || !r.Ready() || manager.ForSystem().Stats.InboundUplink {
-		t.Fatal("rejected policy displaced serving features")
-	}
 	invalidDNS := editNative(t, next, func(root map[string]any) {
 		root["dns"].(map[string]any)["script"] = "function NotAHandler() end"
 		root["policy"] = map[string]any{"levels": map[string]any{"0": map[string]any{"connIdle": 71}}}
@@ -74,6 +63,22 @@ func TestServingDNSAndSessionPolicySwapThroughStableFeatures(t *testing.T) {
 	if _, explicit := resolver.active.client.(interface{ IsOwnLink(context.Context) bool }); explicit {
 		t.Fatal("removing the DNS section did not restore the system resolver")
 	}
+
+	systemChange := editNative(t, next, func(root map[string]any) {
+		root["dns"] = map[string]any{"hosts": map[string]any{"reload.test": "192.0.2.12"}}
+		root["policy"].(map[string]any)["system"] = map[string]any{"statsInboundUplink": true}
+	})
+	if err := r.Apply(context.Background(), systemChange); err != nil {
+		t.Fatalf("valid cold-only system policy failed activation: %v", err)
+	}
+	if r.instance == original || !r.Ready() || r.Statistics().LastMode != "cold_reload" {
+		t.Fatal("a changed system counter policy should rebuild the embedded core")
+	}
+	if !r.instance.GetFeature(policy.ManagerType()).(policy.Manager).ForSystem().Stats.InboundUplink {
+		t.Fatal("the new runtime did not publish the requested system policy")
+	}
+	resolver = r.instance.GetFeature(dns.ClientType()).(*reloadableDNS)
+	assertResolverIP("192.0.2.12")
 }
 
 type heldResolver struct {

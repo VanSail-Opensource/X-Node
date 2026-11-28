@@ -1,3 +1,29 @@
+# X-Node v2.0.33
+
+Fixes a case where adding or editing a route in an existing Carpool plan
+could leave a node degraded. X-Node now hot-reloads supported direct member
+routes even when Carpool temporarily removes the old outbounds during the
+transition. In-flight routing decisions keep their original outbound handler.
+New connections use the published routes without a listener restart, and
+explicit access revocation still takes effect.
+
+Routes that explicitly disable mux now qualify for hot reload. Enabled mux
+and invalid mux settings still retain their existing safety checks.
+
+The node journal identifies the activation stage and a safe reason code when
+a configuration fails. Repeated retries do not flood the log, and native
+error text is kept out of the journal.
+
+When a valid enforced change cannot hot-reload, X-Node reloads embedded Xray
+in the same agent process instead of leaving the revision stuck. This can
+briefly interrupt current connections. A failed startup restores the previous
+runtime when possible without restoring revoked access or acknowledging the
+failed revision. Installing the signed binary itself still restarts X-Node.
+
+Inbound gRPC binds are verified before activation succeeds. Removing an
+embedded Xray environment override restores the process's original value,
+including an originally unset value.
+
 # X-Node v2.0.32
 
 Improves command handling from the master. Command receipt lookup is indexed,

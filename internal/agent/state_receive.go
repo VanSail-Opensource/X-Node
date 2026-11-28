@@ -164,6 +164,7 @@ func (a *Agent) handle(ctx context.Context, m protocol.Message) {
 				return
 			}
 			a.desiredCached = true
+			a.activationWarnings.reset()
 			a.Client.Send(protocol.New("state.accepted", m.ID, m.Revision, map[string]uint64{"authorization_revision": m.Revision}), true)
 			a.Client.Send(protocol.New("state.applied", m.ID, m.Revision, map[string]bool{"ready": true}), true)
 			return

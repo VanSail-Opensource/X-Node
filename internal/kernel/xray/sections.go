@@ -4,7 +4,6 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
-	"os"
 	"strings"
 	"sync"
 
@@ -69,21 +68,23 @@ func buildSections(p, previous *Prepared) error {
 	if err != nil {
 		return err
 	}
-	var c conf.Config
-	if err = json.Unmarshal(raw, &c); err != nil {
-		return err
-	}
+	env := preparedEnvironment(p)
 	nativeEnvironmentMu.Lock()
 	defer nativeEnvironmentMu.Unlock()
-	restore, err := setNativeEnvironment(c.Env)
+	restore, _, err := beginNativeRuntimeEnvironment(env)
 	if err != nil {
 		return err
 	}
 	defer restore()
+	// Native addresses and port ranges can resolve env: during unmarshaling.
+	var c conf.Config
+	if err = json.Unmarshal(raw, &c); err != nil {
+		return err
+	}
 	p.StaticHash = staticKey(p.Native)
 	// API/metrics postprocessors inject additional handlers and routing. Keep
 	// their complete upstream builder instead of bypassing those semantics.
-	if previous == nil || c.API != nil || c.Metrics != nil || len(c.Transport) > 0 {
+	if previous == nil || nativeBuilderEnvironmentChanged(previous, env) || c.API != nil || c.Metrics != nil || len(c.Transport) > 0 {
 		p.Core, err = c.Build()
 		p.Counts = BuildCounts{1, len(c.InboundConfigs), len(c.OutboundConfigs), 1}
 		if err == nil && c.API == nil && c.Metrics == nil && len(c.Transport) == 0 && c.RouterConfig != nil {
@@ -146,35 +147,6 @@ func buildSections(p, previous *Prepared) error {
 // Xray's native configuration builders read process-scoped asset paths.
 // Do not leave values from validation or a failed candidate in the process.
 var nativeEnvironmentMu sync.Mutex
-
-func setNativeEnvironment(values map[string]string) (func(), error) {
-	type prior struct {
-		value string
-		set   bool
-	}
-	old := make(map[string]prior, len(values))
-	restore := func() {
-		for key, value := range old {
-			if value.set {
-				_ = os.Setenv(key, value.value)
-			} else {
-				_ = os.Unsetenv(key)
-			}
-		}
-	}
-	for key, value := range values {
-		before, exists := os.LookupEnv(key)
-		if before == value && exists {
-			continue
-		}
-		old[key] = prior{before, exists}
-		if err := os.Setenv(key, value); err != nil {
-			restore()
-			return nil, err
-		}
-	}
-	return restore, nil
-}
 
 func preparedEnvironment(p *Prepared) map[string]string {
 	raw, _ := p.Native["env"].(map[string]any)

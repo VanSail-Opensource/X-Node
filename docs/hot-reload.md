@@ -25,10 +25,10 @@ instance is never accompanied by a second complete candidate instance.
 
 `runtime.reload` rechecks external dependencies. Changes that do not alter an
 active receiver use incremental application. The legacy `{"force":true}`
-form behaves identically and does not restart an unchanged runtime. An
-unsupported transition outside receiver reload fails without restarting.
-Deliberate access revocation, firewall rules, and other policy effects still
-apply. Signed binary upgrades and rollbacks restart X-Node itself.
+form behaves identically and does not restart an unchanged runtime. A valid
+enforced transition that cannot apply live falls back to a cold reload of
+embedded Xray. Deliberate access revocation, firewall rules, and other policy
+effects still apply. Signed binary upgrades and rollbacks restart X-Node itself.
 
 ## Action and configuration consumers
 
@@ -40,7 +40,7 @@ apply. Signed binary upgrades and rollbacks restart X-Node itself.
 | Providers, DDNS, updates, telemetry | Utility/sampler; referenced certificate providers also invalidate preparation |
 | Firewall rules, source GeoIP, bans, forwarding | Existing firewall transaction; identical pending ID or confirmed policy reused |
 | Native inbounds and certificate bindings/material | Eligible VLESS and Trojan proxy changes reuse the listener. Compatible additions stage on unused endpoints. Changes to active receiver settings or compiled TLS material can rebuild embedded Xray after preflight |
-| Native outbounds and MemberOutbounds guards | Eligible new/default-handler changes apply live with existing flow handlers retained. Unsafe replacement or removal is refused |
+| Native outbounds and MemberOutbounds guards | Eligible handler additions, replacements, and direct Carpool member route retirement apply live. The dispatcher pins its chosen handler for in-flight traffic. Unsafe replacement or removal is refused |
 | Native routing and BlockedDomains | Changed native routing; safe suffix append retains existing matchers |
 | Torrent enablement | Generated routing/outbound and affected sniffing settings |
 | Torrent ban duration | Dispatch bridge atomic value only |
@@ -48,10 +48,10 @@ apply. Signed binary upgrades and rollbacks restart X-Node itself.
 | Geodata URL/hash/generation, explicit refresh | Prepare verified generation; only actual dependent sections rebuild |
 | Native DNS and session policy levels | Native preparation and in-process replacement |
 | Routing strategy/script | Prepared with native routing rules and balancers |
-| Other static core fields, including system-level counters | Transitions without a live application path are rejected while serving |
+| Other static core fields, including system-level counters | A valid change without a live application path uses a cold Xray reload |
 | Unchanged resend/reconnect | Reuse active sections; absent/unhealthy runtime reconstructs |
 | config.validate, client previews/probes | Separate validation/client candidate; no serving listener changes |
-| runtime.reload | Recheck material, apply incrementally or rebuild for changed active receivers, and permit an explicit retry after a failed receiver cutover. The legacy `force` argument does not change this behavior |
+| runtime.reload | Recheck material, apply incrementally where supported, and permit an explicit retry after a failed cold cutover. The legacy `force` argument does not change this behavior |
 | Binary install/rollback | Explicit process restart |
 
 The classifier begins with all configuration fields, removing only known
@@ -64,21 +64,28 @@ Rule replacement reuses unchanged compiled rule definitions when available
 and publishes native rules atomically. Outbound changes are subject to live
 application checks for affected mux/reverse/dialer chains, observers and
 untracked utility flows.
+Direct member-route additions and edits can remove and reintroduce an outbound
+during the Carpool authorization transition. Dispatch sees a coherent pair of
+routing rules and outbound handlers and retains the exact handler selected by
+an in-flight decision. Retired handlers are not selected by new decisions.
+This does not bypass credential revocation. Configurations with scripting,
+TUN, native API, reverse, or balancers and observers that can select a removed
+handler remain conservative.
 The dependency graph includes XHTTP's independent download transport after
 native alias, `extra` and socket-penetration selection. Case-insensitive native
 field names cannot bypass cycle checks or live application restrictions.
-The agent refuses gRPC and Hysteria listener additions through live application.
-Xray's gRPC listener does not return asynchronous bind failures and its Hysteria
-transport requires a native validator that cannot share the staging gate.
+The agent uses cold reload for gRPC and Hysteria listener additions that cannot
+use live staging. The embedded gRPC receiver reports bind failures
+synchronously. Hysteria needs its concrete native QUIC validator and therefore
+cannot share the live staging gate.
 
-## Receiver reload and recovery
+## Cold reload and recovery
 
-Effective changes to an existing listener's receiver settings, including its
-compiled TLS certificate and key, trigger a full reload of the embedded Xray
-core after validation. X-Node probes compatible new endpoints that do not
-overlap serving listeners. Validation and these probes cannot guarantee every
-bind will succeed. A receiver reload is refused if the active or desired
-configuration uses a gRPC receiver, whose binding cannot be verified.
+Effective changes to active receivers, including compiled TLS certificates and
+keys, trigger a full reload of embedded Xray after validation. Other valid
+changes that cannot be hot-reloaded use the same recovery path. X-Node probes
+compatible new endpoints that do not overlap serving listeners. Validation
+and these probes cannot guarantee every bind will succeed.
 
 X-Node stops the old core before starting the replacement. This can interrupt
 connections and briefly stop new admissions, but does not restart the X-Node
@@ -86,8 +93,8 @@ process or change its boot ID. Failed native startup restores the previous
 compiled configuration when possible, including the original certificate
 bytes even if the source files have changed. Interrupted connections cannot be
 restored. Automatic reconciliation does not repeat a failed disruptive cutover
-with the same receivers. Correct the receiver or run `runtime.reload` to retry
-explicitly.
+of the same effective native configuration. Correct the configuration or run
+`runtime.reload` to retry explicitly.
 
 At process startup, X-Node attempts the persisted pending configuration first.
 If activation fails, it tries to serve the last accepted listeners while

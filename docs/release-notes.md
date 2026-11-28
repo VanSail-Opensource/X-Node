@@ -1,5 +1,11 @@
 # X-Node v2.0.33
 
+Reduces CPU and allocation overhead found during fleet profiling. Idle utility
+ticks no longer copy the full configuration. Configuration classification
+compares unchanged native settings and accounts without a JSON round trip, and
+activity reports sort large IP snapshots more efficiently. Utility schedules,
+account validation, access enforcement, and report ordering are unchanged.
+
 Fixes a case where adding or editing a route in an existing Carpool plan
 could leave a node degraded. X-Node now hot-reloads supported direct member
 routes even when Carpool temporarily removes the old outbounds during the

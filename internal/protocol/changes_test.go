@@ -1,9 +1,11 @@
 package protocol
 
 import (
+	"bytes"
 	"encoding/json"
 	"reflect"
 	"testing"
+	"time"
 )
 
 func TestAllActionsAndConfigurationFieldsHaveConsumers(t *testing.T) {
@@ -21,6 +23,56 @@ func TestAllActionsAndConfigurationFieldsHaveConsumers(t *testing.T) {
 	}
 	if ClassifyAction("future.command") != ReconcileAction {
 		t.Fatal("unknown action bypassed conservative reconciliation")
+	}
+}
+
+func TestNativeProjectionRetainsCanonicalAccountComparison(t *testing.T) {
+	old := Config{
+		Xray: json.RawMessage(`{"routing":{},"geodata":{"outbound":"direct","cron":"0 1 * * *"}}`),
+		Users: []User{{
+			ID: 1, UUID: "owner", InboundTags: []string{"paid"},
+			Credentials: map[string]json.RawMessage{"paid": json.RawMessage(`{"level":9007199254740993,"mode":"sample"}`)},
+		}},
+	}
+	next := Clone(old)
+	next.Xray = json.RawMessage(`{"geodata":{"cron":"0 2 * * *","outbound":"direct"}, "routing":{}}`)
+	next.Torrent.BanSeconds = 60
+	next.Users[0].Credentials["paid"] = json.RawMessage(`{ "mode": "sample", "level": 9007199254740993 }`)
+	next.Users[0].WhitelistEnabled = true
+	next.Users[0].WhitelistedIPs = []string{"192.0.2.1"}
+	next.Users[0].BlockNew = true
+	until := time.Now().UTC().Add(time.Hour)
+	next.Users[0].ValidUntil = &until
+	snapshot := Clone(next)
+	if got := Classify(old, next); got.Native || got.Assets || !got.Registry {
+		t.Fatalf("unrelated changes affected native/asset classification: %+v", got)
+	}
+	oldIdentity, nextIdentity := NativeIdentity(old), NativeIdentity(next)
+	if !bytes.Equal(oldIdentity, nextIdentity) || !bytes.Contains(nextIdentity, []byte("9007199254740993")) {
+		t.Fatal("canonical native cache key changed or lost credential precision")
+	}
+	if !sameJSON(next, snapshot) {
+		t.Fatal("classification mutated the source")
+	}
+
+	next.Users[0].Credentials["paid"] = json.RawMessage(`{"mode":"sample","level":9007199254740992}`)
+	if !Classify(old, next).Native || bytes.Equal(oldIdentity, NativeIdentity(next)) {
+		t.Fatal("distinct account values were classified as equal")
+	}
+}
+
+func TestNativeProjectionPreservesAccountOrderAndEmptyShape(t *testing.T) {
+	old := Config{Xray: json.RawMessage(`{}`), Users: []User{
+		{ID: 1, InboundTags: []string{"paid"}}, {ID: 2, InboundTags: []string{"paid"}},
+	}}
+	next := Clone(old)
+	next.Users[0], next.Users[1] = next.Users[1], next.Users[0]
+	if !Classify(old, next).Native {
+		t.Fatal("native account order changed without reconciliation")
+	}
+	old.Users, next.Users = nil, []User{}
+	if Classify(old, next).Native || !bytes.Equal(NativeIdentity(old), NativeIdentity(next)) {
+		t.Fatal("empty native account lists changed classification")
 	}
 }
 

@@ -2,12 +2,39 @@ package sessions
 
 import (
 	"fmt"
+	"slices"
 	"testing"
 	"testing/synctest"
 	"time"
 
 	"github.com/VanSail-Opensource/X-Node/internal/protocol"
 )
+
+func TestSummaryOrdersDetachedActivityObservations(t *testing.T) {
+	r := New()
+	at := time.Now().UTC()
+	earlier := at.Add(-time.Second)
+	h := &r.activityHistory
+	h.sampled = at
+	h.observe(activityIP{11, "192.0.2.1"}, at)
+	h.observe(activityIP{2, "2001:db8::2"}, earlier)
+	h.observe(activityIP{2, "192.0.2.8"}, earlier)
+	h.observe(activityIP{2, "2001:db8::2"}, at)
+	h.observe(activityIP{2, "192.0.2.10"}, at)
+	want := []protocol.IPActivity{
+		{UserID: 2, IP: "192.0.2.10", LastActive: at, Observations: 1},
+		{UserID: 2, IP: "192.0.2.8", LastActive: earlier, Observations: 1},
+		{UserID: 2, IP: "2001:db8::2", LastActive: at, Observations: 2},
+		{UserID: 11, IP: "192.0.2.1", LastActive: at, Observations: 1},
+	}
+	for range 10 {
+		got := r.Summary().ActiveIPObservations
+		if !slices.Equal(got, want) {
+			t.Fatalf("history = %+v, want %+v", got, want)
+		}
+		got[0] = protocol.IPActivity{}
+	}
+}
 
 func TestBriefClosedActivitySurvivesSamplingWithoutBecomingAnOpenFlow(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
